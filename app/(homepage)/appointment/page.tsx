@@ -112,18 +112,25 @@ export default function AppointmentPage() {
 
       if (error) {
         setLoginError(error.message);
+        setIsLoggingIn(false);
         return;
       }
 
       if (data.user) {
+        // Update auth state immediately
         setIsAuthenticated(true);
         setShowLoginDialog(false);
+        // Clear login form
+        setLoginEmail('');
+        setLoginPassword('');
+        setLoginError('');
         // Auto-submit the form after successful login
         setSubmitted(true);
         console.log('Appointment booked:', formData);
       }
     } catch (err) {
       setLoginError('An error occurred. Please try again.');
+      setIsLoggingIn(false);
     } finally {
       setIsLoggingIn(false);
     }
@@ -424,13 +431,6 @@ export default function AppointmentPage() {
                 </a>
               </div>
               <div className="text-center">
-                <p className="text-3xl mb-2">⏰</p>
-                <h3 className="font-semibold mb-2">Hours</h3>
-                <p className="text-muted-foreground text-sm">Mon-Fri: 9am-5pm<br/>Sat: 9am-2pm</p>
-              </div>
-              <div className="text-center">
-                <p className="text-3xl mb-2">📍</p>
-                <h3 className="font-semibold mb-2">Location</h3>
                 <p className="text-muted-foreground text-sm">123 Pet Street<br/>Veterinary City, VC 12345</p>
               </div>
             </div>

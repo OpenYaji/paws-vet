@@ -28,7 +28,7 @@ export function Header() {
             height={40}
             className="rounded-full"
           />
-          <span className="text-xl font-bold text-primary">PAWS VET CLINIC</span>
+          <span className="text-xl font-bold text-primary">PAWS VETERINARY CLINIC</span>
         </Link>
 
         <nav className="hidden md:flex items-center gap-8">
