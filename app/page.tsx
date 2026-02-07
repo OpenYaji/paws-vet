@@ -51,7 +51,7 @@ export default function Home() {
 
               <div className="md:order-1 flex justify-center">
                 <div className="relative w-full max-w-md aspect-square bg-gradient-to-br from-primary/20 to-primary/5 rounded-3xl flex items-center justify-center">
-                    <img src="/images/paws.png" alt="PAWS Clinic" className="w-full h-full object-contain p-8" />
+                    <img src="/images/pet4.png" alt="PAWS Clinic" className="w-full h-full object-contain p-8" />
                 </div>
               </div>
             </div>
