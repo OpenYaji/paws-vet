@@ -1,8 +1,6 @@
 'use client';
 
-import React from "react"
-
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/auth-client';
@@ -13,96 +11,239 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import Image from 'next/image';
 import { ArrowLeft } from 'lucide-react';
 
+type UserRole = 'client' | 'veterinarian' | 'admin';
+
+interface ClientFormData {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  alternatePhone?: string;
+  addressLine1: string;
+  addressLine2?: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  communicationPreference: 'email' | 'sms' | 'phone' | 'any';
+}
+
+interface VeterinarianFormData {
+  firstName: string;
+  lastName: string;
+  licenseNumber: string;
+  phone: string;
+  yearsOfExperience: number;
+  consultationFee: number;
+  hireDate: string;
+}
+
+interface AdminFormData {
+  firstName: string;
+  lastName: string;
+  employeeId: string;
+  phone: string;
+  department?: string;
+  position: string;
+  hireDate: string;
+}
+
 export default function SignupPage() {
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-    role: 'pet_owner',
-  });
+  const [step, setStep] = useState(1);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [role, setRole] = useState<UserRole>('client');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
-  function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+  // Client-specific fields
+  const [clientData, setClientData] = useState<ClientFormData>({
+    firstName: '',
+    lastName: '',
+    phone: '',
+    alternatePhone: '',
+    addressLine1: '',
+    addressLine2: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    communicationPreference: 'email',
+  });
+
+  // Veterinarian-specific fields
+  const [vetData, setVetData] = useState<VeterinarianFormData>({
+    firstName: '',
+    lastName: '',
+    licenseNumber: '',
+    phone: '',
+    yearsOfExperience: 0,
+    consultationFee: 0,
+    hireDate: new Date().toISOString().split('T')[0],
+  });
+
+  // Admin-specific fields
+  const [adminData, setAdminData] = useState<AdminFormData>({
+    firstName: '',
+    lastName: '',
+    employeeId: '',
+    phone: '',
+    department: '',
+    position: '',
+    hireDate: new Date().toISOString().split('T')[0],
+  });
+
+  function handleClientChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setClientData((prev) => ({ ...prev, [name]: value }));
   }
 
-  function handleRoleChange(value: string) {
-    setFormData((prev) => ({ ...prev, role: value }));
+  function handleVetChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const { name, value, type } = e.target;
+    setVetData((prev) => ({
+      ...prev,
+      [name]: type === 'number' ? parseFloat(value) || 0 : value,
+    }));
   }
 
-  async function handleSignup(e: React.FormEvent) {
+  function handleAdminChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const { name, value } = e.target;
+    setAdminData((prev) => ({ ...prev, [name]: value }));
+  }
+
+  async function handleStep1Submit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
 
     // Validation
-    if (formData.password !== formData.confirmPassword) {
+    if (password !== confirmPassword) {
       setError('Passwords do not match');
       return;
     }
 
-    if (formData.password.length < 6) {
+    if (password.length < 6) {
       setError('Password must be at least 6 characters');
       return;
     }
 
+    // Move to step 2 (profile information)
+    setStep(2);
+  }
+
+  async function handleStep2Submit(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
     setIsLoading(true);
 
     try {
+      // Step 1: Create auth user
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
+        email: email,
+        password: password,
         options: {
           data: {
-            name: formData.name,
-            role: formData.role,
+            role: role,
           },
         },
       });
 
       if (signUpError) {
         setError(signUpError.message);
+        setIsLoading(false);
         return;
       }
 
-      if (authData.user) {
-        // Create profile
-        const { error: profileError } = await supabase.from('profiles').insert([
-          {
-            id: authData.user.id,
-            name: formData.name,
-            email: formData.email,
-            role: formData.role,
-            created_at: new Date().toISOString(),
-          },
-        ]);
+      if (!authData.user) {
+        setError('Failed to create user account');
+        setIsLoading(false);
+        return;
+      }
 
-        if (profileError) {
-          console.error('Profile creation error:', profileError);
-        }
+      // Step 2: Insert into users table
+      const { error: userError } = await supabase.from('users').insert({
+        id: authData.user.id,
+        email: email,
+        role: role,
+        account_status: 'active',
+        email_verified: false,
+      });
 
-        // Redirect based on role
-        if (formData.role === 'admin' || formData.role === 'veterinarian') {
-          router.push('/dashboard');
-        } else {
-          router.push('/client');
-        }
+      if (userError) {
+        setError('Failed to create user record: ' + userError.message);
+        setIsLoading(false);
+        return;
+      }
+
+      // Step 3: Create role-specific profile
+      let profileError = null;
+
+      if (role === 'client') {
+        const { error } = await supabase.from('client_profiles').insert({
+          user_id: authData.user.id,
+          first_name: clientData.firstName,
+          last_name: clientData.lastName,
+          phone: clientData.phone,
+          alternate_phone: clientData.alternatePhone || null,
+          address_line1: clientData.addressLine1,
+          address_line2: clientData.addressLine2 || null,
+          city: clientData.city,
+          state: clientData.state,
+          zip_code: clientData.zipCode,
+          communication_preference: clientData.communicationPreference,
+        });
+        profileError = error;
+      } else if (role === 'veterinarian') {
+        const { error } = await supabase.from('veterinarian_profiles').insert({
+          user_id: authData.user.id,
+          first_name: vetData.firstName,
+          last_name: vetData.lastName,
+          license_number: vetData.licenseNumber,
+          phone: vetData.phone,
+          years_of_experience: vetData.yearsOfExperience,
+          consultation_fee: vetData.consultationFee,
+          hire_date: vetData.hireDate,
+          employment_status: 'full_time',
+        });
+        profileError = error;
+      } else if (role === 'admin') {
+        const { error } = await supabase.from('admin_profiles').insert({
+          user_id: authData.user.id,
+          first_name: adminData.firstName,
+          last_name: adminData.lastName,
+          employee_id: adminData.employeeId,
+          phone: adminData.phone,
+          department: adminData.department || null,
+          position: adminData.position,
+          hire_date: adminData.hireDate,
+        });
+        profileError = error;
+      }
+
+      if (profileError) {
+        setError('Failed to create profile: ' + profileError.message);
+        setIsLoading(false);
+        return;
+      }
+
+      // Success! Redirect based on role
+      if (role === 'client') {
+        router.push('/client');
+      } else if (role === 'veterinarian') {
+        router.push('/dashboard');
+      } else if (role === 'admin') {
+        router.push('/dashboard');
       }
     } catch (err) {
-      setError('An error occurred. Please try again.');
-    } finally {
+      console.error('Signup error:', err);
+      setError('An unexpected error occurred. Please try again.');
       setIsLoading(false);
     }
   }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <div className="w-full max-w-md space-y-6">
-                {/* Back to Home Button */}
-                <div className="flex justify-start">
+      <div className="w-full max-w-2xl space-y-6">
+        {/* Back to Home Button */}
+        <div className="flex justify-start">
           <Link href="/">
             <Button variant="ghost" size="sm" className="gap-2">
               <ArrowLeft className="h-4 w-4" />
@@ -119,76 +260,440 @@ export default function SignupPage() {
         <Card>
           <CardHeader className="space-y-2 text-center">
             <CardTitle className="text-2xl">Join PAWS</CardTitle>
-            <CardDescription>Create your veterinary clinic account</CardDescription>
+            <CardDescription>
+              {step === 1 ? 'Create your veterinary clinic account' : 'Complete your profile'}
+            </CardDescription>
+            <div className="flex justify-center gap-2 pt-2">
+              <div className={`h-2 w-16 rounded-full ${step >= 1 ? 'bg-primary' : 'bg-gray-200'}`} />
+              <div className={`h-2 w-16 rounded-full ${step >= 2 ? 'bg-primary' : 'bg-gray-200'}`} />
+            </div>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSignup} className="space-y-4">
-              {error && <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-md">{error}</div>}
+            {step === 1 ? (
+              // Step 1: Basic Account Info
+              <form onSubmit={handleStep1Submit} className="space-y-4">
+                {error && <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-md">{error}</div>}
 
-              <div className="space-y-2">
-                <label htmlFor="name" className="text-sm font-medium leading-none">
-                  Full Name
-                </label>
-                <Input id="name" type="text" placeholder="John Doe" name="name" value={formData.name} onChange={handleInputChange} required />
-              </div>
+                <div className="space-y-2">
+                  <label htmlFor="email" className="text-sm font-medium leading-none">
+                    Email Address
+                  </label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="your@email.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                  />
+                </div>
 
-              <div className="space-y-2">
-                <label htmlFor="email" className="text-sm font-medium leading-none">
-                  Email
-                </label>
-                <Input id="email" type="email" placeholder="your@email.com" name="email" value={formData.email} onChange={handleInputChange} required />
-              </div>
+                <div className="space-y-2">
+                  <label htmlFor="role" className="text-sm font-medium leading-none">
+                    I am a...
+                  </label>
+                  <Select value={role} onValueChange={(value) => setRole(value as UserRole)}>
+                    <SelectTrigger id="role">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="client">Pet Owner / Client</SelectItem>
+                      <SelectItem value="veterinarian">Veterinarian</SelectItem>
+                      <SelectItem value="admin">Clinic Administrator</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div className="space-y-2">
-                <label htmlFor="role" className="text-sm font-medium leading-none">
-                  Role
-                </label>
-                <Select value={formData.role} onValueChange={handleRoleChange}>
-                  <SelectTrigger id="role">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pet_owner">Pet Owner</SelectItem>
-                    <SelectItem value="veterinarian">Veterinarian</SelectItem>
-                    <SelectItem value="admin">Clinic Admin</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+                <div className="space-y-2">
+                  <label htmlFor="password" className="text-sm font-medium leading-none">
+                    Password
+                  </label>
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">Must be at least 6 characters</p>
+                </div>
 
-              <div className="space-y-2">
-                <label htmlFor="password" className="text-sm font-medium leading-none">
-                  Password
-                </label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
+                <div className="space-y-2">
+                  <label htmlFor="confirmPassword" className="text-sm font-medium leading-none">
+                    Confirm Password
+                  </label>
+                  <Input
+                    id="confirmPassword"
+                    type="password"
+                    placeholder="••••••••"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                  />
+                </div>
 
-              <div className="space-y-2">
-                <label htmlFor="confirmPassword" className="text-sm font-medium leading-none">
-                  Confirm Password
-                </label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  placeholder="••••••••"
-                  name="confirmPassword"
-                  value={formData.confirmPassword}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
+                <Button type="submit" className="w-full">
+                  Continue
+                </Button>
+              </form>
+            ) : (
+              // Step 2: Profile Information
+              <form onSubmit={handleStep2Submit} className="space-y-4">
+                {error && <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-md">{error}</div>}
 
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? 'Creating account...' : 'Sign Up'}
-              </Button>
-            </form>
+                {role === 'client' && (
+                  <>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label htmlFor="firstName" className="text-sm font-medium leading-none">
+                          First Name
+                        </label>
+                        <Input
+                          id="firstName"
+                          name="firstName"
+                          placeholder="John"
+                          value={clientData.firstName}
+                          onChange={handleClientChange}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label htmlFor="lastName" className="text-sm font-medium leading-none">
+                          Last Name
+                        </label>
+                        <Input
+                          id="lastName"
+                          name="lastName"
+                          placeholder="Doe"
+                          value={clientData.lastName}
+                          onChange={handleClientChange}
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label htmlFor="phone" className="text-sm font-medium leading-none">
+                          Phone Number
+                        </label>
+                        <Input
+                          id="phone"
+                          name="phone"
+                          type="tel"
+                          placeholder="+1234567890"
+                          value={clientData.phone}
+                          onChange={handleClientChange}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label htmlFor="alternatePhone" className="text-sm font-medium leading-none">
+                          Alternate Phone (Optional)
+                        </label>
+                        <Input
+                          id="alternatePhone"
+                          name="alternatePhone"
+                          type="tel"
+                          placeholder="+1234567890"
+                          value={clientData.alternatePhone}
+                          onChange={handleClientChange}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label htmlFor="addressLine1" className="text-sm font-medium leading-none">
+                        Street Address
+                      </label>
+                      <Input
+                        id="addressLine1"
+                        name="addressLine1"
+                        placeholder="123 Main Street"
+                        value={clientData.addressLine1}
+                        onChange={handleClientChange}
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label htmlFor="addressLine2" className="text-sm font-medium leading-none">
+                        Apartment, Suite, etc. (Optional)
+                      </label>
+                      <Input
+                        id="addressLine2"
+                        name="addressLine2"
+                        placeholder="Apt 4B"
+                        value={clientData.addressLine2}
+                        onChange={handleClientChange}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="space-y-2 col-span-2">
+                        <label htmlFor="city" className="text-sm font-medium leading-none">
+                          City
+                        </label>
+                        <Input id="city" name="city" placeholder="New York" value={clientData.city} onChange={handleClientChange} required />
+                      </div>
+                      <div className="space-y-2">
+                        <label htmlFor="state" className="text-sm font-medium leading-none">
+                          State
+                        </label>
+                        <Input id="state" name="state" placeholder="NY" value={clientData.state} onChange={handleClientChange} required />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label htmlFor="zipCode" className="text-sm font-medium leading-none">
+                          ZIP Code
+                        </label>
+                        <Input
+                          id="zipCode"
+                          name="zipCode"
+                          placeholder="10001"
+                          value={clientData.zipCode}
+                          onChange={handleClientChange}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label htmlFor="communicationPreference" className="text-sm font-medium leading-none">
+                          Contact Preference
+                        </label>
+                        <Select
+                          value={clientData.communicationPreference}
+                          onValueChange={(value) => setClientData((prev) => ({ ...prev, communicationPreference: value as any }))}
+                        >
+                          <SelectTrigger id="communicationPreference">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="email">Email</SelectItem>
+                            <SelectItem value="sms">SMS</SelectItem>
+                            <SelectItem value="phone">Phone</SelectItem>
+                            <SelectItem value="any">Any</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {role === 'veterinarian' && (
+                  <>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label htmlFor="firstName" className="text-sm font-medium leading-none">
+                          First Name
+                        </label>
+                        <Input
+                          id="firstName"
+                          name="firstName"
+                          placeholder="Dr. Sarah"
+                          value={vetData.firstName}
+                          onChange={handleVetChange}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label htmlFor="lastName" className="text-sm font-medium leading-none">
+                          Last Name
+                        </label>
+                        <Input
+                          id="lastName"
+                          name="lastName"
+                          placeholder="Johnson"
+                          value={vetData.lastName}
+                          onChange={handleVetChange}
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label htmlFor="licenseNumber" className="text-sm font-medium leading-none">
+                          License Number
+                        </label>
+                        <Input
+                          id="licenseNumber"
+                          name="licenseNumber"
+                          placeholder="VET-12345"
+                          value={vetData.licenseNumber}
+                          onChange={handleVetChange}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label htmlFor="phone" className="text-sm font-medium leading-none">
+                          Phone Number
+                        </label>
+                        <Input
+                          id="phone"
+                          name="phone"
+                          type="tel"
+                          placeholder="+1234567890"
+                          value={vetData.phone}
+                          onChange={handleVetChange}
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label htmlFor="yearsOfExperience" className="text-sm font-medium leading-none">
+                          Years of Experience
+                        </label>
+                        <Input
+                          id="yearsOfExperience"
+                          name="yearsOfExperience"
+                          type="number"
+                          min="0"
+                          placeholder="5"
+                          value={vetData.yearsOfExperience}
+                          onChange={handleVetChange}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label htmlFor="consultationFee" className="text-sm font-medium leading-none">
+                          Consultation Fee ($)
+                        </label>
+                        <Input
+                          id="consultationFee"
+                          name="consultationFee"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="75.00"
+                          value={vetData.consultationFee}
+                          onChange={handleVetChange}
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label htmlFor="hireDate" className="text-sm font-medium leading-none">
+                        Hire Date
+                      </label>
+                      <Input id="hireDate" name="hireDate" type="date" value={vetData.hireDate} onChange={handleVetChange} required />
+                    </div>
+                  </>
+                )}
+
+                {role === 'admin' && (
+                  <>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label htmlFor="firstName" className="text-sm font-medium leading-none">
+                          First Name
+                        </label>
+                        <Input
+                          id="firstName"
+                          name="firstName"
+                          placeholder="Jane"
+                          value={adminData.firstName}
+                          onChange={handleAdminChange}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label htmlFor="lastName" className="text-sm font-medium leading-none">
+                          Last Name
+                        </label>
+                        <Input
+                          id="lastName"
+                          name="lastName"
+                          placeholder="Smith"
+                          value={adminData.lastName}
+                          onChange={handleAdminChange}
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label htmlFor="employeeId" className="text-sm font-medium leading-none">
+                          Employee ID
+                        </label>
+                        <Input
+                          id="employeeId"
+                          name="employeeId"
+                          placeholder="EMP-001"
+                          value={adminData.employeeId}
+                          onChange={handleAdminChange}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label htmlFor="phone" className="text-sm font-medium leading-none">
+                          Phone Number
+                        </label>
+                        <Input
+                          id="phone"
+                          name="phone"
+                          type="tel"
+                          placeholder="+1234567890"
+                          value={adminData.phone}
+                          onChange={handleAdminChange}
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label htmlFor="department" className="text-sm font-medium leading-none">
+                          Department (Optional)
+                        </label>
+                        <Input
+                          id="department"
+                          name="department"
+                          placeholder="Administration"
+                          value={adminData.department}
+                          onChange={handleAdminChange}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label htmlFor="position" className="text-sm font-medium leading-none">
+                          Position
+                        </label>
+                        <Input
+                          id="position"
+                          name="position"
+                          placeholder="Clinic Manager"
+                          value={adminData.position}
+                          onChange={handleAdminChange}
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label htmlFor="hireDate" className="text-sm font-medium leading-none">
+                        Hire Date
+                      </label>
+                      <Input id="hireDate" name="hireDate" type="date" value={adminData.hireDate} onChange={handleAdminChange} required />
+                    </div>
+                  </>
+                )}
+
+                <div className="flex gap-4">
+                  <Button type="button" variant="outline" className="w-full" onClick={() => setStep(1)} disabled={isLoading}>
+                    Back
+                  </Button>
+                  <Button type="submit" className="w-full" disabled={isLoading}>
+                    {isLoading ? 'Creating account...' : 'Create Account'}
+                  </Button>
+                </div>
+              </form>
+            )}
 
             <div className="mt-6 text-center text-sm">
               <span className="text-muted-foreground">Already have an account? </span>
