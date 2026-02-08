@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/auth-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Search, Plus, Edit, Trash2, UserPlus, Mail, Phone, MapPin } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, UserPlus, Mail, Phone, MapPin, Users, Shield, Stethoscope, User } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -30,13 +31,18 @@ interface User {
   full_name?: string;
   phone?: string;
   address?: string;
+  account_status?: string;
+  email_verified?: boolean;
+  last_login_at?: string;
   created_at: string;
 }
 
 export default function UsersPage() {
+  const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [stats, setStats] = useState({
@@ -57,27 +63,30 @@ export default function UsersPage() {
   async function loadUsers() {
     try {
       setIsLoading(true);
+      setError(null);
       
-      // Get users from profiles table
-      const { data: profiles, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      const usersData = profiles || [];
+      console.log('Fetching users...');
+      const response = await fetch('/api/user');
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch users');
+      }
+      
+      const usersData = await response.json();
+      console.log('Received users:', usersData);
+      
       setUsers(usersData);
 
-      // Calculate stats
       const total = usersData.length;
-      const petOwners = usersData.filter(u => u.role === 'pet_owner').length;
-      const veterinarians = usersData.filter(u => u.role === 'veterinarian').length;
-      const admins = usersData.filter(u => u.role === 'admin').length;
+      const petOwners = usersData.filter((u: User) => u.role === 'client').length;
+      const veterinarians = usersData.filter((u: User) => u.role === 'veterinarian').length;
+      const admins = usersData.filter((u: User) => u.role === 'admin').length;
 
       setStats({ total, petOwners, veterinarians, admins });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading users:', error);
+      setError(error.message);
     } finally {
       setIsLoading(false);
     }
@@ -110,7 +119,7 @@ export default function UsersPage() {
         return 'destructive';
       case 'veterinarian':
         return 'default';
-      case 'pet_owner':
+      case 'client':
         return 'secondary';
       default:
         return 'outline';
@@ -131,6 +140,16 @@ export default function UsersPage() {
     });
   }
 
+  function handleViewUser(user: User) {
+    const roleRouteMap = {
+      client: 'client',
+      veterinarian: 'vet',
+      admin: 'admin'
+    };
+    const route = roleRouteMap[user.role as keyof typeof roleRouteMap] || 'client';
+    router.push(`/admin/users-management/${route}/${user.id}`);
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -142,76 +161,111 @@ export default function UsersPage() {
     );
   }
 
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle className="text-destructive">Error Loading Users</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground mb-4">{error}</p>
+            <Button onClick={loadUsers}>Retry</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-8 p-1">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Users Management</h1>
-          <p className="text-muted-foreground mt-1">Manage all system users</p>
+          <h1 className="text-4xl font-bold tracking-tight">Users Management</h1>
+          <p className="text-muted-foreground mt-2 text-base">Manage and monitor all system users</p>
         </div>
-        <Button className="gap-2">
-          <UserPlus size={18} />
+        <Button size="lg" className="gap-2 shadow-sm">
+          <UserPlus size={20} />
           Add New User
         </Button>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Card className="border-2 hover:border-primary/50 transition-colors">
+          <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Users</CardTitle>
+            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+              <Users className="h-5 w-5 text-primary" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.total}</div>
+            <div className="text-3xl font-bold">{stats.total}</div>
+            <p className="text-xs text-muted-foreground mt-1">All registered users</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-3">
+        
+        <Card className="border-2 hover:border-blue-500/50 transition-colors">
+          <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
             <CardTitle className="text-sm font-medium text-muted-foreground">Pet Owners</CardTitle>
+            <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
+              <User className="h-5 w-5 text-blue-600" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{stats.petOwners}</div>
+            <div className="text-3xl font-bold text-blue-600">{stats.petOwners}</div>
+            <p className="text-xs text-muted-foreground mt-1">Client accounts</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-3">
+        
+        <Card className="border-2 hover:border-green-500/50 transition-colors">
+          <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
             <CardTitle className="text-sm font-medium text-muted-foreground">Veterinarians</CardTitle>
+            <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center">
+              <Stethoscope className="h-5 w-5 text-green-600" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">{stats.veterinarians}</div>
+            <div className="text-3xl font-bold text-green-600">{stats.veterinarians}</div>
+            <p className="text-xs text-muted-foreground mt-1">Medical professionals</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-3">
+        
+        <Card className="border-2 hover:border-red-500/50 transition-colors">
+          <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
             <CardTitle className="text-sm font-medium text-muted-foreground">Admins</CardTitle>
+            <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center">
+              <Shield className="h-5 w-5 text-red-600" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">{stats.admins}</div>
+            <div className="text-3xl font-bold text-red-600">{stats.admins}</div>
+            <p className="text-xs text-muted-foreground mt-1">System administrators</p>
           </CardContent>
         </Card>
       </div>
 
       {/* Filters */}
-      <Card>
+      <Card className="border-2">
         <CardContent className="pt-6">
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={18} />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={20} />
               <Input
                 placeholder="Search by name, email, or phone..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
+                className="pl-11 h-11 border-2"
               />
             </div>
             <Select value={roleFilter} onValueChange={setRoleFilter}>
-              <SelectTrigger className="w-full sm:w-[200px]">
+              <SelectTrigger className="w-full sm:w-[200px] h-11 border-2">
                 <SelectValue placeholder="Filter by role" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Roles</SelectItem>
-                <SelectItem value="pet_owner">Pet Owners</SelectItem>
+                <SelectItem value="client">Pet Owners</SelectItem>
                 <SelectItem value="veterinarian">Veterinarians</SelectItem>
                 <SelectItem value="admin">Admins</SelectItem>
               </SelectContent>
@@ -221,78 +275,118 @@ export default function UsersPage() {
       </Card>
 
       {/* Users Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Users List ({filteredUsers.length})</CardTitle>
+      <Card className="border-2">
+        <CardHeader className="border-b bg-muted/30">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-xl">Users Directory</CardTitle>
+            <Badge variant="outline" className="text-base px-3 py-1">
+              {filteredUsers.length} {filteredUsers.length === 1 ? 'user' : 'users'}
+            </Badge>
+          </div>
         </CardHeader>
-        <CardContent>
-          <div className="rounded-md border overflow-x-auto">
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>User</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead className="hidden md:table-cell">Contact</TableHead>
-                  <TableHead className="hidden lg:table-cell">Joined</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                <TableRow className="bg-muted/50">
+                  <TableHead className="font-semibold">User</TableHead>
+                  <TableHead className="font-semibold">Role</TableHead>
+                  <TableHead className="hidden md:table-cell font-semibold">Contact</TableHead>
+                  <TableHead className="hidden lg:table-cell font-semibold">Status</TableHead>
+                  <TableHead className="hidden lg:table-cell font-semibold">Joined</TableHead>
+                  <TableHead className="text-right font-semibold">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredUsers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                      No users found
+                    <TableCell colSpan={6} className="text-center py-12">
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
+                          <Users className="h-8 w-8 text-muted-foreground" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-lg">No users found</p>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            Try adjusting your search or filters
+                          </p>
+                        </div>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ) : (
                   filteredUsers.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                            <span className="text-sm font-semibold text-primary">
+                    <TableRow 
+                      key={user.id}
+                      className="cursor-pointer hover:bg-muted/50 transition-colors"
+                      onClick={() => handleViewUser(user)}
+                    >
+                      <TableCell className="py-4">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center ring-2 ring-primary/20">
+                            <span className="text-base font-bold text-primary">
                               {user.full_name?.charAt(0) || user.email.charAt(0).toUpperCase()}
                             </span>
                           </div>
                           <div>
-                            <div className="font-medium">{user.full_name || 'N/A'}</div>
-                            <div className="text-sm text-muted-foreground flex items-center gap-1">
-                              <Mail size={12} />
+                            <div className="font-semibold text-base">{user.full_name || 'N/A'}</div>
+                            <div className="text-sm text-muted-foreground flex items-center gap-1.5 mt-0.5">
+                              <Mail size={14} />
                               {user.email}
                             </div>
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={getRoleBadgeVariant(user.role)}>
+                        <Badge 
+                          variant={getRoleBadgeVariant(user.role)}
+                          className="font-medium px-3 py-1"
+                        >
                           {formatRole(user.role)}
                         </Badge>
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
-                        <div className="space-y-1 text-sm">
+                        <div className="space-y-1.5 text-sm">
                           {user.phone && (
-                            <div className="flex items-center gap-1 text-muted-foreground">
-                              <Phone size={12} />
-                              {user.phone}
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                              <Phone size={14} />
+                              <span>{user.phone}</span>
                             </div>
                           )}
                           {user.address && (
-                            <div className="flex items-center gap-1 text-muted-foreground">
-                              <MapPin size={12} />
-                              {user.address.substring(0, 30)}...
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                              <MapPin size={14} />
+                              <span className="truncate max-w-[200px]">{user.address.substring(0, 30)}...</span>
                             </div>
                           )}
                         </div>
                       </TableCell>
-                      <TableCell className="hidden lg:table-cell text-muted-foreground">
-                        {formatDate(user.created_at)}
+                      <TableCell className="hidden lg:table-cell">
+                        <Badge 
+                          variant={user.account_status === 'active' ? 'default' : 'secondary'}
+                          className="font-medium"
+                        >
+                          {user.account_status || 'active'}
+                        </Badge>
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="hidden lg:table-cell">
+                        <span className="text-sm font-medium">{formatDate(user.created_at)}</span>
+                      </TableCell>
+                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="sm">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            className="h-9 w-9 p-0"
+                            onClick={() => handleViewUser(user)}
+                          >
                             <Edit size={16} />
                           </Button>
-                          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-9 w-9 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          >
                             <Trash2 size={16} />
                           </Button>
                         </div>

@@ -3,56 +3,55 @@
 import { Header } from '@/components/header';
 import { Footer } from '@/components/footer';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
-const products = [
-  {
-    category: 'Pet Food',
-    items: [
-      { id: 1, name: 'Premium Dry Dog Food', price: '$45', desc: 'High-quality nutrition for healthy coat and vitality', image: '🥩' },
-      { id: 2, name: 'Grain-Free Cat Food', price: '$38', desc: 'Specially formulated for sensitive digestion', image: '🐟' },
-      { id: 3, name: 'Puppy Growth Formula', price: '$52', desc: 'Essential nutrients for growing puppies', image: '🦴' },
-      { id: 4, name: 'Senior Pet Diet', price: '$48', desc: 'Joint support for aging pets', image: '🥕' },
-    ],
-  },
-  {
-    category: 'Supplements',
-    items: [
-      { id: 5, name: 'Omega-3 Fish Oil', price: '$25', desc: 'Supports skin, coat, and heart health', image: '💊' },
-      { id: 6, name: 'Joint Care Supplement', price: '$35', desc: 'Glucosamine and chondroitin formula', image: '🧴' },
-      { id: 7, name: 'Probiotic Powder', price: '$20', desc: 'Improves digestive health', image: '✨' },
-      { id: 8, name: 'Multivitamin Tablets', price: '$22', desc: 'Complete vitamin and mineral support', image: '💉' },
-    ],
-  },
-  {
-    category: 'Medications',
-    items: [
-      { id: 9, name: 'Flea & Tick Prevention', price: '$65', desc: 'Monthly topical treatment', image: '🛡️' },
-      { id: 10, name: 'Anti-Inflammatory Tablets', price: '$30', desc: 'Relief from pain and inflammation', image: '⚕️' },
-      { id: 11, name: 'Allergy Relief', price: '$28', desc: 'Reduces allergic reactions and itching', image: '🌿' },
-      { id: 12, name: 'Antibiotics (Prescribed)', price: '$40', desc: 'Infection treatment (requires prescription)', image: '🩹' },
-    ],
-  },
-  {
-    category: 'Accessories',
-    items: [
-      { id: 13, name: 'Orthopedic Dog Bed', price: '$89', desc: 'Memory foam for joint support', image: '🛏️' },
-      { id: 14, name: 'Pet Grooming Kit', price: '$45', desc: 'Complete set with brushes and clippers', image: '✂️' },
-      { id: 15, name: 'Interactive Toy Set', price: '$35', desc: 'Mental stimulation and enrichment', image: '🎾' },
-      { id: 16, name: 'Travel Carrier Bag', price: '$55', desc: 'Comfortable and secure transport', image: '👜' },
-    ],
-  },
-];
+interface Product {
+  id: string;
+  product_name: string;
+  category: string;
+  price: number;
+  stock_quantity: number;
+  description?: string;
+  image_url?: string;
+}
 
 export default function Products() {
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
-  const filteredProducts = selectedCategory
-    ? products.find(cat => cat.category === selectedCategory)?.items || []
-    : products.flatMap(cat => cat.items);
+  useEffect(() => {
+    loadProducts();
+  }, []);
 
-  const categories = ['All', ...products.map(cat => cat.category)];
+  async function loadProducts() {
+    try {
+      setIsLoading(true);
+      const response = await fetch('/api/products');
+      const data = await response.json();
+      setProducts(data.products || []);
+    } catch (error) {
+      console.error('Error loading products:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  const categories = ['all', ...Array.from(new Set(products.map(p => p.category)))];
+
+  const filteredProducts = selectedCategory === 'all'
+    ? products
+    : products.filter(p => p.category === selectedCategory);
+
+  const groupedProducts = categories
+    .filter(cat => cat !== 'all')
+    .map(category => ({
+      category,
+      items: products.filter(p => p.category === category)
+    }))
+    .filter(group => group.items.length > 0);
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -76,9 +75,9 @@ export default function Products() {
               {categories.map((category) => (
                 <button
                   key={category}
-                  onClick={() => setSelectedCategory(category === 'All' ? null : category)}
-                  className={`px-4 py-2 rounded-full font-medium transition-colors ${
-                    (category === 'All' && !selectedCategory) || category === selectedCategory
+                  onClick={() => setSelectedCategory(category)}
+                  className={`px-4 py-2 rounded-full font-medium transition-colors capitalize ${
+                    category === selectedCategory
                       ? 'bg-primary text-primary-foreground'
                       : 'bg-secondary text-foreground hover:bg-secondary/80'
                   }`}
@@ -93,30 +92,37 @@ export default function Products() {
         {/* Products Grid */}
         <section className="py-16">
           <div className="container mx-auto px-4">
-            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
-              {filteredProducts.map((product) => (
-                <div key={product.id} className="bg-card rounded-lg border border-border overflow-hidden hover:shadow-lg transition-shadow">
-                  <div className="h-32 bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center text-6xl">
-                    {product.image}
-                  </div>
-                  <div className="p-4">
-                    <h3 className="font-semibold text-lg mb-2 line-clamp-2">{product.name}</h3>
-                    <p className="text-muted-foreground text-sm mb-4 line-clamp-2">{product.desc}</p>
-                    
-                    <div className="flex items-center justify-between">
-                      <span className="text-2xl font-bold text-primary">{product.price}</span>
-                      <Button asChild size="sm" variant="outline">
-                        <Link href={`/appointment?product=${product.id}`}>Inquire</Link>
-                      </Button>
+            {isLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+                  <p className="text-muted-foreground">Loading products...</p>
+                </div>
+              </div>
+            ) : filteredProducts.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-muted-foreground text-lg">No products available at the moment.</p>
+              </div>
+            ) : selectedCategory === 'all' ? (
+              // Grouped by category view
+              <div className="space-y-12">
+                {groupedProducts.map(({ category, items }) => (
+                  <div key={category}>
+                    <h2 className="text-2xl font-bold mb-6 capitalize">{category}</h2>
+                    <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+                      {items.map((product) => (
+                        <ProductCard key={product.id} product={product} />
+                      ))}
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-
-            {filteredProducts.length === 0 && (
-              <div className="text-center py-12">
-                <p className="text-muted-foreground text-lg">No products found in this category.</p>
+                ))}
+              </div>
+            ) : (
+              // Single category view
+              <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {filteredProducts.map((product) => (
+                  <ProductCard key={product.id} product={product} />
+                ))}
               </div>
             )}
           </div>
@@ -168,6 +174,53 @@ export default function Products() {
       </main>
 
       <Footer />
+    </div>
+  );
+}
+
+function ProductCard({ product }: { product: Product }) {
+  const isOutOfStock = product.stock_quantity === 0;
+  const displayImage = product.image_url || '📦';
+  const isEmoji = displayImage.length <= 4;
+
+  return (
+    <div className="bg-card rounded-lg border border-border overflow-hidden hover:shadow-lg transition-shadow">
+      <div className="h-32 bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center relative">
+        {isEmoji ? (
+          <span className="text-6xl">{displayImage}</span>
+        ) : (
+          <img 
+            src={displayImage} 
+            alt={product.product_name}
+            className="w-full h-full object-cover"
+          />
+        )}
+        {isOutOfStock && (
+          <Badge variant="destructive" className="absolute top-2 right-2">
+            Out of Stock
+          </Badge>
+        )}
+      </div>
+      <div className="p-4">
+        <h3 className="font-semibold text-lg mb-2 line-clamp-2">{product.product_name}</h3>
+        <p className="text-muted-foreground text-sm mb-4 line-clamp-2">
+          {product.description || 'Quality product for your pet'}
+        </p>
+        
+        <div className="flex items-center justify-between">
+          <span className="text-2xl font-bold text-primary">₱{product.price.toFixed(2)}</span>
+          <Button 
+            asChild 
+            size="sm" 
+            variant={isOutOfStock ? "secondary" : "outline"}
+            disabled={isOutOfStock}
+          >
+            <Link href={`/appointment?product=${product.id}`}>
+              {isOutOfStock ? 'Notify Me' : 'Inquire'}
+            </Link>
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
