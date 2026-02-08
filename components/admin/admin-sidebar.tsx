@@ -13,6 +13,7 @@ import {
   Settings,
   LifeBuoy,
   Package,
+  Receipt,
   Menu,
   X,
 } from "lucide-react";
@@ -62,7 +63,7 @@ const menuItems: MenuItem[] = [
     { name: 'Appointments', icon: <Calendar size={20} />, path: '/admin/appointments' },
     { name: 'Pets', icon: <PawPrint size={20} />, path: '/admin/pets' },
     { name: 'Products', icon: <Package size={20} />, path: '/admin/products' },
-    { name: 'Billing & Invoice', icon: <Package size={20} />, path: '/admin/billing' },
+    { name: 'Billing & Invoice', icon: <Receipt size={20} />, path: '/admin/billing' },
     { name: 'Settings', icon: <Settings size={20} />, path: '/admin/settings' },
     { name: 'Help Support', icon: <LifeBuoy size={20} />, path: '/admin/help' },
 ];
