@@ -16,7 +16,8 @@ import {
   Files,
   Menu,
   X,
-  PillBottle
+  PillBottle,
+  Syringe
 } from "lucide-react";
 
 interface AdminSidebarProps {
@@ -65,6 +66,7 @@ const menuItems: MenuItem[] = [
     { name: 'My Appointments', icon: <Calendar size={20} />, path: '/veterinarian/appointments' },
     { name: 'Triage', icon: <PawPrint size={20} />, path: '/veterinarian/triage' },
     { name: 'Consultation', icon: <Package size={20} />, path: '/veterinarian/consultation' },
+    { name: 'Vaccinations', icon: <Syringe size={20} />, path: '/veterinarian/vaccinations' },
     { name: 'Settings', icon: <Settings size={20} />, path: '/veterinarian/settings' },
     { name: 'Help Support', icon: <LifeBuoy size={20} />, path: '/veterinarian/help' },
 ];
