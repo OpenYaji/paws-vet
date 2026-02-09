@@ -52,7 +52,7 @@ export default function VetSidebar({ collapsed, setCollapsed, mobileOpen, setMob
   };
 
   const getIsActive = (item: MenuItem) => {
-    if (item.path === '/admin/dashboard') {
+    if (item.path === '/veterinarian/dashboard') {
       return pathname === item.path;
     }
     return pathname?.startsWith(item.path);
