@@ -14,6 +14,7 @@ export default function VeterinarianDashboardPage() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [userId, setUserId] = useState<string>('');
+  const [userName, setUserName] = useState<string>('');
 
   useEffect(() => {
     async function loadStats() {
@@ -22,6 +23,7 @@ export default function VeterinarianDashboardPage() {
         if (!user) return;
 
         setUserId(user.id);
+        setUserName(user.user_metadata.name || '');
 
         // Get today's appointments
         const today = new Date().toISOString().split('T')[0];
@@ -73,7 +75,7 @@ export default function VeterinarianDashboardPage() {
     <div className="space-y-8 max-w-6xl mx-auto">
       {/* Welcome Section */}
       <div className="space-y-2">
-        <h1 className="text-3xl font-bold">Veterinarian Dashboard</h1>
+        <h1 className="text-3xl font-bold">Hello, {userName}</h1>
         <p className="text-muted-foreground">Manage your appointments and patients</p>
       </div>
 
@@ -115,21 +117,21 @@ export default function VeterinarianDashboardPage() {
         <h2 className="text-2xl font-bold">Quick Actions</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           <Button asChild className="h-auto flex-col py-6" size="lg">
-            <Link href="/veterinarian/appointments">
+            <Link href="/veterinarian/dashboard/appointments">
               <span className="text-2xl mb-2">📅</span>
               <span>View Appointments</span>
             </Link>
           </Button>
           <Button asChild variant="outline" className="h-auto flex-col py-6 bg-transparent" size="lg">
-            <Link href="/veterinarian/patients">
+            <Link href="/veterinarian/pets">
               <span className="text-2xl mb-2">🐾</span>
-              <span>Patient Records</span>
+              <span>Pet Records</span>
             </Link>
           </Button>
           <Button asChild variant="outline" className="h-auto flex-col py-6 bg-transparent" size="lg">
-            <Link href="/veterinarian/schedule">
+            <Link href="/veterinarian/prescriptions">
               <span className="text-2xl mb-2">📋</span>
-              <span>My Schedule</span>
+              <span>New Pets</span>
             </Link>
           </Button>
         </div>
