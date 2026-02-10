@@ -1,13 +1,37 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Search, Sun, Moon, Bell, User } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Search, Sun, Moon, Bell, User, LogOut, Settings } from 'lucide-react';
+import { supabase } from '@/lib/auth-client';
 import { Input } from '@/components/ui/input'; // Assuming you have shadcn Input, otherwise use standard <input>
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export default function VetHeader() {
   const [currentTime, setCurrentTime] = useState<string>('');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [userName, setUserName] = useState<string>('');
+  const [userEmail, setUserEmail] = useState('vet@example.com'); // Placeholder until loaded
+  const router = useRouter();
+
+  useEffect(() => {
+    async function getUser() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user && user.email) {
+        setUserEmail(user.email);
+      }
+    }
+    getUser();
+  }, []);
   // Effect to update time every second
   useEffect(() => {
     const timer = setInterval(() => {
@@ -35,6 +59,16 @@ export default function VetHeader() {
       document.documentElement.classList.remove('dark');
     }
   }, [isDarkMode]);
+
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      router.push('/login');
+      router.refresh();
+    } catch (error) {
+      console.error('Error logging out:', error);
+    }
+  };
 
   return (
     <header className="h-16 border-b bg-white dark:bg-gray-900 dark:border-gray-800 flex items-center justify-between px-6 sticky top-0 z-50">
@@ -71,12 +105,53 @@ export default function VetHeader() {
           <Bell size={20} />
           <span className="absolute top-1 right-1 h-2.5 w-2.5 bg-red-500 rounded-full border-2 border-white dark:border-gray-900"></span>
         </button>
-        
-        {/* User Avatar (Optional fallback) */}
-        <div className="h-8 w-8 rounded-full bg-green-600 flex items-center justify-center text-white font-bold text-xs">
-          <span>{userName ? userName.charAt(0).toUpperCase() : <User size={16} />}</span>
-        </div>
 
+        {/* --- USER DROPDOWN --- */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="relative h-10 w-10 rounded-full hover:bg-transparent">
+              <Avatar className="h-10 w-10 cursor-pointer border-2 border-transparent hover:border-green-500 transition-all">
+                <AvatarImage src="" alt="User" />
+                <AvatarFallback className="bg-green-600 text-white font-bold">
+                  <User size={20} />
+                </AvatarFallback>
+              </Avatar>
+            </Button>
+          </DropdownMenuTrigger>
+          
+          <DropdownMenuContent className="w-56" align="end" forceMount>
+            <DropdownMenuLabel className="font-normal">
+              <div className="flex flex-col space-y-1">
+                <p className="text-sm font-medium leading-none">Veterinarian Account</p>
+                <p className="text-xs leading-none text-muted-foreground">
+                  {userEmail}
+                </p>
+              </div>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            
+            <DropdownMenuItem className="cursor-pointer">
+              <User className="mr-2 h-4 w-4" />
+              <span>Profile</span>
+            </DropdownMenuItem>
+            
+            <DropdownMenuItem className="cursor-pointer">
+              <Settings className="mr-2 h-4 w-4" />
+              <span>Settings</span>
+            </DropdownMenuItem>
+            
+            <DropdownMenuSeparator />
+            
+            <DropdownMenuItem 
+              onClick={handleLogout}
+              className="text-red-600 cursor-pointer focus:text-red-600 focus:bg-red-50"
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              <span>Log out</span>
+            </DropdownMenuItem>
+            
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   );
