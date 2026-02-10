@@ -32,11 +32,13 @@ const statusColors = {
 };
 
 const appointmentTypes = {
-  checkup: 'Check-up',
+  checkup: 'Checkup',
+  consultation: 'Consultation',
   vaccination: 'Vaccination',
   surgery: 'Surgery',
   emergency: 'Emergency',
-  consultation: 'Consultation',
+  dental: 'Dental',
+  grooming: 'Grooming',
   followup: 'Follow-up',
 };
 
@@ -79,7 +81,16 @@ export default function AppointmentsPage() {
       if (searchQuery) params.append('search', searchQuery);
 
       const response = await fetch(`/api/appointments?${params.toString()}`);
+      
+      if (!response.ok) {
+        console.error('Failed to fetch appointments:', response.status);
+        setAppointments([]);
+        setLoading(false);
+        return;
+      }
+
       const data = await response.json();
+      console.log('Fetched appointments:', data);
       setAppointments(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching appointments:', error);
@@ -337,7 +348,7 @@ export default function AppointmentsPage() {
                   {selectedAppointment.appointment_status.replace('_', ' ')}
                 </Badge>
                 <Badge variant="outline">
-                  {appointmentTypes[selectedAppointment.appointment_type]}
+                  {appointmentTypes[selectedAppointment.appointment_type as keyof typeof appointmentTypes] || selectedAppointment.appointment_type}
                 </Badge>
                 {selectedAppointment.is_emergency && (
                   <Badge variant="destructive">Emergency</Badge>

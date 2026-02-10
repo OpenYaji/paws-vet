@@ -94,20 +94,49 @@ export default function SignupPage() {
 
   function handleClientChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     const { name, value } = e.target;
-    setClientData((prev) => ({ ...prev, [name]: value }));
+    
+    // Format phone number on change
+    if (name === 'phone' || name === 'alternatePhone') {
+      // Remove all non-digit characters except +
+      const cleaned = value.replace(/[^\d+]/g, '');
+      setClientData((prev) => ({ ...prev, [name]: cleaned }));
+    } else {
+      setClientData((prev) => ({ ...prev, [name]: value }));
+    }
   }
 
   function handleVetChange(e: React.ChangeEvent<HTMLInputElement>) {
     const { name, value, type } = e.target;
-    setVetData((prev) => ({
-      ...prev,
-      [name]: type === 'number' ? parseFloat(value) || 0 : value,
-    }));
+    
+    // Format phone number on change
+    if (name === 'phone') {
+      const cleaned = value.replace(/[^\d+]/g, '');
+      setVetData((prev) => ({ ...prev, phone: cleaned }));
+    } else {
+      setVetData((prev) => ({
+        ...prev,
+        [name]: type === 'number' ? parseFloat(value) || 0 : value,
+      }));
+    }
   }
 
   function handleAdminChange(e: React.ChangeEvent<HTMLInputElement>) {
     const { name, value } = e.target;
-    setAdminData((prev) => ({ ...prev, [name]: value }));
+    
+    // Format phone number on change
+    if (name === 'phone') {
+      const cleaned = value.replace(/[^\d+]/g, '');
+      setAdminData((prev) => ({ ...prev, phone: cleaned }));
+    } else {
+      setAdminData((prev) => ({ ...prev, [name]: value }));
+    }
+  }
+
+  function validatePhone(phone: string): boolean {
+    // Must match: ^\+?[1-9]\d{1,14}$
+    // Starts with optional +, then 1-9, then 1-14 more digits
+    const phoneRegex = /^\+?[1-9]\d{1,14}$/;
+    return phoneRegex.test(phone);
   }
 
   async function handleStep1Submit(e: React.FormEvent) {
@@ -132,10 +161,72 @@ export default function SignupPage() {
   async function handleStep2Submit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+
+    // ✅ VALIDATE EVERYTHING FIRST - Before creating any database records
+    
+    // Validate phone numbers based on role
+    if (role === 'client') {
+      if (!clientData.firstName.trim() || !clientData.lastName.trim()) {
+        setError('First name and last name are required');
+        return;
+      }
+      if (!validatePhone(clientData.phone)) {
+        setError('Phone number must be in format: +1234567890 (e.g., +12025551234)');
+        return;
+      }
+      if (clientData.alternatePhone && !validatePhone(clientData.alternatePhone)) {
+        setError('Alternate phone number must be in format: +1234567890');
+        return;
+      }
+      if (!clientData.addressLine1.trim()) {
+        setError('Street address is required');
+        return;
+      }
+      if (!clientData.city.trim() || !clientData.state.trim()) {
+        setError('City and state are required');
+        return;
+      }
+      // Validate ZIP code format
+      const zipRegex = /^\d{5}(-\d{4})?$/;
+      if (!zipRegex.test(clientData.zipCode)) {
+        setError('ZIP code must be in format: 12345 or 12345-6789');
+        return;
+      }
+    } else if (role === 'veterinarian') {
+      if (!vetData.firstName.trim() || !vetData.lastName.trim()) {
+        setError('First name and last name are required');
+        return;
+      }
+      if (!validatePhone(vetData.phone)) {
+        setError('Phone number must be in format: +1234567890');
+        return;
+      }
+      if (!vetData.licenseNumber.trim()) {
+        setError('License number is required');
+        return;
+      }
+    } else if (role === 'admin') {
+      if (!adminData.firstName.trim() || !adminData.lastName.trim()) {
+        setError('First name and last name are required');
+        return;
+      }
+      if (!validatePhone(adminData.phone)) {
+        setError('Phone number must be in format: +1234567890');
+        return;
+      }
+      if (!adminData.employeeId.trim() || !adminData.position.trim()) {
+        setError('Employee ID and position are required');
+        return;
+      }
+    }
+
     setIsLoading(true);
 
     try {
-      // Step 1: Create auth user
+      console.log('Starting signup process for role:', role);
+      console.log('All validation passed, creating auth user...');
+
+      // ✅ NOW create auth user - Only after all validation passes
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: email,
         password: password,
@@ -147,6 +238,7 @@ export default function SignupPage() {
       });
 
       if (signUpError) {
+        console.error('Signup error:', signUpError);
         setError(signUpError.message);
         setIsLoading(false);
         return;
@@ -158,6 +250,8 @@ export default function SignupPage() {
         return;
       }
 
+      console.log('Auth user created:', authData.user.id);
+
       // Step 2: Insert into users table
       const { error: userError } = await supabase.from('users').insert({
         id: authData.user.id,
@@ -168,35 +262,42 @@ export default function SignupPage() {
       });
 
       if (userError) {
-        setError('Failed to create user record: ' + userError.message);
+        console.error('User table error:', userError);
+        // If user table fails, we should delete the auth user but Supabase doesn't allow that easily
+        // Instead, show a clear error message
+        setError('Account created but profile setup failed. Please contact support with this email: ' + email);
         setIsLoading(false);
         return;
       }
+
+      console.log('User record created in users table');
 
       // Step 3: Create role-specific profile
       let profileError = null;
 
       if (role === 'client') {
+        console.log('Creating client profile...');
         const { error } = await supabase.from('client_profiles').insert({
           user_id: authData.user.id,
-          first_name: clientData.firstName,
-          last_name: clientData.lastName,
+          first_name: clientData.firstName.trim(),
+          last_name: clientData.lastName.trim(),
           phone: clientData.phone,
           alternate_phone: clientData.alternatePhone || null,
-          address_line1: clientData.addressLine1,
-          address_line2: clientData.addressLine2 || null,
-          city: clientData.city,
-          state: clientData.state,
+          address_line1: clientData.addressLine1.trim(),
+          address_line2: clientData.addressLine2?.trim() || null,
+          city: clientData.city.trim(),
+          state: clientData.state.trim(),
           zip_code: clientData.zipCode,
           communication_preference: clientData.communicationPreference,
         });
         profileError = error;
       } else if (role === 'veterinarian') {
+        console.log('Creating veterinarian profile...');
         const { error } = await supabase.from('veterinarian_profiles').insert({
           user_id: authData.user.id,
-          first_name: vetData.firstName,
-          last_name: vetData.lastName,
-          license_number: vetData.licenseNumber,
+          first_name: vetData.firstName.trim(),
+          last_name: vetData.lastName.trim(),
+          license_number: vetData.licenseNumber.trim(),
           phone: vetData.phone,
           years_of_experience: vetData.yearsOfExperience,
           consultation_fee: vetData.consultationFee,
@@ -205,35 +306,41 @@ export default function SignupPage() {
         });
         profileError = error;
       } else if (role === 'admin') {
+        console.log('Creating admin profile...');
         const { error } = await supabase.from('admin_profiles').insert({
           user_id: authData.user.id,
-          first_name: adminData.firstName,
-          last_name: adminData.lastName,
-          employee_id: adminData.employeeId,
+          first_name: adminData.firstName.trim(),
+          last_name: adminData.lastName.trim(),
+          employee_id: adminData.employeeId.trim(),
           phone: adminData.phone,
-          department: adminData.department || null,
-          position: adminData.position,
+          department: adminData.department?.trim() || null,
+          position: adminData.position.trim(),
           hire_date: adminData.hireDate,
         });
         profileError = error;
       }
 
       if (profileError) {
-        setError('Failed to create profile: ' + profileError.message);
+        console.error('Profile creation error:', profileError);
+        setError('Account created but profile setup failed: ' + profileError.message + '. Please contact support.');
         setIsLoading(false);
         return;
       }
 
+      console.log('Profile created successfully. Redirecting...');
+
       // Success! Redirect based on role
-      if (role === 'client') {
-        router.push('/client');
-      } else if (role === 'veterinarian') {
-        router.push('/dashboard');
-      } else if (role === 'admin') {
-        router.push('/dashboard');
-      }
+      setTimeout(() => {
+        if (role === 'client') {
+          window.location.href = '/client/dashboard';
+        } else if (role === 'veterinarian') {
+          window.location.href = '/veterinarian/dashboard';
+        } else if (role === 'admin') {
+          window.location.href = '/admin/dashboard';
+        }
+      }, 500);
     } catch (err) {
-      console.error('Signup error:', err);
+      console.error('Unexpected signup error:', err);
       setError('An unexpected error occurred. Please try again.');
       setIsLoading(false);
     }
@@ -376,17 +483,18 @@ export default function SignupPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <label htmlFor="phone" className="text-sm font-medium leading-none">
-                          Phone Number
+                          Phone Number *
                         </label>
                         <Input
                           id="phone"
                           name="phone"
                           type="tel"
-                          placeholder="+1234567890"
+                          placeholder="+12025551234"
                           value={clientData.phone}
                           onChange={handleClientChange}
                           required
                         />
+                        <p className="text-xs text-muted-foreground">Include country code: +1</p>
                       </div>
                       <div className="space-y-2">
                         <label htmlFor="alternatePhone" className="text-sm font-medium leading-none">
@@ -396,7 +504,7 @@ export default function SignupPage() {
                           id="alternatePhone"
                           name="alternatePhone"
                           type="tel"
-                          placeholder="+1234567890"
+                          placeholder="+12025551234"
                           value={clientData.alternatePhone}
                           onChange={handleClientChange}
                         />
