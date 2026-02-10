@@ -2,11 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/auth-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Search, Plus, Edit, Trash2, UserPlus, Mail, Phone, MapPin, Users, Shield, Stethoscope, User } from 'lucide-react';
+import { Search, UserPlus, Mail, Phone, MapPin, Users, Shield, Stethoscope, User, Edit, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -37,6 +36,8 @@ interface User {
   created_at: string;
 }
 
+const USERS_PER_PAGE = 10;
+
 export default function UsersPage() {
   const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
@@ -45,6 +46,7 @@ export default function UsersPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState(1);
   const [stats, setStats] = useState({
     total: 0,
     petOwners: 0,
@@ -58,6 +60,7 @@ export default function UsersPage() {
 
   useEffect(() => {
     filterUsers();
+    setCurrentPage(1); // Reset to first page when filters change
   }, [searchQuery, roleFilter, users]);
 
   async function loadUsers() {
@@ -65,7 +68,6 @@ export default function UsersPage() {
       setIsLoading(true);
       setError(null);
       
-      console.log('Fetching users...');
       const response = await fetch('/api/user');
       
       if (!response.ok) {
@@ -74,8 +76,6 @@ export default function UsersPage() {
       }
       
       const usersData = await response.json();
-      console.log('Received users:', usersData);
-      
       setUsers(usersData);
 
       const total = usersData.length;
@@ -95,7 +95,6 @@ export default function UsersPage() {
   function filterUsers() {
     let filtered = [...users];
 
-    // Apply search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(user => 
@@ -105,7 +104,6 @@ export default function UsersPage() {
       );
     }
 
-    // Apply role filter
     if (roleFilter !== 'all') {
       filtered = filtered.filter(user => user.role === roleFilter);
     }
@@ -150,13 +148,102 @@ export default function UsersPage() {
     router.push(`/admin/users-management/${route}/${user.id}`);
   }
 
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredUsers.length / USERS_PER_PAGE);
+  const startIndex = (currentPage - 1) * USERS_PER_PAGE;
+  const endIndex = startIndex + USERS_PER_PAGE;
+  const paginatedUsers = filteredUsers.slice(startIndex, endIndex);
+
+  function goToNextPage() {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  }
+
+  function goToPreviousPage() {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  }
+
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
-          <p className="text-muted-foreground">Loading users...</p>
+      <div className="space-y-8 p-6">
+        {/* Header Skeleton */}
+        <div className="flex justify-between items-center">
+          <div className="space-y-2">
+            <div className="h-10 w-64 bg-gray-200 animate-pulse rounded"></div>
+            <div className="h-5 w-96 bg-gray-200 animate-pulse rounded"></div>
+          </div>
+          <div className="h-11 w-40 bg-gray-200 animate-pulse rounded"></div>
         </div>
+
+        {/* Stats Cards Skeleton */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[1, 2, 3, 4].map((i) => (
+            <Card key={i} className="border-2">
+              <CardHeader className="pb-3">
+                <div className="flex justify-between items-start">
+                  <div className="h-4 w-24 bg-gray-200 animate-pulse rounded"></div>
+                  <div className="w-10 h-10 rounded-full bg-gray-200 animate-pulse"></div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="h-9 w-16 bg-gray-200 animate-pulse rounded mb-1"></div>
+                <div className="h-3 w-24 bg-gray-200 animate-pulse rounded"></div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Table Skeleton */}
+        <Card className="border-2">
+          <CardHeader className="border-b bg-muted/30">
+            <div className="flex items-center justify-between">
+              <div className="h-6 w-32 bg-gray-200 animate-pulse rounded"></div>
+              <div className="h-8 w-20 bg-gray-200 animate-pulse rounded"></div>
+            </div>
+            <div className="flex gap-4 mt-4">
+              <div className="h-11 flex-1 bg-gray-200 animate-pulse rounded"></div>
+              <div className="h-11 w-48 bg-gray-200 animate-pulse rounded"></div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    {[1, 2, 3, 4, 5, 6].map((i) => (
+                      <TableHead key={i}>
+                        <div className="h-4 w-20 bg-gray-200 animate-pulse rounded"></div>
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <TableRow key={i}>
+                      <TableCell>
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 rounded-full bg-gray-200 animate-pulse"></div>
+                          <div className="space-y-2">
+                            <div className="h-4 w-32 bg-gray-200 animate-pulse rounded"></div>
+                            <div className="h-3 w-40 bg-gray-200 animate-pulse rounded"></div>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell><div className="h-6 w-20 bg-gray-200 animate-pulse rounded"></div></TableCell>
+                      <TableCell><div className="h-4 w-32 bg-gray-200 animate-pulse rounded"></div></TableCell>
+                      <TableCell><div className="h-6 w-16 bg-gray-200 animate-pulse rounded"></div></TableCell>
+                      <TableCell><div className="h-4 w-24 bg-gray-200 animate-pulse rounded"></div></TableCell>
+                      <TableCell><div className="h-8 w-20 bg-gray-200 animate-pulse rounded"></div></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -178,7 +265,7 @@ export default function UsersPage() {
   }
 
   return (
-    <div className="space-y-8 p-1">
+    <div className="space-y-8 p-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
@@ -246,9 +333,17 @@ export default function UsersPage() {
         </Card>
       </div>
 
-      {/* Filters */}
+      {/* Users Table with Integrated Filters */}
       <Card className="border-2">
-        <CardContent className="pt-6">
+        <CardHeader className="border-b bg-muted/30 space-y-4">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-xl">Users Directory</CardTitle>
+            <Badge variant="outline" className="text-base px-3 py-1">
+              {filteredUsers.length} {filteredUsers.length === 1 ? 'user' : 'users'}
+            </Badge>
+          </div>
+          
+          {/* Search and Filter Row */}
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={20} />
@@ -271,19 +366,8 @@ export default function UsersPage() {
               </SelectContent>
             </Select>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Users Table */}
-      <Card className="border-2">
-        <CardHeader className="border-b bg-muted/30">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-xl">Users Directory</CardTitle>
-            <Badge variant="outline" className="text-base px-3 py-1">
-              {filteredUsers.length} {filteredUsers.length === 1 ? 'user' : 'users'}
-            </Badge>
-          </div>
         </CardHeader>
+        
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <Table>
@@ -298,7 +382,7 @@ export default function UsersPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredUsers.length === 0 ? (
+                {paginatedUsers.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-12">
                       <div className="flex flex-col items-center gap-3">
@@ -315,7 +399,7 @@ export default function UsersPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredUsers.map((user) => (
+                  paginatedUsers.map((user) => (
                     <TableRow 
                       key={user.id}
                       className="cursor-pointer hover:bg-muted/50 transition-colors"
@@ -397,6 +481,38 @@ export default function UsersPage() {
               </TableBody>
             </Table>
           </div>
+          
+          {/* Pagination */}
+          {filteredUsers.length > USERS_PER_PAGE && (
+            <div className="border-t px-6 py-4 flex items-center justify-between">
+              <div className="text-sm text-muted-foreground">
+                Showing {startIndex + 1} to {Math.min(endIndex, filteredUsers.length)} of {filteredUsers.length} users
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={goToPreviousPage}
+                  disabled={currentPage === 1}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </Button>
+                <div className="text-sm font-medium px-3">
+                  Page {currentPage} of {totalPages}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={goToNextPage}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
