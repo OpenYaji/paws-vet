@@ -27,11 +27,12 @@ interface Pet {
     microchip_number?: string;
     owner_id: string;
     created_at: string;
-    owners?: {
+    client_profiles?: {
         id: string;
-        full_name: string;
-        email: string;
-    };
+        first_name: string;
+        last_name: string;
+        phone: string;
+    }[];
 }
 
     //Use fetcher to load the data faster
@@ -39,12 +40,22 @@ interface Pet {
     const { data, error } = await supabase
         .from('pets')
         .select(`
-        *,
-        owners (
             id,
-            full_name,
-            email
-        )
+            owner_id,
+            name,
+            species,
+            breed,
+            color,
+            gender,
+            weight,
+            microchip_number,
+            client_profiles (
+                id,
+                user_id,
+                first_name,
+                last_name,
+                phone
+            )
         `)
         .order('name', { ascending: true });
 
@@ -62,8 +73,11 @@ export default function PatientsPage() {
 
         const filteredPets = pets.filter((pet) => {
         
+        const petOwner = pet.client_profiles?.[0];
         // Now 'pet' exists, so we can use it here:
-        const ownerName = pet.owners?.full_name || '';
+        const ownerName = petOwner 
+            ? `${petOwner.first_name} ${petOwner.last_name}` 
+            : 'Unknown';
         
         const matchesSearch = 
             pet.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -270,10 +284,10 @@ export default function PatientsPage() {
                         </div>
                         <div>
                             <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
-                            Age
+                            Color
                             </p>
                             <p className="text-sm font-medium mt-1">
-                            {pet.age ? `${pet.age} years` : 'N/A'}
+                            {pet.color ? `${pet.color} years` : 'N/A'}
                             </p>
                         </div>
                         <div>
@@ -287,7 +301,7 @@ export default function PatientsPage() {
                             Owner
                             </p>
                             <p className="text-sm font-medium mt-1">
-                            {pet.owners?.full_name || 'Unknown'}
+                            {pet.client_profiles?.[0] ? `${pet.client_profiles[0].first_name} ${pet.client_profiles[0].last_name}` : 'Unknown'}
                             </p>
                         </div>
                         </div>
