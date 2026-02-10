@@ -129,9 +129,9 @@ export default function VeterinarianDashboardPage() {
             </Link>
           </Button>
           <Button asChild variant="outline" className="h-auto flex-col py-6 bg-transparent" size="lg">
-            <Link href="/veterinarian/prescriptions">
+            <Link href="/veterinarian/pets/new-pets">
               <span className="text-2xl mb-2">📋</span>
-              <span>New Pets</span>
+              <span>Recently Added Pets</span>
             </Link>
           </Button>
         </div>
