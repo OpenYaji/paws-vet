@@ -444,3 +444,25 @@ CREATE TABLE public.veterinarian_profiles (
   CONSTRAINT veterinarian_profiles_pkey PRIMARY KEY (id),
   CONSTRAINT veterinarian_profiles_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
 );
+
+CREATE TABLE public.triage_records (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  appointment_id uuid REFERENCES public.appointments(id) NOT NULL,
+  pet_id uuid REFERENCES public.pets(id) NOT NULL,
+  weight numeric, -- in kg
+  temperature numeric, -- in celsius
+  heart_rate integer, -- bpm
+  respiratory_rate integer, -- bpm
+  mucous_membrane text, -- e.g., Pink, Pale, Blue
+  triage_level text DEFAULT 'Non-Urgent', -- Non-Urgent, Urgent, Critical
+  chief_complaint text,
+  notes text,
+  created_by uuid REFERENCES auth.users(id),
+  created_at timestamp with time zone DEFAULT now()
+);
+
+-- Enable Security
+ALTER TABLE public.triage_records ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Vets can manage triage" ON public.triage_records 
+FOR ALL USING (auth.uid() IN (SELECT id FROM auth.users));
