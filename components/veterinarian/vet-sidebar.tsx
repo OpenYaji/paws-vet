@@ -183,7 +183,7 @@ const menuItems: MenuItem[] = [
                   <Menu size={20} />
                 </button>
                 <Image src="/images/image.png" alt="Logo" width={64} height={64} className="rounded-full mb-2" />
-                <h2 className="font-bold text-sm leading-tight">PAWS VETERINARY<br />CLINIC</h2>
+                <h2 className="font-bold text-sm leading-tight">VETERINARIAN'S<br />PANEL</h2>
               </header>
               <nav className="flex-1 flex flex-col">
                 <ul className="space-y-2 flex-1">

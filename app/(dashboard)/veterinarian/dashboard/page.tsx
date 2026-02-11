@@ -14,7 +14,33 @@ export default function VeterinarianDashboardPage() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [userId, setUserId] = useState<string>('');
-  const [userName, setUserName] = useState<string>('');
+  const [{firstName, lastName}, setName] = useState<{firstName: string, lastName: string}>({firstName: '', lastName: ''});
+
+  useEffect(() => {
+    async function getUserFullName(){
+      try{
+        const { data: { user }} = await supabase.auth.getUser();
+        if(!user) return;
+
+        const { data, error } = await supabase.from('veterinarian_profiles')
+          .select('first_name, last_name')
+          .eq('id', user.id)
+          .single();
+
+          if(data){
+            setName({
+              firstName: data.first_name || 'Doc',
+              lastName: data.last_name || '' 
+            });
+          }
+        }
+        catch(error){
+          console.error('Error fetching user profile:', error);
+        }
+
+        getUserFullName();
+    }
+  }, []);
 
   useEffect(() => {
     async function loadStats() {
@@ -23,7 +49,10 @@ export default function VeterinarianDashboardPage() {
         if (!user) return;
 
         setUserId(user.id);
-        setUserName(user.user_metadata.name || '');
+        setName({
+          firstName: user.user_metadata.first_name || '',
+          lastName: user.user_metadata.last_name || ''
+        });
 
         // Get today's appointments
         const today = new Date().toISOString().split('T')[0];
@@ -75,7 +104,7 @@ export default function VeterinarianDashboardPage() {
     <div className="space-y-8 max-w-6xl mx-auto">
       {/* Welcome Section */}
       <div className="space-y-2">
-        <h1 className="text-3xl font-bold">Hello, {userName}</h1>
+        <h1 className="text-3xl font-bold">Hello, Dr. {firstName} {lastName}</h1>
         <p className="text-muted-foreground">Manage your appointments and patients</p>
       </div>
 
