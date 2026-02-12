@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Sun, Moon, Bell, User, LogOut, Settings } from 'lucide-react';
+import { Search, Sun, Moon, Bell, User, LogOut, Settings, Calendar, CreditCard, FlaskConical, BellRing, Info, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/auth-client';
-import { Input } from '@/components/ui/input'; // Assuming you have shadcn Input, otherwise use standard <input>
+import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -14,14 +14,47 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+
+interface Notification {
+  id: string
+  notification_type: string
+  subject: string | null
+  content: string
+  sent_at: string
+  delivery_status: string
+}
+
+const notificationIcon: Record<string, React.ReactNode> = {
+  appointment_reminder: <Calendar size={16} className="text-blue-500" />,
+  appointment_confirmed: <Calendar size={16} className="text-green-500" />,
+  appointment_cancelled: <Calendar size={16} className="text-red-500" />,
+  test_results: <FlaskConical size={16} className="text-purple-500" />,
+  payment_due: <CreditCard size={16} className="text-orange-500" />,
+  general: <Info size={16} className="text-gray-500" />,
+}
+
+function timeAgo(dateStr: string): string {
+  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000)
+  if (seconds < 60) return 'Just now'
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  return `${days}d ago`
+}
 
 export default function VetHeader() {
   const [currentTime, setCurrentTime] = useState<string>('');
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [userName, setUserName] = useState<string>('');
-  const [userEmail, setUserEmail] = useState('vet@example.com'); // Placeholder until loaded
-  const [isLogoutModalOpen, setLogoutModalOpen] = useState(false);
+  const [userEmail, setUserEmail] = useState('vet@example.com');
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notifLoading, setNotifLoading] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [notifFetched, setNotifFetched] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -33,6 +66,37 @@ export default function VetHeader() {
     }
     getUser();
   }, []);
+
+  // Fetch notifications when popover opens for the first time
+  useEffect(() => {
+    if (!notifOpen || notifFetched) return;
+
+    const fetchNotifications = async () => {
+      setNotifLoading(true);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data, error } = await supabase
+          .from('notification_logs')
+          .select('id, notification_type, subject, content, sent_at, delivery_status')
+          .eq('recipient_id', user.id)
+          .order('sent_at', { ascending: false })
+          .limit(20);
+
+        if (!error && data) {
+          setNotifications(data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch notifications:', err);
+      } finally {
+        setNotifLoading(false);
+        setNotifFetched(true);
+      }
+    };
+
+    fetchNotifications();
+  }, [notifOpen, notifFetched]);
   // Effect to update time every second
   useEffect(() => {
     const timer = setInterval(() => {
@@ -112,11 +176,59 @@ export default function VetHeader() {
           {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
         </button>
 
-        {/* Notifications (Mock) */}
-        <button className="relative p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300 transition">
-          <Bell size={20} />
-          <span className="absolute top-1 right-1 h-2.5 w-2.5 bg-red-500 rounded-full border-2 border-white dark:border-gray-900"></span>
-        </button>
+        {/* Notifications */}
+        <Popover open={notifOpen} onOpenChange={setNotifOpen}>
+          <PopoverTrigger asChild>
+            <button className="relative p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300 transition">
+              <Bell size={20} />
+              {notifications.length > 0 && (
+                <span className="absolute top-1 right-1 h-2.5 w-2.5 bg-red-500 rounded-full border-2 border-white dark:border-gray-900" />
+              )}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-80 p-0">
+            <div className="flex items-center justify-between px-4 py-3 border-b">
+              <h4 className="text-sm font-semibold">Notifications</h4>
+              {notifications.length > 0 && (
+                <span className="text-xs text-muted-foreground">
+                  {notifications.length} notification{notifications.length !== 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+            <ScrollArea className="max-h-80">
+              {notifLoading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : notifications.length === 0 ? (
+                <div className="flex flex-col items-center py-8 text-muted-foreground">
+                  <BellRing size={24} className="mb-2" />
+                  <p className="text-sm">No notifications yet</p>
+                </div>
+              ) : (
+                <div>
+                  {notifications.map((notif) => (
+                    <div
+                      key={notif.id}
+                      className="flex gap-3 px-4 py-3 hover:bg-accent transition-colors border-b last:border-b-0"
+                    >
+                      <div className="mt-0.5 shrink-0">
+                        {notificationIcon[notif.notification_type] || <Info size={16} className="text-gray-500" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        {notif.subject && (
+                          <p className="text-sm font-medium truncate">{notif.subject}</p>
+                        )}
+                        <p className="text-xs text-muted-foreground line-clamp-2">{notif.content}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{timeAgo(notif.sent_at)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </ScrollArea>
+          </PopoverContent>
+        </Popover>
 
         {/* --- USER DROPDOWN --- */}
         <DropdownMenu>
