@@ -117,10 +117,10 @@ export default function VaccinationsPage() {
     <div className="space-y-6 max-w-7xl mx-auto p-2">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+          <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
             <Syringe className="text-green-600 h-8 w-8" /> Immunizations
           </h1>
-          <p className="text-gray-500">Track vaccines and schedule boosters</p>
+          <p className="text-muted-foreground">Track vaccines and schedule boosters</p>
         </div>
 
         {/* --- ADD NEW VACCINE DIALOG --- */}

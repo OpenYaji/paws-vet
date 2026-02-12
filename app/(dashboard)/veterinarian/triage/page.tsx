@@ -117,8 +117,8 @@ export default function TriagePage() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto h-[calc(100vh-100px)] flex flex-col">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Triage & Intake</h1>
-        <p className="text-gray-500">Assess patient vitals and prioritize care</p>
+        <h1 className="text-3xl font-bold text-foreground">Triage & Intake</h1>
+        <p className="text-muted-foreground">Assess patient vitals and prioritize care</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6 flex-1 h-full">

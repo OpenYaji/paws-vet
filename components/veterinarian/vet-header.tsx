@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, Sun, Moon, Bell, User, LogOut, Settings, Calendar, CreditCard, FlaskConical, BellRing, Info, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/auth-client';
-import { Input } from '@/components/ui/input';
+import { useTheme } from '@/components/veterinarian/theme-provider';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -49,7 +49,7 @@ function timeAgo(dateStr: string): string {
 
 export default function VetHeader() {
   const [currentTime, setCurrentTime] = useState<string>('');
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const { setTheme, isDark } = useTheme();
   const [userEmail, setUserEmail] = useState('vet@example.com');
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notifLoading, setNotifLoading] = useState(false);
@@ -116,15 +116,6 @@ export default function VetHeader() {
     return () => clearInterval(timer);
   }, []);
 
-  // Effect to toggle Dark Mode class on the HTML <body>
-  useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [isDarkMode]);
-
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
@@ -136,15 +127,15 @@ export default function VetHeader() {
   };
 
   return (
-    <header className="h-16 border-b bg-white dark:bg-gray-900 dark:border-gray-800 flex items-center justify-between px-6 sticky top-0 z-50">
+    <header className="h-16 border-b border-border bg-background flex items-center justify-between px-6 sticky top-0 z-50">
       
       {/* LEFT: Search Bar */}
       <div className="relative w-96 hidden md:block">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
-        <input 
-          type="text" 
-          placeholder="Search patients, appointments..." 
-          className="w-full pl-10 pr-4 py-2 text-sm border border-gray-200 rounded-full bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-500 dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
+        <input
+          type="text"
+          placeholder="Search patients, appointments..."
+          className="w-full pl-10 pr-4 py-2 text-sm border border-border rounded-full bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
         />
       </div>
 
@@ -152,26 +143,26 @@ export default function VetHeader() {
       <div className="flex items-center gap-4">
         
         {/* Timestamp Display */}
-        <div className="hidden lg:block text-sm font-medium text-gray-500 dark:text-gray-400 border-r pr-4 mr-2">
+        <div className="hidden lg:block text-sm font-medium text-muted-foreground border-r border-border pr-4 mr-2">
           {currentTime || 'Loading...'}
         </div>
 
         {/* Theme Toggle Button */}
-        <button 
-          onClick={() => setIsDarkMode(!isDarkMode)}
-          className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300 transition"
+        <button
+          onClick={() => setTheme(isDark ? 'light' : 'dark')}
+          className="p-2 rounded-full hover:bg-accent text-muted-foreground transition"
           title="Toggle Theme"
         >
-          {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+          {isDark ? <Sun size={20} /> : <Moon size={20} />}
         </button>
 
         {/* Notifications */}
         <Popover open={notifOpen} onOpenChange={setNotifOpen}>
           <PopoverTrigger asChild>
-            <button className="relative p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300 transition">
+            <button className="relative p-2 rounded-full hover:bg-accent text-muted-foreground transition">
               <Bell size={20} />
               {notifications.length > 0 && (
-                <span className="absolute top-1 right-1 h-2.5 w-2.5 bg-red-500 rounded-full border-2 border-white dark:border-gray-900" />
+                <span className="absolute top-1 right-1 h-2.5 w-2.5 bg-red-500 rounded-full border-2 border-background" />
               )}
             </button>
           </PopoverTrigger>
@@ -223,9 +214,9 @@ export default function VetHeader() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="relative h-10 w-10 rounded-full hover:bg-transparent">
-              <Avatar className="h-10 w-10 cursor-pointer border-2 border-transparent hover:border-green-500 transition-all">
+              <Avatar className="h-10 w-10 cursor-pointer border-2 border-transparent hover:border-primary transition-all">
                 <AvatarImage src="" alt="User" />
-                <AvatarFallback className="bg-green-600 text-white font-bold">
+                <AvatarFallback className="bg-primary text-primary-foreground font-bold">
                   <User size={20} />
                 </AvatarFallback>
               </Avatar>
