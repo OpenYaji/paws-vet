@@ -37,7 +37,7 @@ export default function AddNewPet({ onPetAdded }: AddNewPetProps) {
     name: '',
     species: '',
     breed: '',
-    age: '',
+    color: '',
     weight: '',
     owner_id: '',
   });
@@ -104,7 +104,7 @@ export default function AddNewPet({ onPetAdded }: AddNewPetProps) {
           name: newPet.name,
           species: newPet.species,
           breed: newPet.breed,
-          age: newPet.age ? Number(newPet.age) : null,
+          color: newPet.color ? Number(newPet.color) : null,
           weight: newPet.weight,
           owner_id: newPet.owner_id,
           image_url: uploadedImageUrl,
@@ -115,7 +115,7 @@ export default function AddNewPet({ onPetAdded }: AddNewPetProps) {
       // 3. Success
       onPetAdded(); // Notify parent to refresh list
       setIsAddOpen(false);
-      setNewPet({ name: '', species: '', breed: '', age: '', weight: '', owner_id: '' });
+      setNewPet({ name: '', species: '', breed: '', color: '', weight: '', owner_id: '' });
       setSelectedImageFile(null);
       setImagePreviewUrl(null);
 
@@ -215,14 +215,14 @@ export default function AddNewPet({ onPetAdded }: AddNewPetProps) {
 
           {/* Age & Weight */}
           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="age" className="text-right">Age</Label>
+            <Label htmlFor="age" className="text-right">Color</Label>
             <div className="col-span-3 flex gap-2">
               <Input
-                id="age"
-                type="number"
-                placeholder="Years"
-                value={newPet.age}
-                onChange={(e) => setNewPet({ ...newPet, age: e.target.value })}
+                id="color"
+                type="text"
+                placeholder="Color"
+                value={newPet.color}
+                onChange={(e) => setNewPet({ ...newPet, color: e.target.value })}
               />
               <Input
                 id="weight"

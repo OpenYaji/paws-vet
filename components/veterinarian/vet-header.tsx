@@ -130,7 +130,8 @@ export default function VetHeader() {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             
-            <DropdownMenuItem className="cursor-pointer">
+            <DropdownMenuItem className="cursor-pointer"
+              onClick={() => router.push('/veterinarian/profile')}>
               <User className="mr-2 h-4 w-4" />
               <span>Profile</span>
             </DropdownMenuItem>
