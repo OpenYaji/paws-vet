@@ -93,7 +93,9 @@ export async function POST(request: NextRequest) {
       image_url: body.image_url,
     };
 
-    const { data, error } = await supabase.from('prescriptions').insert([body]).select();
+    const { data, error } = await supabase
+        .from('prescriptions')
+        .insert([body]).select();
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 });

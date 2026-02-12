@@ -40,6 +40,7 @@ export default function AddNewPet({ onPetAdded }: AddNewPetProps) {
     color: '',
     weight: '',
     owner_id: '',
+    photo_url: '',
   });
 
   // Image State
@@ -98,24 +99,30 @@ export default function AddNewPet({ onPetAdded }: AddNewPetProps) {
       }
 
       // 2. Insert Pet Data
-      const { error } = await supabase
-        .from('pets')
-        .insert([{
+      const response = await fetch('/api/pets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
           name: newPet.name,
           species: newPet.species,
           breed: newPet.breed,
-          color: newPet.color ? Number(newPet.color) : null,
+          color: newPet.color,
           weight: newPet.weight,
           owner_id: newPet.owner_id,
-          image_url: uploadedImageUrl,
-        }]);
+          photo_url: uploadedImageUrl,
+        }),
+      });
 
-      if (error) throw error;
+      const result = await response.json();
+
+      if(!response.ok){
+        throw new Error(result.error || 'Failed to add pet');
+      }
 
       // 3. Success
       onPetAdded(); // Notify parent to refresh list
       setIsAddOpen(false);
-      setNewPet({ name: '', species: '', breed: '', color: '', weight: '', owner_id: '' });
+      setNewPet({ name: '', species: '', breed: '', color: '', weight: '', owner_id: '', photo_url: '' });
       setSelectedImageFile(null);
       setImagePreviewUrl(null);
 
@@ -154,19 +161,19 @@ export default function AddNewPet({ onPetAdded }: AddNewPetProps) {
                 <Upload className="h-8 w-8 text-gray-400 group-hover:text-green-500 transition-colors" />
               )}
               <Input
-                id="picture"
+                id="image_url"
                 type="file"
                 accept="image/*"
                 className="hidden"
                 onChange={handleImageSelect}
               />
               <Label 
-                htmlFor="picture" 
+                htmlFor="image_url" 
                 className="absolute inset-0 bg-black/0 hover:bg-black/10 cursor-pointer" 
                 title="Upload Photo"
               />
             </div>
-            <Label htmlFor="picture" className="text-sm text-green-600 cursor-pointer hover:underline">
+            <Label htmlFor="image_url" className="text-sm text-green-600 cursor-pointer hover:underline">
               {imagePreviewUrl ? "Change Photo" : "Upload Photo"}
             </Label>
           </div>
