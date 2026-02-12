@@ -19,6 +19,7 @@ import { format } from 'date-fns';
 const fetcher = async () => {
   const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
   
+  //Data structures
   const { data, error } = await supabase
     .from('appointments')
     .select(`
@@ -117,7 +118,7 @@ export default function TriagePage() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto h-[calc(100vh-100px)] flex flex-col">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Triage & Intake</h1>
+        <h1 className="text-3xl font-bold text-gray-900">Triage</h1>
         <p className="text-gray-500">Assess patient vitals and prioritize care</p>
       </div>
 

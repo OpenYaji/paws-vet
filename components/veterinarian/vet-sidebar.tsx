@@ -17,8 +17,7 @@ import {
   Menu,
   X,
   PillBottle,
-  Syringe,
-  FlaskConical
+  Syringe
 } from "lucide-react";
 
 interface AdminSidebarProps {
@@ -63,14 +62,13 @@ export default function VetSidebar({ collapsed, setCollapsed, mobileOpen, setMob
 const menuItems: MenuItem[] = [
     { name: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/veterinarian/dashboard' },
     { name: 'Pet Master File', icon: <Files size={20} />, path: '/veterinarian/pets' },
-    { name: 'Prescriptions', icon: <PillBottle size={20} />, path: '/veterinarian/prescriptions' },
     { name: 'My Appointments', icon: <Calendar size={20} />, path: '/veterinarian/appointments' },
     { name: 'Triage', icon: <PawPrint size={20} />, path: '/veterinarian/triage' },
     { name: 'Consultation', icon: <Package size={20} />, path: '/veterinarian/consultation' },
+    { name: 'Prescriptions', icon: <PillBottle size={20} />, path: '/veterinarian/prescriptions' },
     { name: 'Vaccinations', icon: <Syringe size={20} />, path: '/veterinarian/vaccinations' },
     { name: 'Settings', icon: <Settings size={20} />, path: '/veterinarian/settings' },
-    { name: 'Help Support', icon: <LifeBuoy size={20} />, path: '/veterinarian/help-support' },
-   
+    { name: 'Help Support', icon: <LifeBuoy size={20} />, path: '/veterinarian/help' },
 ];
 
   interface NavLinkProps {
@@ -219,29 +217,6 @@ const menuItems: MenuItem[] = [
           className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-30"
           onClick={() => setMobileOpen(false)}
         ></div>
-      )}
-
-      {isLogoutModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-card p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
-            <h3 className="text-lg font-bold mb-2">Confirm Logout</h3>
-            <p className="text-muted-foreground mb-4">Are you sure you want to logout?</p>
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => setLogoutModalOpen(false)}
-                className="px-4 py-2 rounded-md border hover:bg-accent"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmLogout}
-                className="px-4 py-2 rounded-md bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              >
-                Logout
-              </button>
-            </div>
-          </div>
-        </div>
       )}
     </>
   );
