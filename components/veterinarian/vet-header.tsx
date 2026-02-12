@@ -55,6 +55,7 @@ export default function VetHeader() {
   const [notifLoading, setNotifLoading] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifFetched, setNotifFetched] = useState(false);
+  const [isLogoutModalOpen, setLogoutModalOpen] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
