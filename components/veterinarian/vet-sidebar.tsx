@@ -152,15 +152,15 @@ const menuItems: MenuItem[] = [
     }
 
     return (
-      <aside className={`h-screen bg-transparent flex flex-col flex-shrink-0 transition-all duration-300 sticky top-0 ${collapsed ? 'w-28' : 'w-72'}`}>
+      <aside className={`h-screen bg-transparent flex flex-col FlexShrink-0 transition-all duration-300 sticky top-0 ${collapsed ? 'w-28' : 'w-72'}`}>
         {collapsed ? (
           <div className="flex flex-col h-full items-center p-3 gap-3">
             <div className="flex flex-col items-center space-y-4 bg-card border p-3 rounded-3xl shadow-lg flex-1 w-full overflow-y-auto">
-              <button onClick={() => setCollapsed(false)} className="p-2 hover:bg-accent rounded-full flex-shrink-0">
+              <button onClick={() => setCollapsed(false)} className="p-2 hover:bg-accent rounded-full FlexShrink-0">
                 <Menu size={20} />
               </button>
-              <Image src="/images/image.png" alt="Logo" width={40} height={40} className="rounded-full flex-shrink-0" />
-              <div className="w-8 h-[1px] bg-border flex-shrink-0"></div>
+              <Image src="/images/image.png" alt="Logo" width={40} height={40} className="rounded-full FlexShrink-0" />
+              <div className="w-8 H-[1px] bg-border FlexShrink-0"></div>
               <nav className="flex-1 flex flex-col w-full">
                 <ul className="space-y-2 flex-1">
                   {menuItems.slice(0, -2).map((item) => (
@@ -178,7 +178,7 @@ const menuItems: MenuItem[] = [
         ) : (
           <div className="flex flex-col h-full p-3">
             <div className="bg-card border rounded-3xl p-4 flex-1 flex flex-col shadow-lg overflow-y-auto">
-              <header className="flex flex-col items-center text-center mb-8 relative flex-shrink-0">
+              <header className="flex flex-col items-center text-center mb-8 relative FlexShrink-0">
                 <button onClick={() => setCollapsed(true)} className="p-2 hover:bg-accent rounded-lg absolute top-0 right-0">
                   <Menu size={20} />
                 </button>

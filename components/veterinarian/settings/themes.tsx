@@ -1,10 +1,9 @@
 "use client"
 
-import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
-import { Button } from "@/components/ui/button"
 import { Sun, Moon, Monitor } from "lucide-react"
+import { useTheme } from "@/components/veterinarian/theme-provider"
 
 type Theme = "light" | "dark" | "system"
 
@@ -30,23 +29,7 @@ const themeOptions: { value: Theme; label: string; icon: React.ReactNode; descri
 ]
 
 export default function Themes() {
-  const [selectedTheme, setSelectedTheme] = useState<Theme>("system")
-
-  useEffect(() => {
-    const root = document.documentElement
-    if (selectedTheme === "dark") {
-      root.classList.add("dark")
-    } else if (selectedTheme === "light") {
-      root.classList.remove("dark")
-    } else {
-      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches
-      if (prefersDark) {
-        root.classList.add("dark")
-      } else {
-        root.classList.remove("dark")
-      }
-    }
-  }, [selectedTheme])
+  const { theme, setTheme } = useTheme()
 
   return (
     <div className="space-y-6">
@@ -69,16 +52,16 @@ export default function Themes() {
             {themeOptions.map((option) => (
               <button
                 key={option.value}
-                onClick={() => setSelectedTheme(option.value)}
+                onClick={() => setTheme(option.value)}
                 className={`flex flex-col items-center gap-3 p-6 rounded-xl border-2 transition-all ${
-                  selectedTheme === option.value
+                  theme === option.value
                     ? "border-primary bg-primary/5"
                     : "border-border hover:border-primary/50 hover:bg-accent"
                 }`}
               >
                 <div
                   className={`p-3 rounded-full ${
-                    selectedTheme === option.value
+                    theme === option.value
                       ? "bg-primary text-primary-foreground"
                       : "bg-muted text-muted-foreground"
                   }`}
