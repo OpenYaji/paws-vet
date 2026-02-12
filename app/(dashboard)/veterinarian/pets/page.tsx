@@ -122,7 +122,7 @@ export default function PatientsPage() {
             <div className="flex items-center justify-center min-h-[400px]">
                 <div className="text-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
-                    <p className="text-muted-foreground">Loading patients...</p>
+                    <p className="text-muted-foreground">Loading pets...</p>
                 </div>
             </div>
         );
@@ -137,9 +137,9 @@ export default function PatientsPage() {
                 Dashboard
             </Link>
             <span>›</span>
-            <span>Patient Records</span>
+            <span>Pet Records</span>
             </div>
-            <h1 className="text-3xl font-bold">Patient Records</h1>
+            <h1 className="text-3xl font-bold">Pet Records</h1>
             <p className="text-muted-foreground">Comprehensive database of all registered pets</p>
 
             {/* Right Side: The Add Button */}
@@ -212,7 +212,7 @@ export default function PatientsPage() {
             <CardContent className="pt-6">
                 <div className="text-3xl font-bold text-primary">{filteredPets.length}</div>
                 <p className="text-sm text-muted-foreground mt-1">
-                {filteredPets.length === pets.length ? 'Total Patients' : 'Filtered Results'}
+                {filteredPets.length === pets.length ? 'Total Pets' : 'Filtered Results'}
                 </p>
             </CardContent>
             </Card>
@@ -242,7 +242,7 @@ export default function PatientsPage() {
             <Card>
                 <CardContent className="pt-6 text-center py-12">
                 <div className="text-6xl mb-4 opacity-30">🔍</div>
-                <h3 className="text-xl font-semibold mb-2">No patients found</h3>
+                <h3 className="text-xl font-semibold mb-2">No Pets found</h3>
                 <p className="text-muted-foreground">
                     Try adjusting your search or filters
                 </p>

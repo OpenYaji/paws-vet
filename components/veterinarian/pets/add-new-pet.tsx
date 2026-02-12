@@ -131,13 +131,13 @@ export default function AddNewPet({ onPetAdded }: AddNewPetProps) {
       <DialogTrigger asChild>
         <Button size="default" className="shrink-0">
           <Plus className="mr-2 h-4 w-4" />
-          Add New Patient
+          Add New Pet
         </Button>
       </DialogTrigger>
       
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Add New Patient</DialogTitle>
+          <DialogTitle>Add New Pet</DialogTitle>
           <DialogDescription>
             Enter details and upload a photo below.
           </DialogDescription>
@@ -248,7 +248,7 @@ export default function AddNewPet({ onPetAdded }: AddNewPetProps) {
 
           <DialogFooter>
             <Button type="submit" disabled={isSaving}>
-              {isSaving ? 'Saving...' : 'Save Patient'}
+              {isSaving ? 'Saving...' : 'Save Pet'}
             </Button>
           </DialogFooter>
         </form>

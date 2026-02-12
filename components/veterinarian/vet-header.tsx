@@ -21,6 +21,7 @@ export default function VetHeader() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [userName, setUserName] = useState<string>('');
   const [userEmail, setUserEmail] = useState('vet@example.com'); // Placeholder until loaded
+  const [isLogoutModalOpen, setLogoutModalOpen] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -63,6 +64,17 @@ export default function VetHeader() {
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
+      router.push('/login');
+      router.refresh();
+    } catch (error) {
+      console.error('Error logging out:', error);
+    }
+  };
+
+  const handleConfirmLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      setLogoutModalOpen(false);
       router.push('/login');
       router.refresh();
     } catch (error) {
@@ -150,7 +162,28 @@ export default function VetHeader() {
               <LogOut className="mr-2 h-4 w-4" />
               <span>Log out</span>
             </DropdownMenuItem>
-            
+            {isLogoutModalOpen && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                <div className="bg-card p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
+                  <h3 className="text-lg font-bold mb-2">Confirm Logout</h3>
+                  <p className="text-muted-foreground mb-4">Are you sure you want to logout?</p>
+                  <div className="flex gap-2 justify-end">
+                    <button
+                      onClick={() => setLogoutModalOpen(false)}
+                      className="px-4 py-2 rounded-md border hover:bg-accent"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleConfirmLogout}
+                      className="px-4 py-2 rounded-md bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      Logout
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
