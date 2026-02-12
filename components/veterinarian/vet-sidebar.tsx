@@ -17,7 +17,8 @@ import {
   Menu,
   X,
   PillBottle,
-  Syringe
+  Syringe,
+  FlaskConical
 } from "lucide-react";
 
 interface AdminSidebarProps {
@@ -68,7 +69,8 @@ const menuItems: MenuItem[] = [
     { name: 'Consultation', icon: <Package size={20} />, path: '/veterinarian/consultation' },
     { name: 'Vaccinations', icon: <Syringe size={20} />, path: '/veterinarian/vaccinations' },
     { name: 'Settings', icon: <Settings size={20} />, path: '/veterinarian/settings' },
-    { name: 'Help Support', icon: <LifeBuoy size={20} />, path: '/veterinarian/help' },
+    { name: 'Help Support', icon: <LifeBuoy size={20} />, path: '/veterinarian/help-support' },
+   
 ];
 
   interface NavLinkProps {
