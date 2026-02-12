@@ -11,17 +11,9 @@ import IssuePrescription from '@/components/veterinarian/prescriptions/issue-pre
 import Link from 'next/link';
 
 // Fetcher for SWR
-const fetcher = async () => {
-  const { data, error } = await supabase
-    .from('prescriptions')
-    .select(`
-      *,
-      pets (name, species, breed, owners(full_name))
-    `)
-    .order('created_at', { ascending: false });
-  if (error) throw error;
-  return data;
-};
+// Fetching Prescriptions
+const fetcher = (url: string) => fetch(url).then(res => res.json());
+const { data } = useSWR('/api/prescriptions', fetcher);
 
 export default function PrescriptionsPage() {
   const { data: prescriptions = [], isLoading } = useSWR('prescriptions-list', fetcher);

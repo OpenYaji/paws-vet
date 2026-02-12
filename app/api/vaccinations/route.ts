@@ -25,7 +25,19 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const { data: { user }} = await supabase.auth.getUser();
+    
+    if(user?.user_metadata.role !== 'veterinarian'){
+      return NextResponse.json({ error: 'Unauthorized, Vets only' }, { status: 403 });
+    }
+
     const body = await request.json();
+    const vaccinationData = {
+      pet_id: body.pet_id,
+      vaccine_name: body.vaccine_name,
+      vaccination_date: body.vaccination_date,
+      veterinarian_id: user.id
+    }
 
     const { data, error } = await supabase.from('vaccinations').insert([body]).select();
 

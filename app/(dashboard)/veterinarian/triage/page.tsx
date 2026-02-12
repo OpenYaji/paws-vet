@@ -19,6 +19,7 @@ import { format } from 'date-fns';
 const fetcher = async () => {
   const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
   
+  //Data structures
   const { data, error } = await supabase
     .from('appointments')
     .select(`
