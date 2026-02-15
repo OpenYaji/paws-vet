@@ -1,49 +1,37 @@
-export interface Appointment {
+// Import comprehensive types from database.ts
+import type {
+  Appointment,
+  AppointmentWithRelations,
+  AppointmentType,
+  AppointmentStatus,
+  AppointmentFilters,
+  CreateAppointmentRequest,
+  UpdateAppointmentRequest
+} from './database';
+
+// Additional appointment-specific utility types
+export interface AppointmentCalendarEvent {
   id: string;
-  appointment_number: string;
-  pet_id: string;
-  veterinarian_id: string;
-  booked_by: string;
-  appointment_type: 'checkup' | 'vaccination' | 'surgery' | 'emergency' | 'consultation' | 'followup';
-  appointment_status: 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled' | 'no_show';
-  scheduled_start: string;
-  scheduled_end: string;
-  actual_start?: string;
-  actual_end?: string;
-  reason_for_visit: string;
-  special_instructions?: string;
-  cancellation_reason?: string;
-  is_emergency: boolean;
-  reminder_sent: boolean;
-  checked_in_at?: string;
-  checked_out_at?: string;
-  created_at: string;
-  updated_at: string;
-  // Related data
-  pet?: {
-    id: string;
-    name: string;
-    species: string;
-    breed?: string;
-  };
-  veterinarian?: {
-    id: string;
-    first_name: string;
-    last_name: string;
-    specializations?: string[];
-  };
-  client?: {
-    id: string;
-    first_name: string;
-    last_name: string;
-    phone: string;
-    email: string;
+  title: string;
+  start: Date;
+  end: Date;
+  resource: {
+    appointment: AppointmentWithRelations;
+    status: AppointmentStatus;
+    type: AppointmentType;
   };
 }
 
-export interface AppointmentFilters {
-  status?: string;
-  date?: string;
-  veterinarian?: string;
-  search?: string;
+export interface AppointmentTimeSlot {
+  date: string;
+  time: string;
+  available: boolean;
+  veterinarian_id: string;
+}
+
+export interface VeterinarianSchedule {
+  veterinarian_id: string;
+  date: string;
+  available_slots: AppointmentTimeSlot[];
+  booked_appointments: Appointment[];
 }
