@@ -163,10 +163,10 @@ export default function ProfilePage() {
           </AvatarFallback>
         </Avatar>
         <div className="text-center md:text-left">
-          <h1 className="text-3xl font-bold text-gray-900">
+          <h1 className="text-3xl font-bold text-foreground">
             Dr. {profile.first_name} {profile.last_name}
           </h1>
-          <div className="flex items-center justify-center md:justify-start gap-2 text-gray-500 mt-1">
+          <div className="flex items-center justify-center md:justify-start gap-2 text-muted-foreground mt-1">
             <Award size={16} />
             <span>{profile.license_number || 'No License Added'}</span>
           </div>
@@ -291,7 +291,7 @@ export default function ProfilePage() {
                     <Stethoscope className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
                     <Input 
                       className="pl-9" 
-                      placeholder="e.g. Surgery, Dermatology (comma separated)"
+                      placeholder="e.g. Animal Surgeon"
                       value={profile.specializations}
                       onChange={e => setProfile({...profile, specializations: e.target.value})}
                     />

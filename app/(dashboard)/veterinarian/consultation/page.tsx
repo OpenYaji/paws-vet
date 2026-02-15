@@ -148,8 +148,8 @@ export default function ConsultationPage() {
   return (
     <div className="h-[calc(100vh-100px)] flex flex-col gap-6 max-w-7xl mx-auto">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Consultation Room</h1>
-        <p className="text-gray-500">Examine patients and create medical records</p>
+        <h1 className="text-3xl font-bold text-foreground">Consultation Room</h1>
+        <p className="text-muted-foreground">Examine patients and create medical records</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 h-full overflow-hidden">

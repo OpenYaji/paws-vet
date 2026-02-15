@@ -67,8 +67,8 @@ export default function AppointmentsPage() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">My Schedule</h1>
-        <p className="text-gray-500">Manage your patient appointments</p>
+        <h1 className="text-3xl font-bold text-foreground">My Schedule</h1>
+        <p className="text-muted-foreground">Manage your patient appointments</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
