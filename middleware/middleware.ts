@@ -57,7 +57,13 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
 
   // 1. PROTECT THE API ROUTES
-  if (request.nextUrl.pathname.startsWith('/api/pets')) {
+  if ([
+    'api/appointments',
+    'api/pets',
+    'api/veterinarians',
+    'api/triage',
+    'api/reports',
+  ].some(path => request.nextUrl.pathname.startsWith(`/${path}`))) {
     
     // Check A: Are they logged in?
     if (!user) {
@@ -69,18 +75,19 @@ export async function middleware(request: NextRequest) {
        return NextResponse.json({ error: 'Forbidden: Vets only' }, { status: 403 })
     }
   }
-
   return response
 }
 
 export const config = {
   matcher: [
     /*
-     * Match all request paths except for the ones starting with:
+     * Match all request paths except:
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
+     * - public folder
+     * - api/auth (auth endpoints)
      */
-    '/((?!_next/static|_next/image|favicon.ico).*)',
+    '/((?!_next/static|_next/image|favicon.ico|public|api/auth).*)',
   ],
-}
+};
