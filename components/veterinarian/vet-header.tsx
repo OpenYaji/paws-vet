@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Sun, Moon, Bell, User, LogOut, Settings, Calendar, CreditCard, FlaskConical, BellRing, Info, Loader2 } from 'lucide-react';
+import { Search, Sun, Moon, Bell, User, LogOut, Settings, BellRing, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/auth-client';
 import { useTheme } from '@/components/veterinarian/theme-provider';
 import { Button } from '@/components/ui/button';
@@ -17,92 +17,133 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-
-interface Notification {
-  id: string
-  notification_type: string
-  subject: string | null
-  content: string
-  sent_at: string
-  delivery_status: string
-}
-
-const notificationIcon: Record<string, React.ReactNode> = {
-  appointment_reminder: <Calendar size={16} className="text-blue-500" />,
-  appointment_confirmed: <Calendar size={16} className="text-green-500" />,
-  appointment_cancelled: <Calendar size={16} className="text-red-500" />,
-  test_results: <FlaskConical size={16} className="text-purple-500" />,
-  payment_due: <CreditCard size={16} className="text-orange-500" />,
-  general: <Info size={16} className="text-gray-500" />,
-}
-
-function timeAgo(dateStr: string): string {
-  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000)
-  if (seconds < 60) return 'Just now'
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes}m ago`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  return `${days}d ago`
-}
+import type { Notification } from '@/types/notifications';
+import { 
+  getNotificationIcon, 
+  timeAgo, 
+  getNotificationTitle 
+} from '@/lib/notification-utils';
 
 export default function VetHeader() {
   const [currentTime, setCurrentTime] = useState<string>('');
   const { setTheme, isDark } = useTheme();
   const [userEmail, setUserEmail] = useState('vet@example.com');
+  const [userId, setUserId] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notifLoading, setNotifLoading] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifFetched, setNotifFetched] = useState(false);
+  const [hasUnread, setHasUnread] = useState(false); // For red dot indicator
   const [isLogoutModalOpen, setLogoutModalOpen] = useState(false);
   const router = useRouter();
+  
+  // Ref to track the latest notification count for comparison
+  const prevNotificationCountRef = useRef(0);
 
+  // Fetch user and setup real-time subscription
   useEffect(() => {
-    async function getUser() {
+    async function setupUser() {
       const { data: { user } } = await supabase.auth.getUser();
-      if (user && user.email) {
-        setUserEmail(user.email);
+      if (user) {
+        setUserEmail(user.email || 'vet@example.com');
+        setUserId(user.id);
       }
     }
-    getUser();
+    setupUser();
   }, []);
 
-  // Fetch notifications when popover opens for the first time
-  useEffect(() => {
-    if (!notifOpen || notifFetched) return;
+  // Fetch initial notifications
+  const fetchNotifications = useCallback(async () => {
+    if (!userId) return;
+    
+    setNotifLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('notification_logs')
+        .select('id, notification_type, subject, content, sent_at, delivery_status, related_entity_type, related_entity_id, recipient_id, delivery_attempted_at, delivered_at, error_message, created_at')
+        .eq('recipient_id', userId)
+        .order('sent_at', { ascending: false })
+        .limit(20);
 
-    const fetchNotifications = async () => {
-      setNotifLoading(true);
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        const { data, error } = await supabase
-          .from('notification_logs')
-          .select('id, notification_type, subject, content, sent_at, delivery_status')
-          .eq('recipient_id', user.id)
-          .order('sent_at', { ascending: false })
-          .limit(20);
-
-        if (!error && data) {
-          setNotifications(data);
+      if (!error && data) {
+        setNotifications(data);
+        
+        // Update unread status based on new notifications
+        if (data.length > prevNotificationCountRef.current) {
+          setHasUnread(true);
         }
-      } catch (err) {
-        console.error('Failed to fetch notifications:', err);
-      } finally {
-        setNotifLoading(false);
-        setNotifFetched(true);
+        prevNotificationCountRef.current = data.length;
       }
-    };
+    } catch (err) {
+      console.error('Failed to fetch notifications:', err);
+    } finally {
+      setNotifLoading(false);
+      setNotifFetched(true);
+    }
+  }, [userId]);
 
+  // Fetch notifications when popover opens
+  useEffect(() => {
+    if (!notifOpen || notifFetched || !userId) return;
     fetchNotifications();
-  }, [notifOpen, notifFetched]);
+  }, [notifOpen, notifFetched, userId, fetchNotifications]);
+
+  // Set up real-time subscription for new notifications
+  useEffect(() => {
+    if (!userId) return;
+
+    // Subscribe to new notifications for this user
+    const subscription = supabase
+      .channel('notification-logs-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notification_logs',
+          filter: `recipient_id=eq.${userId}`,
+        },
+        (payload) => {
+          console.log('New notification received:', payload);
+          
+          // Add the new notification to the list
+          const newNotification = payload.new as Notification;
+          
+          // Update notifications state (add to top)
+          setNotifications(prev => [newNotification, ...prev].slice(0, 20));
+          
+          // Show red dot indicator
+          setHasUnread(true);
+          
+          // Optional: Play a sound or show browser notification
+          if (document.visibilityState !== 'visible') {
+            // If tab is not visible, show browser notification
+            if (Notification.permission === 'granted') {
+              new Notification('New Notification', {
+                body: newNotification.content || 'You have a new notification',
+                icon: '/favicon.ico'
+              });
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    // Request notification permission if needed
+    if (Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+
+    // Cleanup subscription on unmount
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [userId]);
+
   // Effect to update time every second
   useEffect(() => {
     const timer = setInterval(() => {
       const now = new Date();
-      // Format: "Mon, Feb 8 • 8:47 PM"
       const options: Intl.DateTimeFormatOptions = { 
         weekday: 'short', 
         month: 'short', 
@@ -116,6 +157,13 @@ export default function VetHeader() {
 
     return () => clearInterval(timer);
   }, []);
+
+  // Mark notifications as read when popover opens
+  useEffect(() => {
+    if (notifOpen) {
+      setHasUnread(false);
+    }
+  }, [notifOpen]);
 
   const handleLogout = async () => {
     try {
@@ -168,13 +216,20 @@ export default function VetHeader() {
           {isDark ? <Sun size={20} /> : <Moon size={20} />}
         </button>
 
-        {/* Notifications */}
+        {/* Notifications with Red Dot */}
         <Popover open={notifOpen} onOpenChange={setNotifOpen}>
           <PopoverTrigger asChild>
             <button className="relative p-2 rounded-full hover:bg-accent text-muted-foreground transition">
               <Bell size={20} />
-              {notifications.length > 0 && (
-                <span className="absolute top-1 right-1 h-2.5 w-2.5 bg-red-500 rounded-full border-2 border-background" />
+              {/* Red dot indicator for unread notifications */}
+              {hasUnread && (
+                <span className="absolute top-1 right-1 h-2.5 w-2.5 bg-red-500 rounded-full border-2 border-background animate-pulse" />
+              )}
+              {/* Also show count if you prefer number badge */}
+              {!hasUnread && notifications.length > 0 && (
+                <span className="absolute -top-1 -right-1 h-5 w-5 bg-primary text-primary-foreground text-xs rounded-full flex items-center justify-center border-2 border-background">
+                  {notifications.length > 9 ? '9+' : notifications.length}
+                </span>
               )}
             </button>
           </PopoverTrigger>
@@ -199,13 +254,15 @@ export default function VetHeader() {
                 </div>
               ) : (
                 <div>
-                  {notifications.map((notif) => (
+                  {notifications.map((notif, index) => (
                     <div
                       key={notif.id}
-                      className="flex gap-3 px-4 py-3 hover:bg-accent transition-colors border-b last:border-b-0"
+                      className={`flex gap-3 px-4 py-3 hover:bg-accent transition-colors border-b last:border-b-0 cursor-pointer ${
+                        index === 0 && hasUnread ? 'bg-blue-50 dark:bg-blue-950/20' : ''
+                      }`}
                     >
                       <div className="mt-0.5 shrink-0">
-                        {notificationIcon[notif.notification_type] || <Info size={16} className="text-gray-500" />}
+                        {getNotificationIcon(notif.notification_type)}
                       </div>
                       <div className="flex-1 min-w-0">
                         {notif.subject && (
@@ -214,6 +271,10 @@ export default function VetHeader() {
                         <p className="text-xs text-muted-foreground line-clamp-2">{notif.content}</p>
                         <p className="text-xs text-muted-foreground mt-1">{timeAgo(notif.sent_at)}</p>
                       </div>
+                      {/* New indicator for the latest notification */}
+                      {index === 0 && hasUnread && (
+                        <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">New</span>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -222,7 +283,7 @@ export default function VetHeader() {
           </PopoverContent>
         </Popover>
 
-        {/* --- USER DROPDOWN --- */}
+        {/* USER DROPDOWN (unchanged) */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="relative h-10 w-10 rounded-full hover:bg-transparent">

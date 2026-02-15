@@ -1,37 +1,44 @@
-export interface Pet {
-  id: string;
-  owner_id: string;
-  name: string;
-  species: string;
-  breed?: string;
-  date_of_birth?: string;
-  gender?: 'male' | 'female' | 'unknown';
-  color?: string;
-  weight?: number;
-  microchip_number?: string;
-  is_spayed_neutered: boolean;
-  special_needs?: string;
-  behavioral_notes?: string;
-  current_medical_status?: string;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-  // Related data
-  owner?: {
+// Import comprehensive types from database.ts
+export type {
+  Pet,
+  PetWithRelations,
+  PetInsurance,
+  Gender,
+  PetFilters,
+  CreatePetRequest,
+  UpdatePetRequest
+} from './database';
+
+// Additional pet-specific utility types
+export interface PetMedicalHistory {
+  pet_id: string;
+  appointments: Array<{
     id: string;
-    first_name: string;
-    last_name: string;
-    phone: string;
-    email: string;
-    address_line1?: string;
-    city?: string;
-    state?: string;
-  };
-  image_url?: string;
+    date: string;
+    veterinarian_name: string;
+    reason_for_visit: string;
+    notes?: string;
+  }>;
+  vaccinations: Array<{
+    id: string;
+    vaccine_name: string;
+    date_administered: string;
+    next_due_date?: string;
+  }>;
+  allergies: string[];
+  medications: Array<{
+    name: string;
+    dosage: string;
+    frequency: string;
+    start_date: string;
+    end_date?: string;
+  }>;
 }
 
-export interface PetFilters {
-  species?: string;
-  search?: string;
-  owner?: string;
+export interface PetVitals {
+  weight: number;
+  temperature?: number;
+  heart_rate?: number;
+  recorded_at: string;
+  recorded_by: string;
 }

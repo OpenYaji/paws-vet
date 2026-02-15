@@ -15,40 +15,15 @@ import {
 import { Activity, Thermometer, Weight, Heart, Clock, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { format } from 'date-fns';
 
-// Fetch appointments scheduled for TODAY that are pending/confirmed
-const fetcher = async () => {
-  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-  
-  //Data structures
-  const { data, error } = await supabase
-    .from('appointments')
-    .select(`
-      id,
-      scheduled_start,
-      reason_for_visit,
-      appointment_status,
-      pets (
-        id,
-        name,
-        species,
-        breed,
-        client_profiles (first_name, last_name)
-      )
-    `)
-    // Filter for TODAY's appointments only
-    .gte('scheduled_start', `${today}T00:00:00`)
-    .lt('scheduled_start', `${today}T23:59:59`)
-    .in('appointment_status', ['pending', 'confirmed']) // Only show waiting patients
-    .order('scheduled_start', { ascending: true });
-
-  if (error) throw error;
-  return data;
-};
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export default function TriagePage() {
-  const { data: appointments = [], isLoading } = useSWR('triage-queue', fetcher);
+  const { data: appointments = [], isLoading, error } = useSWR('/api/triage', fetcher);
   const [selectedAppt, setSelectedAppt] = useState<any | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Ensure appointments is always an array
+  const safeAppointments = Array.isArray(appointments) ? appointments : [];
 
   // Form State
   const [vitals, setVitals] = useState({
@@ -127,17 +102,19 @@ export default function TriagePage() {
         {/* --- LEFT COLUMN: WAITING LIST --- */}
         <div className="md:col-span-4 lg:col-span-3 flex flex-col gap-4 overflow-y-auto pr-2">
           <h2 className="font-semibold text-gray-700 flex items-center gap-2">
-            <Clock size={18} /> Waiting Room ({appointments.length})
+            <Clock size={18} /> Waiting Room ({safeAppointments.length})
           </h2>
           
-          {isLoading ? (
+          {error ? (
+            <div className="text-sm text-red-400">Error loading queue: {error.message}</div>
+          ) : isLoading ? (
             <div className="text-sm text-gray-400">Loading queue...</div>
-          ) : appointments.length === 0 ? (
+          ) : safeAppointments.length === 0 ? (
             <div className="p-6 text-center border border-dashed rounded-lg bg-gray-50 text-gray-400">
               No patients waiting.
             </div>
           ) : (
-            appointments.map((appt: any) => (
+            safeAppointments.map((appt: any) => (
               <div 
                 key={appt.id}
                 onClick={() => handleSelect(appt)}
