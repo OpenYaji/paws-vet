@@ -37,20 +37,21 @@ export async function GET(request: NextRequest) {
       `)
       // You can adjust this filter based on your exact status names
       // e.g., 'Checked In', 'Arrived', or just fetch all 'Pending' for today
-      .eq('appointment_status', 'Checked In') 
+      .eq('appointment_status', 'checked_in') 
       .gte('scheduled_start', `${today}T00:00:00`)
       .lte('scheduled_start', `${today}T23:59:59`)
       .order('scheduled_start', { ascending: true });
 
     if (error) {
       console.error('Error fetching waiting room:', error);
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return NextResponse.json([], { status: 200 }); // Return empty array instead of error
     }
 
-    return NextResponse.json(data);
+    return NextResponse.json(data || []); // Ensure we always return an array
 
   } catch (error) {
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    console.error('Triage API error:', error);
+    return NextResponse.json([], { status: 200 }); // Return empty array on catch
   }
 }
 
@@ -81,7 +82,7 @@ export async function POST(request: NextRequest) {
     const { data, error: apptError } = await supabase
       .from('appointments')
       .update({ 
-        appointment_status: 'In Consultation', // Move them to the next stage
+        appointment_status: 'in_progress', // Move them to the next stage
         // triage_notes: `Temp: ${temperature}, HR: ${heart_rate}. ${notes}`, // Optional: Save vitals string
       })
       .eq('id', appointment_id)
