@@ -63,6 +63,7 @@ export async function middleware(request: NextRequest) {
     'api/veterinarians',
     'api/triage',
     'api/reports',
+    'api/prescriptions',
   ].some(path => request.nextUrl.pathname.startsWith(`/${path}`))) {
     
     // Check A: Are they logged in?
