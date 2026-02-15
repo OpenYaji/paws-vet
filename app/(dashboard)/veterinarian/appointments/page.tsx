@@ -13,7 +13,7 @@ import { AppointmentWithRelations } from '@/types/appointments';
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export default function AppointmentsPage() {
-  const { data: appointments = [], isLoading } = useSWR<AppointmentWithRelations[]>('my-appointments', fetcher);
+  const { data: appointments = [], isLoading } = useSWR<AppointmentWithRelations[]>('/api/appointments', fetcher);
   
   const [date, setDate] = useState<Date | undefined>(new Date());
 

@@ -2,12 +2,16 @@
 import type {
   Appointment,
   AppointmentWithRelations,
-  AppointmentType,
   AppointmentStatus,
-  AppointmentFilters,
-  CreateAppointmentRequest,
-  UpdateAppointmentRequest
+  AppointmentType
 } from './database';
+
+export type {
+  Appointment,
+  AppointmentWithRelations,
+  AppointmentStatus,
+  AppointmentType
+};
 
 // Additional appointment-specific utility types
 export interface AppointmentCalendarEvent {
