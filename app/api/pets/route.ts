@@ -8,12 +8,6 @@ const supabase = createClient(
 
 export async function GET(request: NextRequest) {
   try {
-    const { data: { user }} = await supabase.auth.getUser();
-
-    if(user?.user_metadata.role !== 'veterinarian'){
-      return NextResponse.json({ error: 'Unauthorized, Vets only' }, { status: 403 });
-    }
-
     const { data, error } = await supabase
       .from('pets')
       .select(`
