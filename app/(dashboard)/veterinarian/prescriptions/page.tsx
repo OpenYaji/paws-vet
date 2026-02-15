@@ -13,7 +13,6 @@ import Link from 'next/link';
 // Fetcher for SWR
 // Fetching Prescriptions
 const fetcher = (url: string) => fetch(url).then(res => res.json());
-const { data } = useSWR('/api/prescriptions', fetcher);
 
 export default function PrescriptionsPage() {
   const { data: prescriptions = [], isLoading } = useSWR('prescriptions-list', fetcher);
