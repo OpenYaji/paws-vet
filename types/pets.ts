@@ -1,5 +1,5 @@
 // Import comprehensive types from database.ts
-export type{
+export type {
   Pet,
   PetWithRelations,
   PetInsurance,

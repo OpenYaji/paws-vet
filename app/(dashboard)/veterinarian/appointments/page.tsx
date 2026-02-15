@@ -8,59 +8,20 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Clock, Calendar as CalendarIcon, User, FileText, MapPin } from 'lucide-react';
 import { format, isSameDay, parseISO } from 'date-fns';
+import { AppointmentWithRelations } from '@/types/appointments';
 
-// 1. Improved Fetcher that handles your Schema Relationships
-const fetcher = async () => {
-  // A. Get the current Logged-In User
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return [];
-
-  // B. IMPORTANT: Get the 'veterinarian_profile' ID for this user
-  // (Because appointments table uses profile ID, not auth user ID)
-  const { data: vetProfile } = await supabase
-    .from('veterinarian_profiles')
-    .select('id')
-    .eq('user_id', user.id)
-    .single();
-
-  if (!vetProfile) return [];
-
-  // C. Fetch Appointments for this Vet Profile
-  const { data, error } = await supabase
-    .from('appointments')
-    .select(`
-      id,
-      scheduled_start,
-      scheduled_end,
-      appointment_status,
-      reason_for_visit,
-      pets (
-        name,
-        species,
-        breed,
-        client_profiles (
-          first_name,
-          last_name
-        )
-      )
-    `)
-    .eq('veterinarian_id', vetProfile.id)
-    .order('scheduled_start', { ascending: true });
-
-  if (error) throw error;
-  return data;
-};
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export default function AppointmentsPage() {
-  const { data: appointments = [], isLoading } = useSWR('my-appointments', fetcher);
+  const { data: appointments = [], isLoading } = useSWR<AppointmentWithRelations[]>('my-appointments', fetcher);
   
   const [date, setDate] = useState<Date | undefined>(new Date());
 
-  // 2. Parse Dates using 'scheduled_start'
-  const appointmentDates = appointments.map((app: any) => parseISO(app.scheduled_start));
+  // Parse Dates using 'scheduled_start'
+  const appointmentDates = appointments.map((app) => parseISO(app.scheduled_start));
 
-  // 3. Filter for Selected Date
-  const selectedDateAppointments = appointments.filter((app: any) => 
+  // Filter for Selected Date
+  const selectedDateAppointments = appointments.filter((app) => 
     date && isSameDay(parseISO(app.scheduled_start), date)
   );
 
@@ -119,6 +80,7 @@ export default function AppointmentsPage() {
             </h2>
           </div>
 
+          { }
           {isLoading ? (
             <div className="text-center py-12 text-gray-400">Loading schedule...</div>
           ) : selectedDateAppointments.length === 0 ? (
@@ -130,7 +92,7 @@ export default function AppointmentsPage() {
             </div>
           ) : (
             <div className="grid gap-4">
-              {selectedDateAppointments.map((app: any) => {
+              {selectedDateAppointments.map((app) => {
                 // Helper to get owner name safely
                 const owner = app.pets?.client_profiles;
                 const ownerName = owner ? `${owner.first_name} ${owner.last_name}` : 'Unknown Owner';
