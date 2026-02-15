@@ -1,24 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 
-export const dynamic = 'force-dynamic';
-export const runtime = 'nodejs';
-
-function getSupabaseAdmin() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Missing Supabase environment variables');
-  }
-
-  return createClient(supabaseUrl, supabaseKey);
-}
-
 export async function POST(request: NextRequest) {
   try {
     const { currentPassword, newPassword } = await request.json();
 
+    // 1. Validation
     if (!currentPassword || !newPassword) {
       return NextResponse.json(
         { error: 'Current password and new password are required.' },
@@ -33,37 +20,39 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get the access token from the Authorization header
+    // 2. Auth Check & Get Email
     const authHeader = request.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json(
-        { error: 'Not authenticated.' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Not authenticated.' }, { status: 401 });
     }
-
     const token = authHeader.split(' ')[1];
 
-    const supabaseAdmin = getSupabaseAdmin();
-
-    // Verify the token and get the user
-    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
-
-    if (userError || !user) {
-      return NextResponse.json(
-        { error: 'Invalid session. Please log in again.' },
-        { status: 401 }
-      );
-    }
-
-    // Verify current password by attempting sign-in
-    const supabaseAnon = createClient(
+    // Create a temporary client to get the user's email
+    // We use the ANON key here because we just need to read the token
+    const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
-    const { error: signInError } = await supabaseAnon.auth.signInWithPassword({
-      email: user.email!,
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+
+    if (userError || !user || !user.email) {
+      return NextResponse.json(
+        { error: 'Invalid session or email not found.' },
+        { status: 401 }
+      );
+    }
+
+    // 3. Verify Old Password & Create Update Session
+    // We create a FRESH client instance to handle the sign-in
+    const sessionClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+
+    // Attempt to log in with the OLD password
+    const { error: signInError } = await sessionClient.auth.signInWithPassword({
+      email: user.email,
       password: currentPassword,
     });
 
@@ -74,20 +63,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Update the password using admin client
-    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
-      user.id,
-      { password: newPassword }
-    );
+    // 4. Update Password (SAFER METHOD)
+    // Instead of using the Admin client, we use 'sessionClient'.
+    // This client is now authenticated as the user, so it has permission to update itself.
+    const { error: updateError } = await sessionClient.auth.updateUser({
+      password: newPassword
+    });
 
     if (updateError) {
       return NextResponse.json(
-        { error: 'Failed to update password. Please try again.' },
+        { error: 'Failed to update password.' },
         { status: 500 }
       );
     }
 
     return NextResponse.json({ message: 'Password updated successfully.' });
+
   } catch (error) {
     console.error('Change password error:', error);
     return NextResponse.json(

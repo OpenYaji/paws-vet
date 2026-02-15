@@ -102,6 +102,7 @@ export default function AddNewPet({ onPetAdded }: AddNewPetProps) {
       const response = await fetch('/api/pets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ 
           name: newPet.name,
           species: newPet.species,
