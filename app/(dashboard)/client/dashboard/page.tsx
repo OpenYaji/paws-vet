@@ -13,33 +13,89 @@ export default function ClientDashboardPage() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [userId, setUserId] = useState<string>('');
+  const [clientId, setClientId] = useState<string>('');
 
   useEffect(() => {
     async function loadStats() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+        if (!user) {
+          console.log('No user found');
+          setIsLoading(false);
+          return;
+        }
 
         setUserId(user.id);
+        console.log('User ID:', user.id);
 
-        // Get my pets count
-        const { count: petsCount } = await supabase
-          .from('pets')
-          .select('*', { count: 'exact', head: true })
-          .eq('owner_id', user.id);
+        // Get client profile first
+        const { data: profile, error: profileError } = await supabase
+          .from('client_profiles')
+          .select('id')
+          .eq('user_id', user.id)
+          .maybeSingle();
 
-        // Get upcoming appointments
-        const today = new Date().toISOString().split('T')[0];
-        const { count: upcomingCount } = await supabase
-          .from('appointments')
-          .select('*', { count: 'exact', head: true })
-          .eq('client_id', user.id)
-          .gte('appointment_date', today);
+        if (profileError) {
+          console.error('Error fetching profile:', profileError);
+          setIsLoading(false);
+          return;
+        }
 
-        setStats({
-          myPets: petsCount || 0,
-          upcomingAppointments: upcomingCount || 0,
-        });
+        if (!profile) {
+          console.log('No client profile found for user');
+          setIsLoading(false);
+          return;
+        }
+        
+        console.log('Client Profile ID:', profile.id);
+        setClientId(profile.id);
+
+        // Fetch pets using the API endpoint (bypasses RLS issues)
+        try {
+          const petsResponse = await fetch(`/api/pets?client_id=${profile.id}`);
+          
+          if (!petsResponse.ok) {
+            console.error('Failed to fetch pets:', petsResponse.status);
+          }
+
+          const petsData = await petsResponse.json();
+          const pets = Array.isArray(petsData) ? petsData : [];
+          console.log('Fetched pets:', pets);
+
+          const petsCount = pets.length;
+          console.log('Pets count:', petsCount);
+
+          // Get pet IDs for appointments query
+          const petIds = pets.map((pet: any) => pet.id);
+          console.log('Pet IDs:', petIds);
+
+          // Get upcoming appointments count
+          let upcomingCount = 0;
+          if (petIds.length > 0) {
+            const today = new Date().toISOString();
+            
+            const { count, error: appointmentsError } = await supabase
+              .from('appointments')
+              .select('*', { count: 'exact', head: true })
+              .in('pet_id', petIds)
+              .gte('scheduled_start', today)
+              .in('appointment_status', ['pending', 'confirmed']);
+            
+            if (appointmentsError) {
+              console.error('Error fetching appointments:', appointmentsError);
+            } else {
+              console.log('Upcoming appointments count:', count);
+              upcomingCount = count || 0;
+            }
+          }
+
+          setStats({
+            myPets: petsCount,
+            upcomingAppointments: upcomingCount,
+          });
+        } catch (fetchError) {
+          console.error('Error fetching pets via API:', fetchError);
+        }
       } catch (error) {
         console.error('Error loading stats:', error);
       } finally {
@@ -97,7 +153,7 @@ export default function ClientDashboardPage() {
         <h2 className="text-2xl font-bold">Quick Actions</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <Button asChild className="h-auto flex-col py-6" size="lg">
-            <Link href="/client/appointments/new">
+            <Link href="/client/appointments">
               <span className="text-2xl mb-2">📅</span>
               <span>Book Appointment</span>
             </Link>

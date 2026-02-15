@@ -1,44 +1,44 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-);
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  throw new Error('Missing Supabase environment variables');
+}
+
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 export async function GET(request: NextRequest) {
   try {
+    const searchParams = request.nextUrl.searchParams;
+    const clientId = searchParams.get('client_id');
+
+    console.log('GET /api/pets - client_id:', clientId);
+
+    if (!clientId) {
+      return NextResponse.json({ error: 'Client ID required' }, { status: 400 });
+    }
+
+    // Query pets with owner_id matching the client_id
     const { data, error } = await supabase
       .from('pets')
-      .select(`
-        id,
-        owner_id,
-        name,
-        species,
-        breed,
-        color,
-        gender,
-        weight,
-        microchip_number,
-        client_profiles (
-          id,
-          user_id,
-          first_name,
-          last_name,
-          phone
-        )
-      `)
+      .select('*')
+      .eq('owner_id', clientId)
+      .eq('is_active', true)
       .order('name', { ascending: true });
 
     if (error) {
+      console.error('Supabase error:', error);
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
-    return NextResponse.json(data);
-
-  } catch (error) {
-    // This catch block handles unexpected crashes (like network issues)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.log('Found pets:', data?.length || 0);
+    return NextResponse.json(data || []);
+  } catch (error: any) {
+    console.error('Unexpected error in GET /api/pets:', error);
+    return NextResponse.json({ error: 'Internal server error: ' + error.message }, { status: 500 });
   }
 }
 
@@ -46,33 +46,54 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    if (!body.name || !body.owner_id || !body.species) {
-        return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    console.log('POST /api/pets - body:', body);
+
+    // Required Field Validations
+    if (!body.name || !body.owner_id || !body.species || !body.date_of_birth) {
+      return NextResponse.json({ 
+        error: 'Missing required fields: Name, Owner ID, Species, and DOB are mandatory.' 
+      }, { status: 400 });
     }
 
-     const newPet = {
-      name: body.name,
-      species: body.species,
-      breed: body.breed,
-      color: body.color,
-      weight: body.weight,
-      owner_id: body.owner_id,
-      photo_url: body.photo_url,
-    };
+    // Server-side Date Validation
+    if (new Date(body.date_of_birth) > new Date()) {
+      return NextResponse.json({ 
+        error: 'Date of birth cannot be in the future.' 
+      }, { status: 400 });
+    }
 
     const { data, error } = await supabase
-        .from('pets')
-        .insert([newPet])
-        .select()
-        .single();
+      .from('pets')
+      .insert([{
+        owner_id: body.owner_id,
+        name: body.name,
+        species: body.species,
+        breed: body.breed || null,
+        date_of_birth: body.date_of_birth,
+        gender: body.gender,
+        color: body.color || null,
+        weight: parseFloat(body.weight) || 0,
+        microchip_number: body.microchip_number || null,
+        is_spayed_neutered: body.is_spayed_neutered || false,
+        behavioral_notes: body.behavioral_notes || null,
+        special_needs: body.special_needs || null,
+        current_medical_status: body.current_medical_status || null,
+        photo_url: body.photo_url || null,
+        is_active: true
+      }])
+      .select()
+      .single();
 
     if (error) {
+      console.error('Insert error:', error);
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
+    console.log('Created pet:', data);
     return NextResponse.json(data, { status: 201 });
-  } catch (error) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  } catch (error: any) {
+    console.error('Unexpected error in POST /api/pets:', error);
+    return NextResponse.json({ error: 'Internal server error: ' + error.message }, { status: 500 });
   }
 }
 
@@ -81,41 +102,25 @@ export async function DELETE(request: NextRequest) {
     const searchParams = new URL(request.url).searchParams;
     const id = searchParams.get('id');
 
-    if (!id) {
-      return NextResponse.json({ error: 'Pet ID is required' }, { status: 400 });
-    }
+    if (!id) return NextResponse.json({ error: 'Pet ID is required' }, { status: 400 });
 
     const { error } = await supabase.from('pets').delete().eq('id', id);
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
     return NextResponse.json({ message: 'Pet deleted successfully' }, { status: 200 });
-  } catch (err) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  } catch (err: any) {
+    return NextResponse.json({ error: 'Internal server error: ' + err.message }, { status: 500 });
   }
 }
 
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
-    
-    // We expect the ID to be passed either in the URL or the Body.
-    // Let's check the URL first (standard REST practice).
     const searchParams = new URL(request.url).searchParams;
-    let id = searchParams.get('id');
+    let id = searchParams.get('id') || body.id;
 
-    // If not in URL, check body
-    if (!id && body.id) {
-        id = body.id;
-    }
+    if (!id) return NextResponse.json({ error: 'Pet ID is required for update' }, { status: 400 });
 
-    if (!id) {
-      return NextResponse.json({ error: 'Pet ID is required for update' }, { status: 400 });
-    }
-
-    // Prepare update object (remove ID from the fields to update)
     const { id: _, ...updates } = body;
 
     const { data, error } = await supabase
@@ -125,13 +130,9 @@ export async function PATCH(request: NextRequest) {
       .select()
       .single();
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
     return NextResponse.json(data, { status: 200 });
-
-  } catch (error) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  } catch (error: any) {
+    return NextResponse.json({ error: 'Internal server error: ' + error.message }, { status: 500 });
   }
 }
