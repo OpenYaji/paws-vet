@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { AlertCircle, Package, Users, PawPrint, Calendar, Stethoscope } from 'lucide-react';
+import { AlertCircle, Users, PawPrint, Calendar, Stethoscope, Package, Receipt, TrendingUp, BarChart3, ShoppingCart, FileText, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { StackedAreaChart, BarChart, MultiLineChart } from '@/components/dashboard/charts';
+import { DonutChart } from '@/components/dashboard/donut-chart';
 
 interface DashboardStats {
   totalClients: number;
@@ -17,7 +18,87 @@ interface DashboardStats {
   lowStockProducts: any[];
   revenueByCategory: Array<{ category: string; value: number; color: string }>;
   totalRevenue: number;
+  salesPerformance?: {
+    labels: string[];
+    series: Array<{ name: string; color: string; data: number[] }>;
+  };
+  vetPerformance?: Array<{ category: string; value: number; color: string }>;
+  customerSatisfaction?: {
+    labels: string[];
+    series: Array<{ name: string; color: string; data: number[] }>;
+  };
+  weeklyRevenue?: number;
+  inventoryStats?: {
+    totalProducts: number;
+    lowStockCount: number;
+    outOfStock: number;
+    totalInventoryValue: number;
+    inventoryByCategory: Array<{ category: string; count: number }>;
+  };
+  billingStats?: {
+    todaySales: number;
+    weeklyRevenue: number;
+    monthlyRevenue: number;
+    totalRevenue: number;
+    totalInvoices: number;
+    paidInvoices: number;
+    unpaidInvoices: number;
+    partialInvoices: number;
+    outstandingBalance: number;
+    dailyRevenue: Array<{ date: string; amount: number }>;
+  };
+  appointmentStats?: {
+    todayCount: number;
+    thisWeekCount: number;
+    totalCount: number;
+    completionRate: number;
+    cancelRate: number;
+    byType: Record<string, number>;
+    byStatus: Record<string, number>;
+  };
+  petStats?: {
+    totalPets: number;
+    petsBySpecies: Array<{ species: string; count: number }>;
+  };
+  employeeStats?: {
+    totalEmployees: number;
+    activeEmployees: number;
+    suspendedEmployees: number;
+    totalAdminStaff: number;
+    totalVetStaff: number;
+  };
 }
+
+const COLORS = {
+  primary: '#2D5016',
+  accent: '#7FA650',
+  muted: '#D4C5A9',
+  textMuted: '#8C7A5B',
+  bgLight: '#F5F0E8',
+  border: '#E8E2D6',
+  dark: '#1A1A1A',
+  bg: '#FAFAF7',
+  red: '#C0392B',
+  amber: '#D69E2E',
+};
+
+const SPECIES_COLORS: Record<string, string> = {
+  Dog: '#7FA650',
+  Cat: '#D4C5A9',
+  Bird: '#2D5016',
+  Rabbit: '#8C7A5B',
+};
+
+const APPT_TYPE_COLORS: Record<string, string> = {
+  checkup: '#7FA650',
+  consultation: '#2D5016',
+  vaccination: '#D4C5A9',
+  surgery: '#C0392B',
+  emergency: '#D69E2E',
+  dental: '#8C7A5B',
+  grooming: '#A0AEC0',
+  followup: '#48BB78',
+};
 
 export default function AdminDashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
@@ -43,13 +124,8 @@ export default function AdminDashboardPage() {
     try {
       setIsLoading(true);
       setError(null);
-
       const response = await fetch('/api/admin/dashboard');
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch dashboard data');
-      }
-
+      if (!response.ok) throw new Error('Failed to fetch dashboard data');
       const data = await response.json();
       setStats(data);
     } catch (error: any) {
@@ -60,145 +136,105 @@ export default function AdminDashboardPage() {
     }
   }
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(amount);
-  };
+  const formatCurrency = (amount: number) =>
+    `₱${amount.toLocaleString('en-PH', { minimumFractionDigits: 0 })}`;
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
+  const salesSeries = stats.salesPerformance?.series || [
+    { name: 'Vaccine Shot', color: COLORS.dark, data: [15000, 22000, 18000, 28000, 25000, 35000, 30000] },
+    { name: 'Consultation Fee', color: COLORS.accent, data: [10000, 14000, 12000, 18000, 20000, 24000, 20000] },
+    { name: 'Dewormer', color: '#9AE6B4', data: [6000, 8000, 7000, 10000, 11000, 14000, 12000] },
+    { name: 'Anti-Rabies', color: COLORS.bgLight, data: [3000, 4500, 4000, 6000, 7000, 8000, 6500] },
+  ];
+  const salesLabels = stats.salesPerformance?.labels || ['0', '1', '2', '3', '4', '5', '6', '7'];
+
+  const vetPerfData = stats.vetPerformance || [
+    { category: 'N/A', value: 0, color: COLORS.muted },
+  ];
+
+  const satisfactionSeries = stats.customerSatisfaction?.series || [
+    { name: 'Overall', color: COLORS.accent, data: [40, 45, 55, 50, 60, 70, 65] },
+    { name: 'Service', color: COLORS.primary, data: [35, 40, 48, 52, 55, 58, 62] },
+    { name: 'Cleanliness', color: COLORS.muted, data: [30, 38, 42, 40, 50, 55, 58] },
+  ];
+  const satisfactionLabels = stats.customerSatisfaction?.labels || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+  const weeklyRevenue = stats.weeklyRevenue ?? stats.totalRevenue;
+
+  const inventoryCategories = (stats.inventoryStats?.inventoryByCategory || []).map((c, i) => ({
+    label: c.category,
+    value: c.count,
+    color: [COLORS.accent, COLORS.muted, COLORS.primary, COLORS.textMuted, '#A0AEC0', COLORS.amber, COLORS.red][i % 7],
+  }));
+
+  const petDemoSegments = (stats.petStats?.petsBySpecies || []).map((s) => ({
+    label: s.species,
+    value: s.count,
+    color: SPECIES_COLORS[s.species] || '#A0AEC0',
+  }));
+
+  const apptTypeSegments = Object.entries(stats.appointmentStats?.byType || {}).map(([type, count]) => ({
+    label: type.charAt(0).toUpperCase() + type.slice(1),
+    value: count,
+    color: APPT_TYPE_COLORS[type] || '#A0AEC0',
+  }));
+
+  const invoiceSegments = [
+    { label: 'Paid', value: stats.billingStats?.paidInvoices || 0, color: COLORS.accent },
+    { label: 'Unpaid', value: stats.billingStats?.unpaidInvoices || 0, color: COLORS.red },
+    { label: 'Partial', value: stats.billingStats?.partialInvoices || 0, color: COLORS.amber },
+  ].filter(s => s.value > 0);
+
+  const dailyRevenueData = (stats.billingStats?.dailyRevenue || []).map((d, i, arr) => ({
+    category: d.date,
+    value: d.amount,
+    color: i === arr.length - 1 ? COLORS.accent : COLORS.muted,
+  }));
+
+  const employeeSegments = [
+    { label: 'Admin', value: stats.employeeStats?.totalAdminStaff || 0, color: COLORS.primary },
+    { label: 'Veterinarians', value: stats.employeeStats?.totalVetStaff || 0, color: COLORS.accent },
+  ].filter(s => s.value > 0);
+
+  const inventoryColors = [COLORS.red, COLORS.accent, '#3182CE', COLORS.amber];
 
   if (isLoading) {
     return (
-      <div className="space-y-6 max-w-7xl mx-auto p-6">
-        {/* Header Skeleton */}
-        <div className="space-y-2">
-          <div className="h-9 w-80 bg-gray-200 animate-pulse rounded"></div>
-          <div className="h-5 w-96 bg-gray-200 animate-pulse rounded"></div>
-        </div>
-
-        {/* Stats Cards Skeleton */}
+      <div className="space-y-4 max-w-[1400px] mx-auto p-6" style={{ fontFamily: 'Inter, system-ui, sans-serif', backgroundColor: COLORS.bg, minHeight: '100vh' }}>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((i) => (
-            <Card key={i}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <div className="h-4 w-24 bg-gray-200 animate-pulse rounded"></div>
-                <div className="h-4 w-4 bg-gray-200 animate-pulse rounded"></div>
-              </CardHeader>
-              <CardContent>
-                <div className="h-8 w-16 bg-gray-200 animate-pulse rounded mb-1"></div>
-                <div className="h-3 w-20 bg-gray-200 animate-pulse rounded"></div>
-              </CardContent>
-            </Card>
+            <div key={i} className="bg-white rounded-2xl border p-5 shadow-sm" style={{ borderColor: COLORS.border }}>
+              <div className="h-3 w-20 bg-gray-200 animate-pulse rounded mb-3"></div>
+              <div className="h-8 w-14 bg-gray-200 animate-pulse rounded mb-2"></div>
+              <div className="h-3 w-24 bg-gray-200 animate-pulse rounded"></div>
+            </div>
           ))}
         </div>
-
-        {/* Dashboard Grid Skeleton */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Revenue Chart Skeleton */}
-          <Card className="bg-[#7FA650]/10">
-            <CardHeader className="pb-4">
-              <div className="h-5 w-32 bg-gray-200 animate-pulse rounded"></div>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="flex items-center justify-center gap-6">
-                {/* Pie chart circle */}
-                <div className="w-36 h-36 rounded-full bg-gray-200 animate-pulse"></div>
-                {/* Legend */}
-                <div className="space-y-2">
-                  {[1, 2, 3, 4].map((i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-gray-200 animate-pulse"></div>
-                      <div>
-                        <div className="h-4 w-24 bg-gray-200 animate-pulse rounded mb-1"></div>
-                        <div className="h-3 w-16 bg-gray-200 animate-pulse rounded"></div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Inventory Alerts Skeleton */}
-          <Card className="bg-[#D4C5A9]/10">
-            <CardHeader className="pb-4 flex flex-row items-center justify-between">
-              <div className="h-5 w-32 bg-gray-200 animate-pulse rounded"></div>
-              <div className="h-6 w-8 bg-gray-200 animate-pulse rounded-full"></div>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="space-y-2">
-                {[1, 2, 3, 4].map((i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between p-3 bg-background rounded-lg border"
-                  >
-                    <div className="flex items-center gap-3 flex-1">
-                      <div className="w-5 h-5 rounded-full bg-gray-200 animate-pulse"></div>
-                      <div className="flex-1">
-                        <div className="h-4 w-32 bg-gray-200 animate-pulse rounded mb-1"></div>
-                        <div className="h-3 w-20 bg-gray-200 animate-pulse rounded"></div>
-                      </div>
-                    </div>
-                    <div className="h-6 w-16 bg-gray-200 animate-pulse rounded-full"></div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Recent Appointments Skeleton */}
-          <Card className="lg:col-span-2">
-            <CardHeader className="pb-4">
-              <div className="h-5 w-40 bg-gray-200 animate-pulse rounded"></div>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="space-y-3">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between p-3 bg-secondary/20 rounded-lg"
-                  >
-                    <div className="flex-1 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <div className="h-5 w-24 bg-gray-200 animate-pulse rounded"></div>
-                        <div className="h-5 w-16 bg-gray-200 animate-pulse rounded-full"></div>
-                      </div>
-                      <div className="h-4 w-40 bg-gray-200 animate-pulse rounded"></div>
-                      <div className="h-3 w-32 bg-gray-200 animate-pulse rounded"></div>
-                    </div>
-                    <div className="text-right space-y-2">
-                      <div className="h-4 w-24 bg-gray-200 animate-pulse rounded ml-auto"></div>
-                      <div className="h-6 w-20 bg-gray-200 animate-pulse rounded-full ml-auto"></div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* System Status Skeleton */}
-        <Card>
-          <CardHeader>
-            <div className="h-6 w-32 bg-gray-200 animate-pulse rounded"></div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-gray-200 animate-pulse"></div>
-              <div className="h-4 w-96 bg-gray-200 animate-pulse rounded"></div>
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+          <div className="lg:col-span-2 bg-white rounded-2xl border p-6 shadow-sm" style={{ borderColor: COLORS.border }}>
+            <div className="h-4 w-36 bg-gray-200 animate-pulse rounded mb-4"></div>
+            <div className="h-[180px] bg-gray-100 animate-pulse rounded"></div>
+          </div>
+          <div className="lg:col-span-2 space-y-4">
+            <div className="bg-white rounded-2xl border p-5 shadow-sm" style={{ borderColor: COLORS.border }}>
+              <div className="h-4 w-28 bg-gray-200 animate-pulse rounded mb-2"></div>
+              <div className="h-7 w-36 bg-gray-200 animate-pulse rounded"></div>
             </div>
-            <div className="h-9 w-32 bg-gray-200 animate-pulse rounded"></div>
-          </CardContent>
-        </Card>
+            <div className="bg-white rounded-2xl border p-5 shadow-sm" style={{ borderColor: COLORS.border }}>
+              <div className="h-4 w-40 bg-gray-200 animate-pulse rounded mb-4"></div>
+              <div className="space-y-3">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-gray-200 animate-pulse"></div>
+                      <div className="h-3 w-28 bg-gray-200 animate-pulse rounded"></div>
+                    </div>
+                    <div className="h-3 w-14 bg-gray-200 animate-pulse rounded"></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -207,250 +243,403 @@ export default function AdminDashboardPage() {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
-          <p className="text-destructive mb-4">{error}</p>
-          <Button onClick={loadDashboardData}>Retry</Button>
+          <p className="text-red-600 mb-4">{error}</p>
+          <Button onClick={loadDashboardData} className="text-white" style={{ backgroundColor: COLORS.primary }}>Retry</Button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto p-6">
-      {/* Header */}
-      <div className="space-y-2">
-        <h1 className="text-3xl font-bold">Veterinary Clinic Admin Dashboard</h1>
-        <p className="text-muted-foreground">Overview of clinic operations and performance</p>
-      </div>
-
-      {/* Overview Stats Cards */}
+    <div
+      className="space-y-4 max-w-[1400px] mx-auto p-6"
+      style={{ fontFamily: 'Inter, system-ui, sans-serif', backgroundColor: COLORS.bg, minHeight: '100vh' }}
+    >
+      {/* ═══════════ ROW 1: 4 Metric Cards ═══════════ */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Clients</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalClients}</div>
-            <p className="text-xs text-muted-foreground">Pet owners</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Pets</CardTitle>
-            <PawPrint className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalPets}</div>
-            <p className="text-xs text-muted-foreground">Registered pets</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Today's Appointments</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-primary">{stats.todayAppointments}</div>
-            <p className="text-xs text-muted-foreground">
-              {stats.upcomingAppointments} upcoming this week
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Veterinarians</CardTitle>
-            <Stethoscope className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalVeterinarians}</div>
-            <p className="text-xs text-muted-foreground">Active staff</p>
-          </CardContent>
-        </Card>
+        {[
+          { label: 'Total Clients', value: stats.totalClients, sub: 'Pet Owners', icon: Users, color: COLORS.primary },
+          { label: 'Total Pets', value: stats.totalPets, sub: 'Registered Pets', icon: PawPrint, color: COLORS.accent },
+          { label: 'Appointments', value: stats.totalAppointments, sub: 'All Appointments', icon: Calendar, color: COLORS.textMuted },
+          { label: 'Veterinarians', value: stats.totalVeterinarians, sub: 'Active Staffs', icon: Stethoscope, color: COLORS.primary },
+        ].map((m, i) => (
+          <div key={i} className="bg-white rounded-2xl border p-5 shadow-sm" style={{ borderColor: COLORS.border }}>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: m.color + '18' }}>
+                <m.icon className="w-5 h-5" style={{ color: m.color }} />
+              </div>
+              <p className="text-xs font-medium" style={{ color: COLORS.textMuted }}>{m.label}</p>
+            </div>
+            <div className="text-[32px] font-bold leading-tight" style={{ color: COLORS.dark }}>{m.value}</div>
+            <p className="text-xs mt-1" style={{ color: COLORS.muted }}>{m.sub}</p>
+          </div>
+        ))}
       </div>
 
-      {/* Dashboard Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Revenue by Category - Pie Chart */}
-        <Card className="bg-[#7FA650]/10">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-lg">Revenue Overview</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-0">
-            {stats.totalRevenue > 0 ? (
-              <div className="flex items-center justify-center gap-6">
-                {/* Pie Chart Visualization */}
-                <div className="relative w-36 h-36">
-                  <svg viewBox="0 0 100 100" className="transform -rotate-90">
-                    {stats.revenueByCategory.map((item, index) => {
-                      const total = stats.revenueByCategory.reduce((sum, i) => sum + i.value, 0);
-                      const percentage = (item.value / total) * 100;
-                      const offset = stats.revenueByCategory
-                        .slice(0, index)
-                        .reduce((sum, i) => sum + (i.value / total) * 100, 0);
-
-                      return (
-                        <circle
-                          key={item.category}
-                          cx="50"
-                          cy="50"
-                          r="40"
-                          fill="none"
-                          stroke={item.color}
-                          strokeWidth="20"
-                          strokeDasharray={`${percentage * 2.51} ${251 - percentage * 2.51}`}
-                          strokeDashoffset={-offset * 2.51}
-                        />
-                      );
-                    })}
-                  </svg>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="text-center">
-                      <div className="text-xl font-bold">{formatCurrency(stats.totalRevenue)}</div>
-                      <div className="text-xs text-muted-foreground">Total</div>
-                    </div>
+      {/* ═══════════ ROW 2: Sales Performance + Weekly Revenue & Inventory ═══════════ */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+        <div className="lg:col-span-2 bg-white rounded-2xl border p-5 shadow-sm" style={{ borderColor: COLORS.border }}>
+          <h2 className="text-sm font-semibold mb-3" style={{ color: COLORS.dark }}>Sales Performance</h2>
+          <div className="flex gap-4">
+            <div className="flex-1 h-[180px]">
+              <StackedAreaChart series={salesSeries} xLabels={salesLabels} yMax={90000} height={180} />
+            </div>
+            <div className="flex flex-col justify-center space-y-2 min-w-[130px]">
+              {salesSeries.map((s) => {
+                const total = salesSeries.reduce((sum, ser) => sum + ser.data.reduce((a, b) => a + b, 0), 0);
+                const seriesTotal = s.data.reduce((a, b) => a + b, 0);
+                const pct = total > 0 ? Math.round((seriesTotal / total) * 100) : 0;
+                return (
+                  <div key={s.name} className="flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
+                    <span className="text-[11px] flex-1" style={{ color: COLORS.textMuted }}>{s.name}</span>
+                    <span className="text-[11px] font-medium" style={{ color: COLORS.muted }}>{pct}%</span>
                   </div>
-                </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
 
-                {/* Legend */}
-                <div className="space-y-2">
-                  {stats.revenueByCategory.map((item) => (
-                    <div key={item.category} className="flex items-center gap-2">
-                      <div
-                        className="w-3 h-3 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: item.color }}
-                      />
-                      <div className="text-sm">
-                        <div className="font-medium">{item.category}</div>
-                        <div className="text-muted-foreground">{formatCurrency(item.value)}</div>
-                      </div>
+        <div className="lg:col-span-2 flex flex-col gap-4">
+          <div className="bg-white rounded-2xl border p-5 shadow-sm" style={{ borderColor: COLORS.border }}>
+            <p className="text-xs font-medium mb-1" style={{ color: COLORS.textMuted }}>Weekly Revenue</p>
+            <div className="text-[28px] font-bold leading-tight" style={{ color: COLORS.dark }}>
+              {formatCurrency(weeklyRevenue)}
+            </div>
+          </div>
+          <div className="bg-white rounded-2xl border p-5 shadow-sm flex-1" style={{ borderColor: COLORS.border }}>
+            <h2 className="text-sm font-semibold mb-3" style={{ color: COLORS.dark }}>Inventory Notification</h2>
+            <div className="space-y-2.5">
+              {stats.lowStockProducts.length > 0 ? (
+                stats.lowStockProducts.slice(0, 5).map((product: any, idx: number) => (
+                  <div key={product.id} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: inventoryColors[idx % inventoryColors.length] }} />
+                      <span className="text-[12px] font-medium cursor-pointer hover:underline" style={{ color: COLORS.accent }}>{product.product_name}</span>
                     </div>
-                  ))}
-                </div>
+                    <span className="text-[12px]" style={{ color: COLORS.textMuted }}>Stock: {product.stock_quantity}</span>
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs text-center py-2" style={{ color: COLORS.muted }}>All products well stocked</p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ═══════════ ROW 3: Vet Performance + Customer Satisfaction ═══════════ */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-white rounded-2xl border p-5 shadow-sm" style={{ borderColor: COLORS.border }}>
+          <h2 className="text-sm font-semibold" style={{ color: COLORS.dark }}>Vet Performance</h2>
+          <p className="text-[11px] mb-3" style={{ color: COLORS.muted }}>Appointments Handled</p>
+          <div className="h-[170px]">
+            <BarChart data={vetPerfData} yMax={50} height={170} />
+          </div>
+        </div>
+        <div className="bg-white rounded-2xl border p-5 shadow-sm" style={{ borderColor: COLORS.border }}>
+          <h2 className="text-sm font-semibold mb-3" style={{ color: COLORS.dark }}>Customer Satisfaction Rate</h2>
+          <div className="h-[170px]">
+            <MultiLineChart series={satisfactionSeries} xLabels={satisfactionLabels} yMax={100} height={170} />
+          </div>
+        </div>
+      </div>
+
+      {/* ═══════════ ROW 4: BILLING ANALYTICS ═══════════ */}
+      <div className="flex items-center gap-3 pt-2">
+        <div className="h-px flex-1" style={{ backgroundColor: COLORS.border }} />
+        <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: COLORS.textMuted }}>
+          <Receipt className="inline w-3.5 h-3.5 mr-1.5 -mt-0.5" />Billing & Sales Report
+        </span>
+        <div className="h-px flex-1" style={{ backgroundColor: COLORS.border }} />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: "Today's Sales", value: formatCurrency(stats.billingStats?.todaySales || 0), icon: ShoppingCart, color: COLORS.accent },
+          { label: 'Monthly Revenue', value: formatCurrency(stats.billingStats?.monthlyRevenue || 0), icon: TrendingUp, color: COLORS.primary },
+          { label: 'Total Revenue', value: formatCurrency(stats.billingStats?.totalRevenue || 0), icon: BarChart3, color: COLORS.textMuted },
+          { label: 'Outstanding', value: formatCurrency(stats.billingStats?.outstandingBalance || 0), icon: AlertCircle, color: COLORS.red },
+        ].map((m, i) => (
+          <div key={i} className="bg-white rounded-2xl border p-5 shadow-sm" style={{ borderColor: COLORS.border }}>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: m.color + '18' }}>
+                <m.icon className="w-5 h-5" style={{ color: m.color }} />
               </div>
+              <div>
+                <p className="text-xs font-medium" style={{ color: COLORS.textMuted }}>{m.label}</p>
+                <p className="text-xl font-bold" style={{ color: COLORS.dark }}>{m.value}</p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Daily Revenue Chart */}
+        <div className="lg:col-span-2 bg-white rounded-2xl border p-5 shadow-sm" style={{ borderColor: COLORS.border }}>
+          <h2 className="text-sm font-semibold mb-3" style={{ color: COLORS.dark }}>Daily Revenue (Last 7 Days)</h2>
+          <div className="h-[180px]">
+            {dailyRevenueData.length > 0 ? (
+              <BarChart data={dailyRevenueData} yMax={Math.max(...dailyRevenueData.map(d => d.value), 1000)} height={180} />
             ) : (
-              <div className="text-center py-8 text-muted-foreground">
-                No revenue data available
+              <div className="h-full flex items-center justify-center">
+                <p className="text-xs" style={{ color: COLORS.muted }}>No revenue data</p>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        {/* Low Stock Alert */}
-        <Card className="bg-[#D4C5A9]/10">
-          <CardHeader className="pb-4 flex flex-row items-center justify-between">
-            <CardTitle className="text-lg">Inventory Alerts</CardTitle>
-            <Badge variant="destructive">{stats.lowStockProducts.length}</Badge>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="space-y-2 max-h-[300px] overflow-y-auto">
-              {stats.lowStockProducts.length > 0 ? (
-                stats.lowStockProducts.map((product) => (
-                  <div
-                    key={product.id}
-                    className="flex items-center justify-between p-3 bg-background rounded-lg border"
-                  >
-                    <div className="flex items-center gap-3">
-                      <AlertCircle className={`w-5 h-5 flex-shrink-0 ${
-                        product.stock_quantity === 0 ? 'text-red-500' : 
-                        product.stock_quantity <= product.low_stock_threshold ? 'text-yellow-500' : 
-                        'text-green-500'
-                      }`} />
-                      <div>
-                        <p className="font-medium text-sm">{product.product_name}</p>
-                        <p className="text-xs text-muted-foreground">{product.category}</p>
-                      </div>
-                    </div>
-                    <Badge
-                      variant={product.stock_quantity === 0 ? 'destructive' : 'secondary'}
-                      className="text-xs"
-                    >
-                      Stock: {product.stock_quantity}
-                    </Badge>
+        {/* Invoice Status */}
+        <div className="bg-white rounded-2xl border p-5 shadow-sm" style={{ borderColor: COLORS.border }}>
+          <h2 className="text-sm font-semibold mb-3" style={{ color: COLORS.dark }}>Invoice Status</h2>
+          {invoiceSegments.length > 0 ? (
+            <div className="flex items-center gap-5">
+              <DonutChart segments={invoiceSegments} size={100} />
+              <div className="space-y-2">
+                {invoiceSegments.map((s) => (
+                  <div key={s.label} className="flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
+                    <span className="text-[11px]" style={{ color: COLORS.textMuted }}>{s.value} {s.label}</span>
                   </div>
-                ))
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  All products are well stocked
+                ))}
+                <div className="pt-1 border-t" style={{ borderColor: COLORS.border }}>
+                  <span className="text-[11px] font-medium" style={{ color: COLORS.dark }}>Total: {stats.billingStats?.totalInvoices || 0}</span>
                 </div>
-              )}
+              </div>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Recent Appointments */}
-        <Card className="lg:col-span-2">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-lg">Recent Appointments</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="space-y-3">
-              {stats.recentAppointments.length > 0 ? (
-                stats.recentAppointments.map((appt) => (
-                  <div
-                    key={appt.id}
-                    className="flex items-center justify-between p-3 bg-secondary/20 rounded-lg"
-                  >
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <p className="font-medium">{appt.pet?.name}</p>
-                        <Badge variant="outline" className="text-xs">
-                          {appt.pet?.species}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        Owner: {appt.client?.first_name} {appt.client?.last_name}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Dr. {appt.veterinarian?.first_name} {appt.veterinarian?.last_name}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-medium">{formatDate(appt.scheduled_start)}</p>
-                      <Badge 
-                        className={
-                          appt.appointment_status === 'completed' ? 'bg-green-100 text-green-800' :
-                          appt.appointment_status === 'confirmed' ? 'bg-blue-100 text-blue-800' :
-                          appt.appointment_status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-gray-100 text-gray-800'
-                        }
-                      >
-                        {appt.appointment_status}
-                      </Badge>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  No recent appointments
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+          ) : (
+            <p className="text-xs text-center py-8" style={{ color: COLORS.muted }}>No invoices yet</p>
+          )}
+        </div>
       </div>
 
-      {/* System Status */}
-      <Card>
-        <CardHeader>
-          <CardTitle>System Status</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-            <p className="text-sm text-muted-foreground">
-              All systems operational. Last updated: {new Date().toLocaleString()}
-            </p>
+      {/* ═══════════ ROW 5: APPOINTMENT ANALYTICS ═══════════ */}
+      <div className="flex items-center gap-3 pt-2">
+        <div className="h-px flex-1" style={{ backgroundColor: COLORS.border }} />
+        <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: COLORS.textMuted }}>
+          <Calendar className="inline w-3.5 h-3.5 mr-1.5 -mt-0.5" />Appointment Analytics
+        </span>
+        <div className="h-px flex-1" style={{ backgroundColor: COLORS.border }} />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        {[
+          { label: 'Today', value: stats.appointmentStats?.todayCount || 0, icon: Clock, color: undefined },
+          { label: 'This Week', value: stats.appointmentStats?.thisWeekCount || 0, icon: Calendar, color: undefined },
+          { label: 'Total', value: stats.appointmentStats?.totalCount || 0, icon: FileText, color: undefined },
+          { label: 'Completion', value: `${stats.appointmentStats?.completionRate || 0}%`, icon: CheckCircle, color: COLORS.accent },
+          { label: 'Cancel Rate', value: `${stats.appointmentStats?.cancelRate || 0}%`, icon: XCircle, color: COLORS.red },
+        ].map((m, i) => (
+          <div key={i} className="bg-white rounded-2xl border p-4 shadow-sm" style={{ borderColor: COLORS.border }}>
+            <div className="flex items-center gap-2 mb-1">
+              <m.icon className="w-4 h-4" style={{ color: m.color || COLORS.textMuted }} />
+              <p className="text-[11px] font-medium" style={{ color: COLORS.textMuted }}>{m.label}</p>
+            </div>
+            <p className="text-2xl font-bold" style={{ color: COLORS.dark }}>{m.value}</p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={loadDashboardData}>
-              Refresh Data
-            </Button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* By Type */}
+        <div className="bg-white rounded-2xl border p-5 shadow-sm" style={{ borderColor: COLORS.border }}>
+          <h2 className="text-sm font-semibold mb-3" style={{ color: COLORS.dark }}>Appointments by Type</h2>
+          {apptTypeSegments.length > 0 ? (
+            <div className="flex items-center gap-6">
+              <DonutChart segments={apptTypeSegments} size={120} />
+              <div className="space-y-1.5 flex-1">
+                {apptTypeSegments.map((s) => {
+                  const total = apptTypeSegments.reduce((sum, seg) => sum + seg.value, 0);
+                  const pct = total > 0 ? Math.round((s.value / total) * 100) : 0;
+                  return (
+                    <div key={s.label} className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
+                      <span className="text-[11px] flex-1" style={{ color: COLORS.textMuted }}>{s.label}</span>
+                      <span className="text-[11px] font-medium" style={{ color: COLORS.dark }}>{s.value} ({pct}%)</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-center py-8" style={{ color: COLORS.muted }}>No appointment data</p>
+          )}
+        </div>
+
+        {/* By Status */}
+        <div className="bg-white rounded-2xl border p-5 shadow-sm" style={{ borderColor: COLORS.border }}>
+          <h2 className="text-sm font-semibold mb-3" style={{ color: COLORS.dark }}>Appointments by Status</h2>
+          <div className="space-y-2.5">
+            {Object.entries(stats.appointmentStats?.byStatus || {}).map(([status, count]) => {
+              const total = stats.appointmentStats?.totalCount || 1;
+              const pct = Math.round((count / total) * 100);
+              const statusColor: Record<string, string> = {
+                completed: COLORS.accent,
+                confirmed: '#3182CE',
+                pending: COLORS.amber,
+                cancelled: COLORS.red,
+                in_progress: COLORS.primary,
+                no_show: COLORS.muted,
+              };
+              return (
+                <div key={status}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[12px] font-medium capitalize" style={{ color: COLORS.dark }}>{status.replace('_', ' ')}</span>
+                    <span className="text-[11px]" style={{ color: COLORS.textMuted }}>{count} ({pct}%)</span>
+                  </div>
+                  <div className="w-full h-2 rounded-full" style={{ backgroundColor: COLORS.bgLight }}>
+                    <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: statusColor[status] || COLORS.muted }} />
+                  </div>
+                </div>
+              );
+            })}
+            {Object.keys(stats.appointmentStats?.byStatus || {}).length === 0 && (
+              <p className="text-xs text-center py-6" style={{ color: COLORS.muted }}>No data</p>
+            )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
+
+      {/* ═══════════ ROW 6: PET & INVENTORY ANALYTICS ═══════════ */}
+      <div className="flex items-center gap-3 pt-2">
+        <div className="h-px flex-1" style={{ backgroundColor: COLORS.border }} />
+        <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: COLORS.textMuted }}>
+          <PawPrint className="inline w-3.5 h-3.5 mr-1.5 -mt-0.5" />Pets & Inventory
+        </span>
+        <div className="h-px flex-1" style={{ backgroundColor: COLORS.border }} />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Pet Demographics */}
+        <div className="bg-white rounded-2xl border p-5 shadow-sm" style={{ borderColor: COLORS.border }}>
+          <h2 className="text-sm font-semibold mb-3" style={{ color: COLORS.dark }}>Pet Demographics</h2>
+          {petDemoSegments.length > 0 ? (
+            <div className="flex items-center gap-5">
+              <DonutChart segments={petDemoSegments} size={100} />
+              <div className="space-y-1.5">
+                {petDemoSegments.map((s) => {
+                  const total = petDemoSegments.reduce((sum, seg) => sum + seg.value, 0);
+                  const pct = total > 0 ? Math.round((s.value / total) * 100) : 0;
+                  return (
+                    <div key={s.label} className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
+                      <span className="text-[11px]" style={{ color: COLORS.textMuted }}>{pct}% {s.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-center py-8" style={{ color: COLORS.muted }}>No pets registered</p>
+          )}
+        </div>
+
+        {/* Inventory Overview */}
+        <div className="bg-white rounded-2xl border p-5 shadow-sm" style={{ borderColor: COLORS.border }}>
+          <h2 className="text-sm font-semibold mb-3" style={{ color: COLORS.dark }}>Inventory Overview</h2>
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { label: 'Total Products', value: stats.inventoryStats?.totalProducts || 0, color: COLORS.primary },
+              { label: 'Low Stock', value: stats.inventoryStats?.lowStockCount || 0, color: COLORS.amber },
+              { label: 'Out of Stock', value: stats.inventoryStats?.outOfStock || 0, color: COLORS.red },
+              { label: 'Total Value', value: formatCurrency(stats.inventoryStats?.totalInventoryValue || 0), color: COLORS.accent },
+            ].map((item, i) => (
+              <div key={i} className="rounded-xl p-3" style={{ backgroundColor: COLORS.bgLight }}>
+                <p className="text-[10px] font-medium uppercase tracking-wider" style={{ color: COLORS.textMuted }}>{item.label}</p>
+                <p className="text-lg font-bold mt-0.5" style={{ color: item.color }}>{item.value}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Inventory by Category */}
+        <div className="bg-white rounded-2xl border p-5 shadow-sm" style={{ borderColor: COLORS.border }}>
+          <h2 className="text-sm font-semibold mb-3" style={{ color: COLORS.dark }}>Inventory by Category</h2>
+          {inventoryCategories.length > 0 ? (
+            <div className="flex items-center gap-5">
+              <DonutChart segments={inventoryCategories} size={100} />
+              <div className="space-y-1.5">
+                {inventoryCategories.map((s) => (
+                  <div key={s.label} className="flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
+                    <span className="text-[11px]" style={{ color: COLORS.textMuted }}>{s.value} {s.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-center py-8" style={{ color: COLORS.muted }}>No inventory data</p>
+          )}
+        </div>
+      </div>
+
+      {/* ═══════════ ROW 7: EMPLOYEE ANALYTICS ═══════════ */}
+      <div className="flex items-center gap-3 pt-2">
+        <div className="h-px flex-1" style={{ backgroundColor: COLORS.border }} />
+        <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: COLORS.textMuted }}>
+          <Users className="inline w-3.5 h-3.5 mr-1.5 -mt-0.5" />Employee Overview
+        </span>
+        <div className="h-px flex-1" style={{ backgroundColor: COLORS.border }} />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+        {/* Employee Composition */}
+        <div className="bg-white rounded-2xl border p-5 shadow-sm" style={{ borderColor: COLORS.border }}>
+          <h2 className="text-sm font-semibold mb-3" style={{ color: COLORS.dark }}>Team Composition</h2>
+          {employeeSegments.length > 0 ? (
+            <div className="flex flex-col items-center gap-3">
+              <DonutChart segments={employeeSegments} size={90} />
+              <div className="flex gap-4">
+                {employeeSegments.map((s) => (
+                  <div key={s.label} className="flex items-center gap-1.5">
+                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color }} />
+                    <span className="text-[11px]" style={{ color: COLORS.textMuted }}>{s.label} ({s.value})</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-center py-6" style={{ color: COLORS.muted }}>No employees</p>
+          )}
+        </div>
+
+        {[
+          { label: 'Total Employees', value: stats.employeeStats?.totalEmployees || 0, icon: Users, color: COLORS.primary },
+          { label: 'Active', value: stats.employeeStats?.activeEmployees || 0, icon: CheckCircle, color: COLORS.accent },
+          { label: 'Suspended', value: stats.employeeStats?.suspendedEmployees || 0, icon: XCircle, color: COLORS.red },
+        ].map((m, i) => (
+          <div key={i} className="bg-white rounded-2xl border p-5 shadow-sm" style={{ borderColor: COLORS.border }}>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: m.color + '18' }}>
+                <m.icon className="w-5 h-5" style={{ color: m.color }} />
+              </div>
+              <div>
+                <p className="text-xs font-medium" style={{ color: COLORS.textMuted }}>{m.label}</p>
+                <p className="text-xl font-bold" style={{ color: COLORS.dark }}>{m.value}</p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ═══════════ FOOTER ═══════════ */}
+      <div className="flex items-center justify-between bg-white rounded-2xl border px-5 py-3 shadow-sm" style={{ borderColor: COLORS.border }}>
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: COLORS.accent }}></div>
+          <p className="text-xs" style={{ color: COLORS.muted }}>
+            All systems operational · Last updated: {new Date().toLocaleString()}
+          </p>
+        </div>
+        <button
+          onClick={loadDashboardData}
+          className="px-4 py-1.5 text-xs font-medium rounded-lg border transition hover:shadow-sm"
+          style={{ borderColor: COLORS.border, color: COLORS.textMuted }}
+        >
+          Refresh Data
+        </button>
+      </div>
     </div>
   );
 }

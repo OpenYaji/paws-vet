@@ -1,102 +1,115 @@
-import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-export async function POST(request: NextRequest) {
+function generateInvoiceNumber() {
+  const now = new Date();
+  const y = now.getFullYear().toString().slice(-2);
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  const rand = Math.floor(1000 + Math.random() * 9000);
+  return `INV-${y}${m}${d}-${rand}`;
+}
+
+export async function POST(req: NextRequest) {
   try {
-    const body = await request.json();
+    const body = await req.json();
     const { invoice, lineItems, isWalkIn } = body;
 
-    // Generate invoice number
-    const invoiceNumber = `INV-${Date.now()}`;
+    if (!invoice || !lineItems || lineItems.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'Missing invoice data or line items' },
+        { status: 400 }
+      );
+    }
 
-    // Prepare invoice data
-    const invoiceData: any = {
+    const invoiceNumber = generateInvoiceNumber();
+    const today = new Date().toISOString().split('T')[0];
+
+    // Build the invoice row matching the actual schema
+    const invoiceRow: Record<string, any> = {
       invoice_number: invoiceNumber,
-      issue_date: new Date().toISOString().split('T')[0],
-      due_date: new Date().toISOString().split('T')[0],
       subtotal: invoice.subtotal,
       tax_amount: invoice.taxAmount,
       discount_amount: invoice.discountAmount,
       total_amount: invoice.total,
       amount_paid: invoice.total,
       payment_status: 'paid',
-      notes: invoice.notes,
+      notes: invoice.notes || '',
+      issue_date: today,
+      due_date: today,
     };
 
     if (isWalkIn) {
-      invoiceData.walk_in_customer_name = invoice.walkInName;
-    } else {
-      invoiceData.client_id = invoice.clientId;
+      invoiceRow.walk_in_customer_name = invoice.walkInName || 'Walk-in Customer';
+    } else if (invoice.clientId) {
+      invoiceRow.client_id = invoice.clientId;
     }
 
-    // Create invoice
-    const { data: createdInvoice, error: invoiceError } = await supabase
+    const { data: invoiceData, error: invoiceError } = await supabaseAdmin
       .from('invoices')
-      .insert(invoiceData)
+      .insert(invoiceRow)
       .select()
       .single();
 
     if (invoiceError) {
-      throw new Error(`Failed to create invoice: ${invoiceError.message}`);
+      console.error('Invoice insert error:', invoiceError);
+      return NextResponse.json(
+        { success: false, error: `Failed to create invoice: ${invoiceError.message}` },
+        { status: 500 }
+      );
     }
 
-    // Create line items
-    const lineItemsData = lineItems.map((item: any) => ({
-      invoice_id: createdInvoice.id,
-      item_type: item.type,
-      service_id: item.type === 'service' ? item.itemId : null,
-      product_id: item.type === 'product' ? item.itemId : null,
-      description: item.description,
-      quantity: item.quantity,
-      unit_price: item.unitPrice,
-      line_total: item.lineTotal,
-      is_taxable: true,
-    }));
+    // Insert line items matching the actual schema
+    const lineItemRows = lineItems.map((item: any) => {
+      const row: Record<string, any> = {
+        invoice_id: invoiceData.id,
+        item_type: item.type,
+        description: item.description,
+        quantity: item.quantity,
+        unit_price: item.unitPrice,
+        line_total: item.lineTotal,
+        is_taxable: true,
+      };
 
-    const { error: lineItemsError } = await supabase
+      // Use the correct FK column based on item type
+      if (item.type === 'service') {
+        row.service_id = item.itemId;
+      } else if (item.type === 'product') {
+        row.product_id = item.itemId;
+      }
+
+      return row;
+    });
+
+    const { error: lineItemsError } = await supabaseAdmin
       .from('invoice_line_items')
-      .insert(lineItemsData);
+      .insert(lineItemRows);
 
     if (lineItemsError) {
-      throw new Error(`Failed to create line items: ${lineItemsError.message}`);
+      console.error('Line items insert error:', lineItemsError);
+      // Clean up the invoice on failure
+      await supabaseAdmin.from('invoices').delete().eq('id', invoiceData.id);
+      return NextResponse.json(
+        { success: false, error: `Failed to create line items: ${lineItemsError.message}` },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({
       success: true,
-      invoice: createdInvoice,
+      invoice: invoiceData,
       invoiceNumber,
-    }, { status: 201 });
-
+    });
   } catch (error: any) {
-    console.error('Error creating invoice:', error);
-    return NextResponse.json({
-      success: false,
-      error: error.message || 'Internal server error'
-    }, { status: 500 });
-  }
-}
-
-export async function GET(request: NextRequest) {
-  try {
-    const { data, error } = await supabase
-      .from('invoices')
-      .select(`
-        *,
-        client:client_profiles(first_name, last_name)
-      `)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-
-    return NextResponse.json({ success: true, data });
-  } catch (error) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error('Invoice API error:', error);
+    return NextResponse.json(
+      { success: false, error: error.message || 'Internal server error' },
+      { status: 500 }
+    );
   }
 }

@@ -98,6 +98,7 @@ CREATE TABLE public.client_profiles (
   notes text,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  avatar_url text,
   CONSTRAINT client_profiles_pkey PRIMARY KEY (id),
   CONSTRAINT client_profiles_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
 );
@@ -307,6 +308,7 @@ CREATE TABLE public.pets (
   updated_by uuid,
   deleted_at timestamp with time zone,
   deleted_by uuid,
+  photo_url text,
   CONSTRAINT pets_pkey PRIMARY KEY (id),
   CONSTRAINT pets_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES public.client_profiles(id),
   CONSTRAINT pets_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id),

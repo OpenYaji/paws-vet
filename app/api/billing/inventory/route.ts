@@ -1,72 +1,66 @@
-import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-export async function PATCH(request: NextRequest) {
+export async function PATCH(req: NextRequest) {
   try {
-    const body = await request.json();
-    const { updates } = body; // Array of { productId, quantity }
+    const body = await req.json();
+    const { updates } = body;
 
-    const errors: string[] = [];
+    if (!updates || !Array.isArray(updates) || updates.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'No inventory updates provided' },
+        { status: 400 }
+      );
+    }
 
     for (const update of updates) {
       const { productId, quantity } = update;
 
-      // Get current product
-      const { data: product, error: fetchError } = await supabase
+      const { data: product, error: fetchError } = await supabaseAdmin
         .from('products')
         .select('stock_quantity')
         .eq('id', productId)
         .single();
 
       if (fetchError || !product) {
-        errors.push(`Product ${productId} not found`);
-        continue;
+        return NextResponse.json(
+          { success: false, error: `Product ${productId} not found` },
+          { status: 404 }
+        );
       }
 
-      // Calculate new quantity
-      const newQuantity = product.stock_quantity - quantity;
+      const newStock = product.stock_quantity - quantity;
 
-      if (newQuantity < 0) {
-        errors.push(`Insufficient stock for product ${productId}`);
-        continue;
+      if (newStock < 0) {
+        return NextResponse.json(
+          { success: false, error: `Insufficient stock for product ${productId}` },
+          { status: 400 }
+        );
       }
 
-      // Update inventory
-      const { error: updateError } = await supabase
+      const { error: updateError } = await supabaseAdmin
         .from('products')
-        .update({ 
-          stock_quantity: newQuantity,
-          updated_at: new Date().toISOString()
-        })
+        .update({ stock_quantity: newStock })
         .eq('id', productId);
 
       if (updateError) {
-        errors.push(`Failed to update product ${productId}: ${updateError.message}`);
+        return NextResponse.json(
+          { success: false, error: `Failed to update inventory: ${updateError.message}` },
+          { status: 500 }
+        );
       }
     }
 
-    if (errors.length > 0) {
-      return NextResponse.json({
-        success: false,
-        errors
-      }, { status: 400 });
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: 'Inventory updated successfully'
-    });
-
+    return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error('Error updating inventory:', error);
-    return NextResponse.json({
-      success: false,
-      error: error.message || 'Internal server error'
-    }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: error.message || 'Internal server error' },
+      { status: 500 }
+    );
   }
 }
