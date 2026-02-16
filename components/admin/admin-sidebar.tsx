@@ -60,11 +60,12 @@ export default function AdminSidebar({ collapsed, setCollapsed, mobileOpen, setM
 
 const menuItems: MenuItem[] = [
     { name: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/admin/dashboard' },
-    { name: 'Users', icon: <Users size={20} />, path: '/admin/users-management' },
     { name: 'Appointments', icon: <Calendar size={20} />, path: '/admin/appointments' },
     { name: 'Pets', icon: <PawPrint size={20} />, path: '/admin/pets' },
     { name: 'Inventory', icon: <Package size={20} />, path: '/admin/inventory' },
     { name: 'Billing & Invoice', icon: <Receipt size={20} />, path: '/admin/billing' },
+    { name: 'Users', icon: <Users size={20} />, path: '/admin/users-management' },
+
     { name: 'Employees', icon: <IdCard size={20} />, path: '/admin/employees' },
 
     { name: 'Settings', icon: <Settings size={20} />, path: '/admin/settings' },

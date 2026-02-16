@@ -273,7 +273,7 @@ export default function EmployeesPage() {
     };
 
     return (
-        <div className="min-h-screen bg-background p-4 md:p-6 lg:p-8">
+        <div className="min-h-screen bg-background mx-auto p-6">
             {/* Top bar */}
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-8 gap-4">
                 <div className="flex items-center gap-3">

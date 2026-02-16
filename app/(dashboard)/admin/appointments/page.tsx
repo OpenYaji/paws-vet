@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Calendar } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
   Table,
@@ -212,11 +213,21 @@ export default function AppointmentsPage() {
   return (
     <main className="p-6 space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold">Appointments</h1>
-        <p className="text-muted-foreground">View and manage all appointments</p>
-      </div>
-
+{/* ═══════════ HEADER SECTION ═══════════ */}
+{/* ═══════════ APPOINTMENTS HEADER ═══════════ */}
+<div className="flex items-center gap-3 mb-6">
+  {/* Icon Container using theme variables */}
+  <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center">
+    <Calendar className="h-5 w-5 text-primary-foreground" />
+  </div>
+  
+  <div>
+    <h1 className="text-2xl font-bold text-foreground">Appointments</h1>
+    <p className="text-sm text-muted-foreground">
+      View and manage all pet clinic schedules and visits
+    </p>
+  </div>
+</div>
       {/* Stats Dashboard */}
       <StatsDashboard
         appointmentsToday={appointmentsToday}
