@@ -42,7 +42,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // 4. PREPARE THE QUERY
     const searchParams = new URL(request.url).searchParams;
     const targetClientId = searchParams.get('client_id'); 
 
