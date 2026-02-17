@@ -253,7 +253,7 @@ export default function AdminDashboardPage() {
 
   return (
     <div
-      className="space-y-4 max-w-[1400px] mx-auto p-6"
+      className="space-y-4 max-w-[1400px] mx-auto"
       style={{ fontFamily: 'Inter, system-ui, sans-serif', backgroundColor: COLORS.bg, minHeight: '100vh' }}
     >
       {/* ═══════════ HEADER SECTION ═══════════ */}

@@ -144,7 +144,7 @@ export default function BillingDashboard() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className=" space-y-6">
       {/* ═══════════ BILLING & INVOICES HEADER ═══════════ */}
       <div className="flex items-center gap-3 mb-6">
         <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center">

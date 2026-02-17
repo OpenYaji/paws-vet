@@ -213,7 +213,7 @@ export default function InventoryPage() {
   return (
     <div className="h-screen flex flex-col overflow-hidden">
       {/* ═══════════ INVENTORY HEADER ═══════════ */}
-      <div className="flex items-center gap-3 p-6 pb-0 mb-6">
+      <div className="flex items-center gap-3 mb-6">
         <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center">
           <Package className="h-5 w-5 text-primary-foreground" />
         </div>

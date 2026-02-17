@@ -211,7 +211,7 @@ export default function AppointmentsPage() {
   };
 
   return (
-    <main className="p-6 space-y-6">
+    <main className="space-y-6">
       {/* Header */}
 {/* ═══════════ HEADER SECTION ═══════════ */}
 {/* ═══════════ APPOINTMENTS HEADER ═══════════ */}

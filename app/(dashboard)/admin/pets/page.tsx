@@ -113,7 +113,7 @@ export default function PetsPage() {
   ].filter(s => s.value > 0);
 
   return (
-    <div className="space-y-6 max-w-[1400px] mx-auto p-6 min-h-screen bg-background text-foreground">
+    <div className="space-y-6 max-w-[1400px] mx-auto min-h-screen bg-background text-foreground">
       
       {/* HEADER SECTION */}
       <div className="flex items-center justify-between mb-6">

@@ -237,7 +237,7 @@ export default function UsersPage() {
   }
 
   return (
-    <div className="space-y-5 max-w-[1400px] mx-auto p-6 min-h-screen bg-background">
+    <div className="space-y-5 max-w-[1400px] mx-auto min-h-screen bg-background">
       <div className="flex items-center gap-3">
         <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-primary">
           <Users className="h-5 w-5 text-primary-foreground" />
