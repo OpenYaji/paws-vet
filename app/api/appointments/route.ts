@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
           client:client_profiles!pets_owner_id_fkey(
             id,
             first_name,
-            last_name,
+            last_name,  
             phone,
             email:users!client_profiles_user_id_fkey(email)
           )
