@@ -87,27 +87,27 @@ export async function POST(request: NextRequest) {
         }
       );
     
-        const { data: { user }, error: authError } = await authClient.auth.getUser();
+      const { data: { user }, error: authError } = await authClient.auth.getUser();
     
-        if (authError || !user || user.user_metadata.role !== 'veterinarian') {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+      if (authError || !user || user.user_metadata.role !== 'veterinarian') {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
     
-        const body = await request.json();
-        const { appointment_id, medication_name, pet_id, veterinarian_id } = body;
+      const body = await request.json();
+      const { appointment_id, medication_name, pet_id, veterinarian_id } = body;
     
-        if (!appointment_id) {
-            return NextResponse.json(
-                { error: 'Appointment ID is required to link this prescription.' }, 
-                { status: 400 }
-            );
-        }
+      if (!appointment_id) {
+        return NextResponse.json(
+          { error: 'Appointment ID is required to link this prescription.' }, 
+          { status: 400 }
+        );
+      }
 
-        const { data: appointment, error: apptError } = await supabase
-            .from('appointments')
-            .select('appointment_status')
-            .eq('id', appointment_id)
-            .single();
+      const { data: appointment, error: apptError } = await supabase
+        .from('appointments')
+        .select('appointment_status')
+        .eq('id', appointment_id)
+        .single();
 
         if (apptError) {
              return NextResponse.json(
