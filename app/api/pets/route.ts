@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
+import { createServerClient } from '@supabase/auth-helpers-nextjs';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -12,33 +14,73 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 export async function GET(request: NextRequest) {
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const clientId = searchParams.get('client_id');
+    const cookieStore = await cookies();
+    
+    const authClient = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() { return cookieStore.getAll(); },
+          setAll(cookiesToSet) {
+             try {
+               cookiesToSet.forEach(({ name, value, options }) => 
+                 cookieStore.set(name, value, options)
+               )
+             } catch {}
+          },
+        },
+      }
+    );
 
-    console.log('GET /api/pets - client_id:', clientId);
+    const { data: { user }, error: authError } = await authClient.auth.getUser();
 
-    if (!clientId) {
-      return NextResponse.json({ error: 'Client ID required' }, { status: 400 });
+    if (authError || !user || user.user_metadata.role !== 'veterinarian') {
+      return NextResponse.json(
+        { error: 'Unauthorized: Access restricted to Veterinarians.' }, 
+        { status: 401 }
+      );
     }
 
-    // Query pets with owner_id matching the client_id
-    const { data, error } = await supabase
+    const searchParams = new URL(request.url).searchParams;
+    const targetClientId = searchParams.get('client_id'); 
+
+    let query = supabase
       .from('pets')
-      .select('*')
-      .eq('owner_id', clientId)
-      .eq('is_active', true)
+      .select(`
+        id,
+        owner_id,
+        name,
+        species,
+        breed,
+        color,
+        gender,
+        weight,
+        microchip_number,
+        client_profiles (
+          id,
+          first_name,
+          last_name,
+          phone
+        )
+      `)
       .order('name', { ascending: true });
+    
+    if (targetClientId) {
+       query = query.eq('owner_id', targetClientId);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
-      console.error('Supabase error:', error);
+      console.error('Error fetching pets:', error);
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
-    console.log('Found pets:', data?.length || 0);
-    return NextResponse.json(data || []);
+    return NextResponse.json(data, { status: 200 });
+
   } catch (error: any) {
-    console.error('Unexpected error in GET /api/pets:', error);
-    return NextResponse.json({ error: 'Internal server error: ' + error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal Server Error: ' + error.message }, { status: 500 });
   }
 }
 

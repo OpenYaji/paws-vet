@@ -15,16 +15,16 @@ import Link from 'next/link';
 const fetcher = (url: string) => fetch(url).then(res => res.json());
 
 export default function PrescriptionsPage() {
-  const { data: prescriptions = [], isLoading } = useSWR('prescriptions-list', fetcher);
+  const { data: prescriptions = [], isLoading } = useSWR('/api/prescriptions', fetcher);
   const [searchTerm, setSearchTerm] = useState('');
-
+  
   // Filter Logic
-  const filteredList = prescriptions.filter((rx: any) => 
+  const filteredList = Array.isArray(prescriptions) ? prescriptions.filter((rx: any) => 
     rx.medication_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     rx.pets?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     rx.pets?.owners?.full_name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
+  ) : [];
+  
   return (
     <div className="space-y-6 max-w-7xl mx-auto p-6">
       

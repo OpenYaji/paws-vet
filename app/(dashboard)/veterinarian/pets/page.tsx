@@ -316,7 +316,9 @@ export default function PatientsPage() {
                       title="View Details"
                       onClick={() => console.log('View details:', pet.id)}
                     >
-                      <Eye className="h-4 w-4" />
+                      <Link href={`/veterinarian/pets/${pet.id}`}>
+                        <Eye className="h-4 w-4" />
+                      </Link>
                     </Button>
                     <Button
                       variant="outline"

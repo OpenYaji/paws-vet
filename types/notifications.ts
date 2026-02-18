@@ -6,17 +6,17 @@ import { NotificationType, NotificationStatus } from './database';
 export interface Notification {
   id: string;
   recipient_id: string;
-  notification_type: NotificationType;  // From './database'
+  notification_type: NotificationType;
   subject: string | null;
   content: string;
   sent_at: string;
-  delivery_status: NotificationStatus;  // From './database'
+  delivery_status: NotificationStatus;
   delivery_attempted_at: string | null;
   delivered_at: string | null;
   error_message: string | null;
   related_entity_type?: string | null;
   related_entity_id?: string | null;
-  created_at: string;  // This is REQUIRED (no ?)
+  created_at: string;
 }
 
 // Extended notification with user info
