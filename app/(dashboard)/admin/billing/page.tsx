@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/auth-client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { 
   ShoppingCart, FileText, Package, Receipt, AlertCircle, 
   TrendingUp
@@ -51,13 +52,9 @@ export default function BillingDashboard() {
   async function loadData() {
     try {
       setIsLoading(true);
-
       const { data: invoicesData } = await supabase
         .from('invoices')
-        .select(`
-          *,
-          client:client_profiles(first_name, last_name)
-        `)
+        .select(`*, client:client_profiles(first_name, last_name)`)
         .order('created_at', { ascending: false });
 
       const { data: productsData } = await supabase
@@ -80,7 +77,6 @@ export default function BillingDashboard() {
     }
   }
 
-  // Calculate metrics
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   
@@ -92,31 +88,79 @@ export default function BillingDashboard() {
     .filter(inv => new Date(inv.issue_date) >= todayStart).length;
 
   const recentTransactions = payments.length;
-
   const lowStockProducts = products.filter(p => p.stock_quantity <= p.low_stock_threshold);
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
-          <p className="text-muted-foreground">Loading billing data...</p>
+      <div className="p-6 space-y-6">
+        {/* Header Skeleton */}
+        <div className="flex items-center gap-3 mb-6">
+          <Skeleton className="h-10 w-10 rounded-xl" />
+          <div className="space-y-2">
+            <Skeleton className="h-7 w-48" />
+            <Skeleton className="h-4 w-64" />
+          </div>
+        </div>
+
+        {/* Alert Skeleton */}
+        <Skeleton className="h-14 w-full rounded-xl" />
+
+        {/* Main Action Cards Skeleton */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {[1, 2, 3].map((i) => (
+            <Card key={i} className="border-2">
+              <CardContent className="p-4 space-y-4">
+                <div className="flex justify-between">
+                  <Skeleton className="h-10 w-10 rounded-lg" />
+                  <Skeleton className="h-5 w-16 rounded-full" />
+                </div>
+                <Skeleton className="h-6 w-3/4" />
+                <Skeleton className="h-4 w-1/2" />
+                <div className="pt-3 border-t">
+                   <Skeleton className="h-4 w-20 mb-2" />
+                   <Skeleton className="h-7 w-28" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Quick Stats Skeleton */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Card key={i}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <Skeleton className="h-9 w-9 rounded-lg" />
+                <div className="space-y-2">
+                  <Skeleton className="h-3 w-16" />
+                  <Skeleton className="h-5 w-10" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold mb-2">Billing & Invoices</h1>
-        <p className="text-muted-foreground">Manage your clinic's finances, invoices, and point of sale</p>
+    <div className=" space-y-6">
+      {/* ═══════════ BILLING & INVOICES HEADER ═══════════ */}
+      <div className="flex items-center gap-3 mb-6">
+        <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center">
+          <Receipt className="h-5 w-5 text-primary-foreground" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Billing & Invoices</h1>
+          <p className="text-sm text-muted-foreground">
+            Manage payments, generate receipts, and track outstanding balances
+          </p>
+        </div>
       </div>
 
       {/* Alert for low stock */}
       {lowStockProducts.length > 0 && (
-        <Card className="border-destructive/50 bg-destructive/10">
+        <Card className="border-destructive/50 bg-destructive/10 shadow-none">
           <CardContent className="py-3 px-4">
             <div className="flex items-center gap-2">
               <div className="p-1.5 bg-destructive rounded-lg">
@@ -131,7 +175,7 @@ export default function BillingDashboard() {
               <Button 
                 variant="outline"
                 size="sm"
-                className="h-7 text-xs"
+                className="h-7 text-xs bg-background"
                 onClick={() => router.push('/admin/inventory')}
               >
                 View Products
@@ -141,11 +185,10 @@ export default function BillingDashboard() {
         </Card>
       )}
 
-      {/* Main Action Cards - 3 Cards (Smaller) */}
+      {/* Main Action Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Card 1: Launch POS */}
         <Card 
-          className="cursor-pointer hover:shadow-lg transition-all hover:scale-[1.02] border-2"
+          className="cursor-pointer hover:shadow-lg transition-all hover:scale-[1.01] border-2"
           onClick={() => router.push('/admin/billing/pos')}
         >
           <CardContent className="p-4">
@@ -153,12 +196,10 @@ export default function BillingDashboard() {
               <div className="p-2 bg-primary/10 rounded-lg">
                 <ShoppingCart className="w-6 h-6 text-primary" />
               </div>
-              <Badge variant="outline" className="text-xs">Quick Action</Badge>
+              <Badge variant="secondary" className="text-[10px] uppercase font-bold">POS System</Badge>
             </div>
             <h3 className="text-xl font-bold mb-1">Launch POS</h3>
-            <p className="text-xs text-muted-foreground mb-3">
-              Quick checkout for walk-ins
-            </p>
+            <p className="text-xs text-muted-foreground mb-3">Quick checkout for walk-ins</p>
             <div className="pt-3 border-t">
               <p className="text-xs text-muted-foreground mb-0.5">Today's Sales</p>
               <p className="text-xl font-bold">₱{todaySales.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
@@ -166,9 +207,8 @@ export default function BillingDashboard() {
           </CardContent>
         </Card>
 
-        {/* Card 2: Invoice Vault */}
         <Card 
-          className="cursor-pointer hover:shadow-lg transition-all hover:scale-[1.02] border-2"
+          className="cursor-pointer hover:shadow-lg transition-all hover:scale-[1.01] border-2"
           onClick={() => router.push('/admin/billing/invoices')}
         >
           <CardContent className="p-4">
@@ -176,12 +216,10 @@ export default function BillingDashboard() {
               <div className="p-2 bg-primary/10 rounded-lg">
                 <FileText className="w-6 h-6 text-primary" />
               </div>
-              <Badge variant="outline" className="text-xs">History</Badge>
+              <Badge variant="secondary" className="text-[10px] uppercase font-bold">Records</Badge>
             </div>
             <h3 className="text-xl font-bold mb-1">Invoice Vault</h3>
-            <p className="text-xs text-muted-foreground mb-3">
-              View all transactions
-            </p>
+            <p className="text-xs text-muted-foreground mb-3">View all transactions</p>
             <div className="pt-3 border-t">
               <p className="text-xs text-muted-foreground mb-0.5">Generated Today</p>
               <p className="text-xl font-bold">{todayInvoices}</p>
@@ -189,9 +227,8 @@ export default function BillingDashboard() {
           </CardContent>
         </Card>
 
-        {/* Card 3: Transaction History */}
         <Card 
-          className="cursor-pointer hover:shadow-lg transition-all hover:scale-[1.02] border-2"
+          className="cursor-pointer hover:shadow-lg transition-all hover:scale-[1.01] border-2"
           onClick={() => router.push('/admin/billing/payments')}
         >
           <CardContent className="p-4">
@@ -199,14 +236,12 @@ export default function BillingDashboard() {
               <div className="p-2 bg-primary/10 rounded-lg">
                 <Receipt className="w-6 h-6 text-primary" />
               </div>
-              <Badge variant="outline" className="text-xs">History</Badge>
+              <Badge variant="secondary" className="text-[10px] uppercase font-bold">History</Badge>
             </div>
-            <h3 className="text-xl font-bold mb-1">Transaction History</h3>
-            <p className="text-xs text-muted-foreground mb-3">
-              View all payment records
-            </p>
+            <h3 className="text-xl font-bold mb-1">Payments</h3>
+            <p className="text-xs text-muted-foreground mb-3">View all payment records</p>
             <div className="pt-3 border-t">
-              <p className="text-xs text-muted-foreground mb-0.5">Total Transactions</p>
+              <p className="text-xs text-muted-foreground mb-0.5">Total Records</p>
               <p className="text-xl font-bold">{recentTransactions}</p>
             </div>
           </CardContent>
@@ -215,64 +250,26 @@ export default function BillingDashboard() {
 
       {/* Quick Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-accent rounded-lg">
-                <TrendingUp className="w-5 h-5" />
+        {[
+          { label: 'Total Invoices', value: invoices.length, icon: TrendingUp, color: 'text-primary' },
+          { label: 'Products', value: products.length, icon: Package, color: 'text-primary' },
+          { label: 'Payments', value: payments.length, icon: Receipt, color: 'text-primary' },
+          { label: 'Low Stock', value: lowStockProducts.length, icon: AlertCircle, color: 'text-destructive' },
+        ].map((stat, i) => (
+          <Card key={i} className="shadow-sm">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-secondary rounded-lg">
+                  <stat.icon className={`w-5 h-5 ${stat.color}`} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-tight">{stat.label}</p>
+                  <p className="text-xl font-bold">{stat.value}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Total Invoices</p>
-                <p className="text-xl font-bold">{invoices.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-accent rounded-lg">
-                <Package className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Products</p>
-                <p className="text-xl font-bold">{products.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-accent rounded-lg">
-                <Receipt className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Payments</p>
-                <p className="text-xl font-bold">{payments.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card 
-          className="cursor-pointer hover:shadow-md transition-shadow"
-          onClick={() => router.push('/admin/inventory')}
-        >
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-destructive/10 rounded-lg">
-                <AlertCircle className="w-5 h-5 text-destructive" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Low Stock</p>
-                <p className="text-xl font-bold">{lowStockProducts.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        ))}
       </div>
     </div>
   );

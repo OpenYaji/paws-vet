@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState, useMemo, useRef } from 'react'; // Added useRef
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { supabase } from '@/lib/auth-client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton'; // Ensure this is in your components/ui
 import {
   Table,
   TableBody,
@@ -55,12 +56,12 @@ const PRODUCT_CATEGORIES = [
 export default function InventoryPage() {
   const [viewMode, setViewMode] = useState<'rows' | 'cards'>('cards');
   const [isLoading, setIsLoading] = useState(true);
-  const [isUploading, setIsUploading] = useState(false); // New state for upload loading
+  const [isUploading, setIsUploading] = useState(false);
   const [products, setProducts] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   
-  const fileInputRef = useRef<HTMLInputElement>(null); // Ref for hidden input
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [showProductDialog, setShowProductDialog] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any | null>(null);
@@ -90,29 +91,17 @@ export default function InventoryPage() {
     }
   }
 
-  // --- NEW IMAGE UPLOAD LOGIC ---
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     try {
       setIsUploading(true);
       const fileExt = file.name.split('.').pop();
-      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
+      const fileName = `${Date.now()}.${fileExt}`;
       const filePath = `products/${fileName}`;
-
-      // 1. Upload to Supabase Storage
-      const { error: uploadError } = await supabase.storage
-        .from('product-images')
-        .upload(filePath, file);
-
+      const { error: uploadError } = await supabase.storage.from('product-images').upload(filePath, file);
       if (uploadError) throw uploadError;
-
-      // 2. Get Public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('product-images')
-        .getPublicUrl(filePath);
-
+      const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(filePath);
       setProductForm({ ...productForm, image_url: publicUrl });
     } catch (error: any) {
       alert('Error uploading image: ' + error.message);
@@ -162,11 +151,78 @@ export default function InventoryPage() {
     };
   }, [products]);
 
-  if (isLoading) return <div className="h-full w-full flex items-center justify-center"><Loader2 className="animate-spin text-primary" /></div>;
+  // --- SKELETAL UI COMPONENT ---
+  if (isLoading) {
+    return (
+      <div className="h-screen flex flex-col overflow-hidden animate-pulse">
+        {/* Header Skeleton */}
+        <div className="flex items-center gap-3 p-6 pb-0">
+          <Skeleton className="h-10 w-10 rounded-xl" />
+          <div className="space-y-2">
+            <Skeleton className="h-7 w-40" />
+            <Skeleton className="h-4 w-60" />
+          </div>
+        </div>
+
+        {/* KPI Skeleton */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-6 pb-2">
+          {[1, 2, 3, 4].map((i) => (
+            <Card key={i}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <Skeleton className="h-10 w-10 rounded-lg" />
+                <div className="space-y-2">
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-6 w-12" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Toolbar Skeleton */}
+        <div className="flex flex-col md:flex-row items-center justify-between px-6 py-4 gap-4">
+          <div className="flex items-center gap-3 w-full md:w-auto flex-1">
+            <Skeleton className="h-11 flex-1 max-w-md rounded-xl" />
+            <Skeleton className="h-11 w-[180px] rounded-xl" />
+            <Skeleton className="h-11 w-24 rounded-xl" />
+          </div>
+          <Skeleton className="h-11 w-32 rounded-xl" />
+        </div>
+
+        {/* Content Skeleton */}
+        <div className="flex-1 px-6 pb-6 overflow-hidden">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <Card key={i} className="border-2 h-32">
+                <CardContent className="p-4 flex gap-4">
+                  <Skeleton className="w-24 h-24 rounded-lg shrink-0" />
+                  <div className="flex-1 space-y-3">
+                    <div className="flex justify-between"><Skeleton className="h-5 w-3/4" /><Skeleton className="h-5 w-12" /></div>
+                    <Skeleton className="h-4 w-1/2" />
+                    <Skeleton className="h-4 w-full pt-2" />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
-      
+      {/* ═══════════ INVENTORY HEADER ═══════════ */}
+      <div className="flex items-center gap-3 mb-6">
+        <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center">
+          <Package className="h-5 w-5 text-primary-foreground" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Inventory</h1>
+          <p className="text-sm text-muted-foreground">Monitor stock levels, medical supplies, and equipment</p>
+        </div>
+      </div>
+
       {/* KPI Section */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-6 pb-2">
         {[
@@ -201,7 +257,6 @@ export default function InventoryPage() {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-
           <div className="w-[180px]">
             <Select value={categoryFilter} onValueChange={setCategoryFilter}>
               <SelectTrigger className="h-11 rounded-xl text-sm">
@@ -210,14 +265,11 @@ export default function InventoryPage() {
               <SelectContent>
                 <SelectItem value="all">All Categories</SelectItem>
                 {PRODUCT_CATEGORIES.map((cat) => (
-                  <SelectItem key={cat} value={cat}>
-                    {cat}
-                  </SelectItem>
+                  <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-
           <div className="flex border rounded-xl p-1">
             <Button variant="ghost" size="sm" className={`h-9 w-9 p-0 ${viewMode === 'rows' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`} onClick={() => setViewMode('rows')}><List size={18} /></Button>
             <Button variant="ghost" size="sm" className={`h-9 w-9 p-0 ${viewMode === 'cards' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`} onClick={() => setViewMode('cards')}><LayoutGrid size={18} /></Button>
@@ -271,16 +323,11 @@ export default function InventoryPage() {
               >
                 <CardContent className="p-4 flex gap-4">
                   <div className="relative w-24 h-24 shrink-0 bg-muted rounded-lg border flex items-center justify-center overflow-hidden">
-                    <img 
-                      src={p.image_url || '/placeholder.png'} 
-                      className="w-full h-full object-contain p-2 group-hover:scale-110 transition-transform duration-300" 
-                      alt={p.product_name} 
-                    />
+                    <img src={p.image_url || '/placeholder.png'} className="w-full h-full object-contain p-2 group-hover:scale-110 transition-transform duration-300" alt={p.product_name} />
                     <div className="absolute inset-0 bg-primary/60 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
                       <Eye className="text-primary-foreground w-5 h-5" />
                     </div>
                   </div>
-
                   <div className="flex-1 flex flex-col justify-between min-w-0">
                     <div>
                       <div className="flex justify-between items-start gap-2">
@@ -292,18 +339,13 @@ export default function InventoryPage() {
                         <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-tight">{p.category}</span>
                       </div>
                     </div>
-
                     <div className="flex items-center justify-between mt-3 pt-2 border-t">
                       <div className="flex items-center gap-1.5">
                         <Boxes size={12} className="text-muted-foreground" />
                         <span className="text-[11px] text-muted-foreground font-medium">Stock:</span>
-                        <span className={`text-xs font-black ${p.stock_quantity <= p.low_stock_threshold ? 'text-destructive' : 'text-primary'}`}>
-                          {p.stock_quantity}
-                        </span>
+                        <span className={`text-xs font-black ${p.stock_quantity <= p.low_stock_threshold ? 'text-destructive' : 'text-primary'}`}>{p.stock_quantity}</span>
                       </div>
-                      {p.stock_quantity <= p.low_stock_threshold && (
-                        <AlertCircle size={12} className="text-destructive" />
-                      )}
+                      {p.stock_quantity <= p.low_stock_threshold && <AlertCircle size={12} className="text-destructive" />}
                     </div>
                   </div>
                 </CardContent>
@@ -323,7 +365,6 @@ export default function InventoryPage() {
             </div>
             <Button variant="ghost" size="icon" onClick={() => setShowProductDialog(false)} className="rounded-full"><X size={20} /></Button>
           </div>
-
           <div className="px-8 py-4">
             <div className="grid grid-cols-1 md:grid-cols-12 gap-10">
               <div className="md:col-span-7 space-y-6">
@@ -361,20 +402,9 @@ export default function InventoryPage() {
                   </div>
                 </div>
               </div>
-              
-              {/* IMAGE UPLOAD SECTION */}
               <div className="md:col-span-5 flex flex-col gap-4">
                 <Label className="text-xs font-bold text-muted-foreground">Product Image</Label>
-                
-                {/* Hidden File Input */}
-                <input 
-                  type="file" 
-                  accept="image/*" 
-                  className="hidden" 
-                  ref={fileInputRef} 
-                  onChange={handleImageUpload}
-                />
-
+                <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleImageUpload} />
                 <div 
                   className={`relative border-2 border-dashed rounded-2xl bg-muted h-[340px] flex items-center justify-center overflow-hidden cursor-pointer hover:bg-muted/80 transition-colors ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}
                   onClick={() => fileInputRef.current?.click()}
@@ -392,7 +422,6 @@ export default function InventoryPage() {
                       <p className="text-xs text-muted-foreground font-medium">Click to upload image</p>
                     </div>
                   )}
-
                   {isUploading && (
                     <div className="absolute inset-0 flex items-center justify-center bg-background/50">
                       <Loader2 className="animate-spin h-8 w-8 text-primary" />
@@ -402,7 +431,6 @@ export default function InventoryPage() {
               </div>
             </div>
           </div>
-
           <div className="px-8 py-6 mt-4 bg-muted flex items-center justify-between border-t">
             {editingProduct ? (
               <Button variant="ghost" onClick={() => deleteProduct(editingProduct.id)} className="text-destructive font-bold text-xs uppercase"><Trash2 className="w-4 h-4 mr-2" /> Delete</Button>
