@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/auth-client';
 import useSWR, { mutate } from 'swr';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,16 +14,41 @@ import {
 } from "@/components/ui/select";
 import { Activity, Thermometer, Weight, Heart, Clock, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { format } from 'date-fns';
+import { useToast } from '@/hooks/use-toast';
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export default function TriagePage() {
-  const { data: appointments = [], isLoading, error } = useSWR('/api/triage', fetcher);
+  const { data: appointments = [], isLoading, error, mutate: mutateQueue } = useSWR('/api/triage', fetcher, {
+    refreshInterval: 5000, // Auto-refresh every 5 seconds
+    revalidateOnFocus: true,
+    revalidateOnReconnect: true
+  });
   const [selectedAppt, setSelectedAppt] = useState<any | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const { toast } = useToast();
 
   // Ensure appointments is always an array
   const safeAppointments = Array.isArray(appointments) ? appointments : [];
+
+  // Debug log
+  useEffect(() => {
+    console.log('=== TRIAGE QUEUE DEBUG ===');
+    console.log('Raw response:', appointments);
+    console.log('Is array?', Array.isArray(appointments));
+    console.log('Queue length:', safeAppointments.length);
+    if (safeAppointments.length > 0) {
+      console.log('Patients in queue:');
+      safeAppointments.forEach((appt: any) => {
+        console.log('  -', appt.id, '|', appt.pets?.name, '| Checked in:', appt.checked_in_at);
+      });
+    } else {
+      console.log('Queue is empty');
+    }
+    if (error) {
+      console.error('Triage error:', error);
+    }
+  }, [appointments, safeAppointments, error]);
 
   // Form State
   const [vitals, setVitals] = useState({
@@ -45,38 +70,45 @@ export default function TriagePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedAppt) return;
+
+    // Validation
+    if (!vitals.weight || !vitals.temperature) {
+      toast({
+        title: "Validation Error",
+        description: "Weight and Temperature are required fields",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setIsSaving(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-
-      // 1. Create Triage Record
-      const { error: triageError } = await supabase
-        .from('triage_records')
-        .insert([{
+      const response = await fetch('/api/triage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           appointment_id: selectedAppt.id,
           pet_id: selectedAppt.pets.id,
-          weight: Number(vitals.weight),
-          temperature: Number(vitals.temperature),
-          heart_rate: Number(vitals.heart_rate),
-          respiratory_rate: Number(vitals.respiratory_rate),
-          mucous_membrane: vitals.mucous_membrane,
-          triage_level: vitals.triage_level,
-          chief_complaint: vitals.chief_complaint,
-          created_by: user?.id
-        }]);
+          ...vitals
+        })
+      });
 
-      if (triageError) throw triageError;
+      const result = await response.json();
 
-      // 2. Optional: Update Appointment Status to "checked-in" or "in-progress"
-      // This removes them from the "Pending" list in future fetches
-      await supabase
-        .from('appointments')
-        .update({ appointment_status: 'checked-in' }) // Ensure this status exists in your enum/DB
-        .eq('id', selectedAppt.id);
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to save triage');
+      }
 
-      // 3. Reset
-      mutate('triage-queue'); // Refresh list
+      toast({
+        title: "Success",
+        description: `Triage completed for ${selectedAppt.pets.name}. Patient ready for consultation.`,
+      });
+
+      // Refresh the queue
+      await mutateQueue();
+      
+      // Reset form
       setSelectedAppt(null);
       setVitals({
         weight: '', temperature: '', heart_rate: '', respiratory_rate: '',
@@ -84,7 +116,11 @@ export default function TriagePage() {
       });
 
     } catch (error: any) {
-      alert('Error saving triage: ' + error.message);
+      toast({
+        title: "Error",
+        description: error.message || 'Failed to save triage assessment',
+        variant: "destructive"
+      });
     } finally {
       setIsSaving(false);
     }
@@ -126,8 +162,8 @@ export default function TriagePage() {
               >
                 <div className="flex justify-between items-start mb-2">
                   <span className="font-bold text-gray-800">{appt.pets.name}</span>
-                  <span className="text-xs font-mono bg-gray-100 px-2 py-1 rounded">
-                    {format(new Date(appt.scheduled_start), 'h:mm a')}
+                  <span className="text-xs font-mono bg-green-100 text-green-700 px-2 py-1 rounded">
+                    {format(new Date(appt.checked_in_at || appt.scheduled_start), 'h:mm a')}
                   </span>
                 </div>
                 <div className="text-sm text-gray-500 mb-1">
@@ -266,8 +302,12 @@ export default function TriagePage() {
 
                   <div className="pt-4 flex justify-end gap-3">
                     <Button type="button" variant="ghost" onClick={() => setSelectedAppt(null)}>Cancel</Button>
-                    <Button type="submit" disabled={isSaving} className="bg-green-600 hover:bg-green-700 w-40">
-                      {isSaving ? 'Saving...' : 'Submit Assessment'}
+                    <Button 
+                      type="submit" 
+                      disabled={isSaving || !vitals.weight || !vitals.temperature} 
+                      className="bg-green-600 hover:bg-green-700 w-48"
+                    >
+                      {isSaving ? 'Saving...' : '✓ Ready for Consult'}
                     </Button>
                   </div>
 
