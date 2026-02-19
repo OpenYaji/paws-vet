@@ -35,29 +35,65 @@ export async function GET(request: NextRequest) {
       if (authError || !user || user.user_metadata.role !== 'veterinarian') {
           return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       }
-
-      const body = await request.json();
-      const { appointment_id, medication_name, pet_id, veterinarian_id } = body;
       
       const { searchParams } = new URL(request.url);
       const search = searchParams.get('search');
 
       let query = supabase
-        .from('pets')
-        .select('id, name, species, client_profiles(first_name, last_name)')
-        .order('name');
+        .from('prescriptions')
+        .select(`
+          *,
+          medical_record:medical_records!prescriptions_medical_record_id_fkey (
+            id,
+            record_number,
+            visit_date,
+            chief_complaint,
+            appointment_id,
+            pet_id
+          ),
+          prescribed_by_vet:veterinarian_profiles!prescriptions_prescribed_by_fkey (
+            id,
+            first_name,
+            last_name
+          )
+        `)
+        .order('created_at', { ascending: false });
 
-      if(search){
-        query = query.ilike('name', `%${search}%`);
-      }
-
-      const { data: petsData, error: petsError } = await query.limit(10);
+      const { data: prescriptionsData, error: prescriptionsError } = await query;
     
-      if (petsError) {
-        return NextResponse.json({ error: petsError.message }, { status: 400 });
+      if (prescriptionsError) {
+        console.error('Prescriptions fetch error:', prescriptionsError);
+        return NextResponse.json({ error: prescriptionsError.message }, { status: 400 });
       }
+
+      // Fetch pet data for each prescription
+      const prescriptionsWithPets = await Promise.all(
+        (prescriptionsData || []).map(async (prescription: any) => {
+          const { data: pet } = await supabase
+            .from('pets')
+            .select(`
+              id,
+              name,
+              species,
+              breed,
+              owners:client_profiles!pets_owner_id_fkey (
+                id,
+                first_name,
+                last_name,
+                phone
+              )
+            `)
+            .eq('id', prescription.medical_record?.pet_id)
+            .single();
+
+          return {
+            ...prescription,
+            pets: pet
+          };
+        })
+      );
         
-      return NextResponse.json(petsData, { status: 200 });
+      return NextResponse.json(prescriptionsWithPets, { status: 200 });
     }
   catch (error) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -94,68 +130,53 @@ export async function POST(request: NextRequest) {
       }
     
       const body = await request.json();
-      const { appointment_id, medication_name, pet_id, veterinarian_id } = body;
+      const { medical_record_id, prescribed_by, medication_name } = body;
     
-      if (!appointment_id) {
+      if (!medical_record_id) {
         return NextResponse.json(
-          { error: 'Appointment ID is required to link this prescription.' }, 
+          { error: 'Medical Record ID is required to link this prescription.' }, 
           { status: 400 }
         );
       }
 
-      const { data: appointment, error: apptError } = await supabase
-        .from('appointments')
-        .select('appointment_status')
-        .eq('id', appointment_id)
+      if (!prescribed_by) {
+        return NextResponse.json(
+          { error: 'Prescribed by (veterinarian ID) is required.' }, 
+          { status: 400 }
+        );
+      }
+
+      // Verify the medical record exists
+      const { data: medicalRecord, error: recordError } = await supabase
+        .from('medical_records')
+        .select('id, pet_id')
+        .eq('id', medical_record_id)
         .single();
 
-        if (apptError) {
-             return NextResponse.json(
-                { error: 'Consultation record not found.' }, 
-                { status: 404 }
-            );
-        }
+      if (recordError || !medicalRecord) {
+        return NextResponse.json(
+          { error: 'Medical record not found.' }, 
+          { status: 404 }
+        );
+      }
 
-        if (!appointment) {
-             return NextResponse.json(
-                { error: 'Consultation record not found.' }, 
-                { status: 404 }
-            );
-        }
-
-        const validStatuses = ['in-consultation', 'completed'];
-        if (appointment && !validStatuses.includes(appointment.appointment_status)) {
-            return NextResponse.json(
-                { error: `Cannot prescribe. Consultation status is currently: ${appointment.appointment_status}` }, 
-                { status: 403 }
-            );
-        }
-
-        const fetchPets = await supabase
-          .from('pets')
-          .select('id, name, species, client_profiles(last_name)')
-          .order('name')
-          .limit(10);
-
-          if (fetchPets.error) {
-            return NextResponse.json({ error: fetchPets.error.message }, { status: 400 });
-          }
-
-        const { data: prescriptionData, error: prescriptionError } = await supabase
-            .from('prescriptions')
-            .insert([{
-                appointment_id,
-                pet_id,
-                veterinarian_id,
-                medication_name,
-                dosage: body.dosage,
-                frequency: body.frequency,
-                duration: body.duration,
-                instructions: body.instructions,
-                status: 'pending' 
-            }])
-            .select()
-            .single();
+      const { data: prescriptionData, error: prescriptionError } = await supabase
+        .from('prescriptions')
+        .insert([{
+          medical_record_id,
+          prescribed_by,
+          medication_name,
+          dosage: body.dosage,
+          frequency: body.frequency,
+          duration: body.duration,
+          instructions: body.instructions,
+          form: body.form || null,
+          quantity: body.quantity || null,
+          refills_allowed: body.refills_allowed || 0,
+          is_controlled_substance: body.is_controlled_substance || false
+        }])
+        .select()
+        .single();
 
         if (prescriptionError) {
             return NextResponse.json({ error: prescriptionError.message }, { status: 400 });
