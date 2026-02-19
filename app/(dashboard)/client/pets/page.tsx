@@ -118,7 +118,7 @@ export default function PetsPage() {
     setError('');
     try {
       console.log('Fetching pets for client_id:', clientId);
-      const response = await fetch(`/api/pets?client_id=${clientId}`);
+      const response = await fetch(`/api/client/pets?client_id=${clientId}`);
       
       console.log('Response status:', response.status);
       
@@ -246,12 +246,11 @@ export default function PetsPage() {
       if (photoFile) {
         photoUrl = await uploadPhoto();
       } else if (photoPreview && editingPet) {
-        // Keep existing photo if no new photo uploaded during edit
         photoUrl = editingPet.photo_url;
       }
 
       const petData = {
-        owner_id: clientId, 
+        owner_id: clientId,
         name: formData.name,
         species: formData.species,
         breed: formData.breed || null,
@@ -270,7 +269,7 @@ export default function PetsPage() {
       console.log('Submitting pet data:', petData);
 
       const isEditing = !!editingPet;
-      const url = isEditing ? `/api/pets?id=${editingPet.id}` : '/api/pets';
+      const url = isEditing ? `/api/client/pets?id=${editingPet.id}` : '/api/client/pets';
       const method = isEditing ? 'PATCH' : 'POST';
 
       const response = await fetch(url, {
