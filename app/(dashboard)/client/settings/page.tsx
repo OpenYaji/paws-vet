@@ -16,7 +16,6 @@ import {
   Bell, 
   Mail,
   Phone,
-  MapPin,
   Save,
   Camera,
   Eye,
@@ -45,50 +44,51 @@ import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 
-// Philippine-specific Validation Schemas
+// ── Schema matched to DB ──────────────────────────────────────────────────────
+// DB columns: first_name, last_name, phone, alternate_phone,
+//             address_line1, address_line2, city, STATE (not province),
+//             zip_code (5-digit), country, communication_preference, notes
+// ─────────────────────────────────────────────────────────────────────────────
+
 const profileSchema = z.object({
   firstName: z.string()
     .min(2, 'First name must be at least 2 characters')
-    .max(50, 'First name must be less than 50 characters')
-    .regex(/^[a-zA-ZñÑ\s'-]+$/i, 'First name contains invalid characters'),
+    .max(50, 'First name must be less than 50 characters'),
   lastName: z.string()
     .min(2, 'Last name must be at least 2 characters')
-    .max(50, 'Last name must be less than 50 characters')
-    .regex(/^[a-zA-ZñÑ\s'-]+$/i, 'Last name contains invalid characters'),
+    .max(50, 'Last name must be less than 50 characters'),
+  // DB phone check: international format ^+?[1-9]\d{1,14}$
   phone: z.string()
-    .regex(/^(\+63|0)\d{10}$/, 'Invalid Philippine mobile number (e.g., 09123456789 or +639123456789)'),
+    .regex(/^\+?[1-9]\d{1,14}$/, 'Invalid phone number (e.g. +639123456789 or 09123456789)'),
   alternatePhone: z.string()
-    .regex(/^(\+63|0)?\d{10}$/, 'Invalid Philippine mobile number')
+    .regex(/^\+?[1-9]\d{1,14}$/, 'Invalid phone number')
     .optional()
     .or(z.literal('')),
   addressLine1: z.string()
-    .min(5, 'House/Building and Street required')
+    .min(5, 'Street address is required')
     .max(100, 'Address must be less than 100 characters'),
   addressLine2: z.string()
     .max(100, 'Address line 2 must be less than 100 characters')
     .optional()
     .or(z.literal('')),
-  barangay: z.string()
-    .min(2, 'Barangay is required')
-    .max(50, 'Barangay must be less than 50 characters'),
   city: z.string()
-    .min(2, 'City/Municipality is required')
-    .max(50, 'City must be less than 50 characters')
-    .regex(/^[a-zA-ZñÑ\s.]+$/i, 'City contains invalid characters'),
-  province: z.string()
-    .min(2, 'Province is required')
-    .max(50, 'Province must be less than 50 characters'),
+    .min(2, 'City is required')
+    .max(50, 'City must be less than 50 characters'),
+  // ← renamed from province to state to match DB column "state"
+  state: z.string()
+    .min(2, 'State/Province is required')
+    .max(50, 'State/Province must be less than 50 characters'),
+  // DB zip_code check: ^\d{5}(-\d{4})?$  (5-digit US format or ZIP+4)
   zipCode: z.string()
-    .regex(/^\d{4}$/, 'Invalid ZIP code (4 digits required)'),
-  country: z.literal('Philippines'),
+    .regex(/^\d{5}(-\d{4})?$/, 'Invalid ZIP code (e.g. 12345 or 12345-6789)'),
+  country: z.string()
+    .min(2, 'Country is required')
+    .max(50, 'Country must be less than 50 characters'),
   communicationPreference: z.enum(['email', 'phone', 'sms', 'zoom']),
   notes: z.string()
     .max(500, 'Notes must be less than 500 characters')
     .optional()
     .or(z.literal('')),
-  emailNotifications: z.boolean(),
-  smsNotifications: z.boolean(),
-  appointmentReminders: z.boolean(),
 });
 
 const passwordSchema = z.object({
@@ -96,14 +96,14 @@ const passwordSchema = z.object({
   newPassword: z.string()
     .min(8, 'Password must be at least 8 characters')
     .max(128, 'Password must be less than 128 characters')
-    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
-    .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
-    .regex(/[0-9]/, 'Password must contain at least one number')
-    .regex(/[^A-Za-z0-9]/, 'Password must contain at least one special character'),
+    .regex(/[A-Z]/, 'Must contain at least one uppercase letter')
+    .regex(/[a-z]/, 'Must contain at least one lowercase letter')
+    .regex(/[0-9]/, 'Must contain at least one number')
+    .regex(/[^A-Za-z0-9]/, 'Must contain at least one special character'),
   confirmPassword: z.string(),
 }).refine((data) => data.newPassword === data.confirmPassword, {
   message: "Passwords don't match",
-  path: ["confirmPassword"],
+  path: ['confirmPassword'],
 });
 
 type ProfileFormData = z.infer<typeof profileSchema>;
@@ -118,9 +118,8 @@ interface ClientProfile {
   alternate_phone: string | null;
   address_line1: string;
   address_line2: string | null;
-  barangay: string;
   city: string;
-  province: string;
+  state: string;          // ← was province
   zip_code: string;
   country: string;
   communication_preference: string;
@@ -137,7 +136,6 @@ export default function ClientSettingsPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // Profile Form
   const {
     register: registerProfile,
     handleSubmit: handleSubmitProfile,
@@ -154,21 +152,16 @@ export default function ClientSettingsPage() {
       alternatePhone: '',
       addressLine1: '',
       addressLine2: '',
-      barangay: '',
       city: '',
-      province: '',
+      state: '',         // ← was province
       zipCode: '',
-      country: 'Philippines',
+      country: '',
       communicationPreference: 'email',
       notes: '',
-      emailNotifications: true,
-      smsNotifications: false,
-      appointmentReminders: true,
     },
     mode: 'onBlur',
   });
 
-  // Password Form
   const {
     register: registerPassword,
     handleSubmit: handleSubmitPassword,
@@ -177,27 +170,19 @@ export default function ClientSettingsPage() {
     watch: watchPassword,
   } = useForm<PasswordFormData>({
     resolver: zodResolver(passwordSchema),
-    defaultValues: {
-      currentPassword: '',
-      newPassword: '',
-      confirmPassword: '',
-    },
+    defaultValues: { currentPassword: '', newPassword: '', confirmPassword: '' },
     mode: 'onChange',
   });
 
   const newPasswordValue = watchPassword('newPassword');
 
-  useEffect(() => {
-    fetchUserData();
-  }, []);
+  useEffect(() => { fetchUserData(); }, []);
 
   const fetchUserData = async () => {
     try {
       setLoading(true);
       const { data: { user }, error: authError } = await supabase.auth.getUser();
-      
       if (authError || !user) {
-        console.error('Auth error:', authError);
         toast.error('Failed to load user data');
         return;
       }
@@ -212,7 +197,6 @@ export default function ClientSettingsPage() {
         .single();
 
       if (profileError) {
-        console.error('Error fetching profile:', profileError);
         toast.error('Failed to load profile');
         return;
       }
@@ -220,29 +204,23 @@ export default function ClientSettingsPage() {
       if (profileData) {
         setProfile(profileData);
         setAvatarUrl(profileData.avatar_url);
-        
-        // Reset form with fetched data
+        // Map DB column "state" → form field "state"
         resetProfile({
-          firstName: profileData.first_name,
-          lastName: profileData.last_name,
-          phone: profileData.phone,
-          alternatePhone: profileData.alternate_phone || '',
-          addressLine1: profileData.address_line1,
-          addressLine2: profileData.address_line2 || '',
-          barangay: profileData.barangay,
-          city: profileData.city,
-          province: profileData.province,
-          zipCode: profileData.zip_code,
-          country: 'Philippines',
+          firstName:               profileData.first_name,
+          lastName:                profileData.last_name,
+          phone:                   profileData.phone,
+          alternatePhone:          profileData.alternate_phone || '',
+          addressLine1:            profileData.address_line1,
+          addressLine2:            profileData.address_line2 || '',
+          city:                    profileData.city,
+          state:                   profileData.state,       // ← DB column is "state"
+          zipCode:                 profileData.zip_code,
+          country:                 profileData.country || '',
           communicationPreference: (profileData.communication_preference as any) || 'email',
-          notes: profileData.notes || '',
-          emailNotifications: true,
-          smsNotifications: false,
-          appointmentReminders: true,
+          notes:                   profileData.notes || '',
         });
       }
     } catch (error) {
-      console.error('Unexpected error:', error);
       toast.error('An unexpected error occurred');
     } finally {
       setLoading(false);
@@ -251,141 +229,99 @@ export default function ClientSettingsPage() {
 
   const onSubmitProfile = async (data: ProfileFormData) => {
     if (!profile) return;
-
     try {
       const { error } = await supabase
         .from('client_profiles')
         .update({
-          first_name: data.firstName,
-          last_name: data.lastName,
-          phone: data.phone,
-          alternate_phone: data.alternatePhone || null,
-          address_line1: data.addressLine1,
-          address_line2: data.addressLine2 || null,
-          barangay: data.barangay,
-          city: data.city,
-          province: data.province,
-          zip_code: data.zipCode,
-          country: 'Philippines',
+          first_name:               data.firstName,
+          last_name:                data.lastName,
+          phone:                    data.phone,
+          alternate_phone:          data.alternatePhone || null,
+          address_line1:            data.addressLine1,
+          address_line2:            data.addressLine2 || null,
+          city:                     data.city,
+          state:                    data.state,             // ← DB column is "state"
+          zip_code:                 data.zipCode,
+          country:                  data.country,
           communication_preference: data.communicationPreference,
-          notes: data.notes || null,
-          updated_at: new Date().toISOString(),
+          notes:                    data.notes || null,
+          updated_at:               new Date().toISOString(),
         })
         .eq('id', profile.id);
 
       if (error) {
         console.error('Error updating profile:', error);
-        toast.error('Failed to update profile');
+        toast.error('Failed to update profile: ' + error.message);
         return;
       }
 
       toast.success('Profile updated successfully!');
       await fetchUserData();
     } catch (error) {
-      console.error('Unexpected error:', error);
       toast.error('An unexpected error occurred');
     }
   };
 
   const onSubmitPassword = async (data: PasswordFormData) => {
     try {
-      // First verify current password by attempting sign in
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: userEmail,
         password: data.currentPassword,
       });
-
       if (signInError) {
         toast.error('Current password is incorrect');
         return;
       }
-
-      const { error } = await supabase.auth.updateUser({
-        password: data.newPassword
-      });
-
+      const { error } = await supabase.auth.updateUser({ password: data.newPassword });
       if (error) {
-        console.error('Error changing password:', error);
         toast.error('Failed to change password: ' + error.message);
         return;
       }
-
       toast.success('Password changed successfully!');
       resetPassword();
     } catch (error) {
-      console.error('Unexpected error:', error);
       toast.error('An unexpected error occurred');
     }
   };
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0 || !profile) return;
-
     const file = e.target.files[0];
-    
-    // Validation
-    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    if (!validTypes.includes(file.type)) {
+    if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.type)) {
       toast.error('Please upload a valid image file (JPG, PNG, GIF, or WebP)');
       return;
     }
-    
     if (file.size > 2 * 1024 * 1024) {
       toast.error('File size must be less than 2MB');
       return;
     }
-
     const fileExt = file.name.split('.').pop();
-    const fileName = `${profile.user_id}-${Date.now()}.${fileExt}`;
-    const filePath = `avatars/${fileName}`;
-
+    const filePath = `avatars/${profile.user_id}-${Date.now()}.${fileExt}`;
     try {
       const { error: uploadError } = await supabase.storage
         .from('client-avatars')
         .upload(filePath, file);
-
-      if (uploadError) {
-        console.error('Upload error:', uploadError);
-        toast.error('Failed to upload avatar');
-        return;
-      }
-
-      const { data } = supabase.storage
-        .from('client-avatars')
-        .getPublicUrl(filePath);
-
-      const publicUrl = data.publicUrl;
-
+      if (uploadError) { toast.error('Failed to upload avatar'); return; }
+      const { data } = supabase.storage.from('client-avatars').getPublicUrl(filePath);
       const { error: updateError } = await supabase
         .from('client_profiles')
-        .update({ avatar_url: publicUrl })
+        .update({ avatar_url: data.publicUrl })
         .eq('id', profile.id);
-
-      if (updateError) {
-        console.error('Update error:', updateError);
-        toast.error('Failed to update avatar');
-        return;
-      }
-
-      setAvatarUrl(publicUrl);
+      if (updateError) { toast.error('Failed to update avatar'); return; }
+      setAvatarUrl(data.publicUrl);
       toast.success('Avatar updated successfully!');
-    } catch (error) {
-      console.error('Unexpected error:', error);
-      toast.error('An unexpected error occurred');
-    }
+    } catch { toast.error('An unexpected error occurred'); }
   };
 
-  // Password strength indicator
   const getPasswordStrength = (password: string) => {
-    let strength = 0;
-    if (password.length >= 8) strength++;
-    if (/[A-Z]/.test(password)) strength++;
-    if (/[a-z]/.test(password)) strength++;
-    if (/[0-9]/.test(password)) strength++;
-    if (/[^A-Za-z0-9]/.test(password)) strength++;
-    return strength;
+    let s = 0;
+    if (password.length >= 8) s++;
+    if (/[A-Z]/.test(password)) s++;
+    if (/[a-z]/.test(password)) s++;
+    if (/[0-9]/.test(password)) s++;
+    if (/[^A-Za-z0-9]/.test(password)) s++;
+    return s;
   };
-
   const passwordStrength = getPasswordStrength(newPasswordValue || '');
   const strengthLabels = ['Very Weak', 'Weak', 'Fair', 'Good', 'Strong', 'Very Strong'];
   const strengthColors = ['bg-red-500', 'bg-red-400', 'bg-yellow-400', 'bg-yellow-300', 'bg-green-400', 'bg-green-500'];
@@ -403,7 +339,6 @@ export default function ClientSettingsPage() {
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
-      {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2 flex items-center gap-3">
           <SettingsIcon className="w-8 h-8 text-primary" />
@@ -415,7 +350,8 @@ export default function ClientSettingsPage() {
       </div>
 
       <div className="space-y-6">
-        {/* Profile Information */}
+
+        {/* ── PROFILE CARD ───────────────────────────────────────────── */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -428,6 +364,7 @@ export default function ClientSettingsPage() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmitProfile(onSubmitProfile)} className="space-y-6">
+
               {/* Avatar */}
               <div className="flex items-center gap-6">
                 <Avatar className="w-24 h-24">
@@ -442,17 +379,9 @@ export default function ClientSettingsPage() {
                       <Camera className="w-4 h-4" />
                       Change Avatar
                     </div>
-                    <Input
-                      id="avatar-upload"
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handleAvatarUpload}
-                    />
+                    <Input id="avatar-upload" type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
                   </Label>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    JPG, PNG, GIF or WebP (max. 2MB)
-                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">JPG, PNG, GIF or WebP (max. 2MB)</p>
                 </div>
               </div>
 
@@ -465,13 +394,12 @@ export default function ClientSettingsPage() {
                   <Input
                     id="firstName"
                     {...registerProfile('firstName')}
-                    className={cn(profileErrors.firstName && "border-red-500 focus-visible:ring-red-500")}
-                    placeholder="Juan"
+                    className={cn(profileErrors.firstName && 'border-red-500 focus-visible:ring-red-500')}
+                    placeholder="John"
                   />
                   {profileErrors.firstName && (
                     <p className="text-sm text-red-500 flex items-center gap-1">
-                      <AlertCircle className="w-3 h-3" />
-                      {profileErrors.firstName.message}
+                      <AlertCircle className="w-3 h-3" />{profileErrors.firstName.message}
                     </p>
                   )}
                 </div>
@@ -480,72 +408,62 @@ export default function ClientSettingsPage() {
                   <Input
                     id="lastName"
                     {...registerProfile('lastName')}
-                    className={cn(profileErrors.lastName && "border-red-500 focus-visible:ring-red-500")}
-                    placeholder="Dela Cruz"
+                    className={cn(profileErrors.lastName && 'border-red-500 focus-visible:ring-red-500')}
+                    placeholder="Doe"
                   />
                   {profileErrors.lastName && (
                     <p className="text-sm text-red-500 flex items-center gap-1">
-                      <AlertCircle className="w-3 h-3" />
-                      {profileErrors.lastName.message}
+                      <AlertCircle className="w-3 h-3" />{profileErrors.lastName.message}
                     </p>
                   )}
                 </div>
               </div>
 
-              {/* Email (Read-only) */}
+              {/* Email (read-only) */}
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <div className="flex gap-2">
                   <Mail className="w-5 h-5 text-muted-foreground mt-2" />
-                  <Input
-                    id="email"
-                    value={userEmail}
-                    disabled
-                    className="bg-secondary/50"
-                  />
+                  <Input id="email" value={userEmail} disabled className="bg-secondary/50" />
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Email cannot be changed. Contact support if needed.
-                </p>
+                <p className="text-xs text-muted-foreground">Email cannot be changed. Contact support if needed.</p>
               </div>
 
-              {/* Phone Numbers */}
+              {/* Phone */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="phone">Mobile Number *</Label>
+                  <Label htmlFor="phone">Phone Number *</Label>
                   <div className="flex gap-2">
                     <Phone className="w-5 h-5 text-muted-foreground mt-2" />
                     <div className="flex-1">
                       <Input
                         id="phone"
                         {...registerProfile('phone')}
-                        className={cn(profileErrors.phone && "border-red-500 focus-visible:ring-red-500")}
-                        placeholder="09123456789"
+                        className={cn(profileErrors.phone && 'border-red-500 focus-visible:ring-red-500')}
+                        placeholder="+10000000000"
                       />
                       {profileErrors.phone && (
                         <p className="text-sm text-red-500 flex items-center gap-1 mt-1">
-                          <AlertCircle className="w-3 h-3" />
-                          {profileErrors.phone.message}
+                          <AlertCircle className="w-3 h-3" />{profileErrors.phone.message}
                         </p>
                       )}
                     </div>
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="alternatePhone">Alternate Mobile</Label>
+                  <Label htmlFor="alternatePhone">Alternate Phone</Label>
                   <div className="flex gap-2">
                     <Phone className="w-5 h-5 text-muted-foreground mt-2" />
                     <div className="flex-1">
                       <Input
                         id="alternatePhone"
                         {...registerProfile('alternatePhone')}
-                        className={cn(profileErrors.alternatePhone && "border-red-500 focus-visible:ring-red-500")}
-                        placeholder="09987654321"
+                        className={cn(profileErrors.alternatePhone && 'border-red-500 focus-visible:ring-red-500')}
+                        placeholder="+10000000001"
                       />
                       {profileErrors.alternatePhone && (
                         <p className="text-sm text-red-500 flex items-center gap-1 mt-1">
-                          <AlertCircle className="w-3 h-3" />
-                          {profileErrors.alternatePhone.message}
+                          <AlertCircle className="w-3 h-3" />{profileErrors.alternatePhone.message}
                         </p>
                       )}
                     </div>
@@ -557,21 +475,20 @@ export default function ClientSettingsPage() {
               <div className="space-y-4">
                 <div className="flex items-center gap-2 mb-2">
                   <Home className="w-5 h-5 text-muted-foreground" />
-                  <Label className="text-base font-semibold">Philippine Address</Label>
+                  <Label className="text-base font-semibold">Address</Label>
                 </div>
-                
+
                 <div className="space-y-2">
-                  <Label htmlFor="addressLine1">House/Building & Street *</Label>
+                  <Label htmlFor="addressLine1">Street Address *</Label>
                   <Input
                     id="addressLine1"
                     {...registerProfile('addressLine1')}
-                    className={cn(profileErrors.addressLine1 && "border-red-500 focus-visible:ring-red-500")}
-                    placeholder="123 Rizal Street"
+                    className={cn(profileErrors.addressLine1 && 'border-red-500 focus-visible:ring-red-500')}
+                    placeholder="123 Main Street"
                   />
                   {profileErrors.addressLine1 && (
                     <p className="text-sm text-red-500 flex items-center gap-1">
-                      <AlertCircle className="w-3 h-3" />
-                      {profileErrors.addressLine1.message}
+                      <AlertCircle className="w-3 h-3" />{profileErrors.addressLine1.message}
                     </p>
                   )}
                 </div>
@@ -581,45 +498,37 @@ export default function ClientSettingsPage() {
                   <Input
                     id="addressLine2"
                     {...registerProfile('addressLine2')}
-                    className={cn(profileErrors.addressLine2 && "border-red-500 focus-visible:ring-red-500")}
                     placeholder="Unit 4B, 2nd Floor"
                   />
-                  {profileErrors.addressLine2 && (
-                    <p className="text-sm text-red-500 flex items-center gap-1">
-                      <AlertCircle className="w-3 h-3" />
-                      {profileErrors.addressLine2.message}
-                    </p>
-                  )}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="barangay">Barangay *</Label>
-                    <Input
-                      id="barangay"
-                      {...registerProfile('barangay')}
-                      className={cn(profileErrors.barangay && "border-red-500 focus-visible:ring-red-500")}
-                      placeholder="Barangay Loyola Heights"
-                    />
-                    {profileErrors.barangay && (
-                      <p className="text-sm text-red-500 flex items-center gap-1">
-                        <AlertCircle className="w-3 h-3" />
-                        {profileErrors.barangay.message}
-                      </p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="city">City/Municipality *</Label>
+                    <Label htmlFor="city">City *</Label>
                     <Input
                       id="city"
                       {...registerProfile('city')}
-                      className={cn(profileErrors.city && "border-red-500 focus-visible:ring-red-500")}
-                      placeholder="Quezon City"
+                      className={cn(profileErrors.city && 'border-red-500 focus-visible:ring-red-500')}
+                      placeholder="New York"
                     />
                     {profileErrors.city && (
                       <p className="text-sm text-red-500 flex items-center gap-1">
-                        <AlertCircle className="w-3 h-3" />
-                        {profileErrors.city.message}
+                        <AlertCircle className="w-3 h-3" />{profileErrors.city.message}
+                      </p>
+                    )}
+                  </div>
+                  {/* ← was "Province" now "State/Province" mapped to DB column "state" */}
+                  <div className="space-y-2">
+                    <Label htmlFor="state">State / Province *</Label>
+                    <Input
+                      id="state"
+                      {...registerProfile('state')}
+                      className={cn(profileErrors.state && 'border-red-500 focus-visible:ring-red-500')}
+                      placeholder="NY"
+                    />
+                    {profileErrors.state && (
+                      <p className="text-sm text-red-500 flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" />{profileErrors.state.message}
                       </p>
                     )}
                   </div>
@@ -627,47 +536,35 @@ export default function ClientSettingsPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="province">Province *</Label>
-                    <Input
-                      id="province"
-                      {...registerProfile('province')}
-                      className={cn(profileErrors.province && "border-red-500 focus-visible:ring-red-500")}
-                      placeholder="Metro Manila"
-                    />
-                    {profileErrors.province && (
-                      <p className="text-sm text-red-500 flex items-center gap-1">
-                        <AlertCircle className="w-3 h-3" />
-                        {profileErrors.province.message}
-                      </p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
+                    {/* ← DB accepts 5-digit ZIP or ZIP+4 */}
                     <Label htmlFor="zipCode">ZIP Code *</Label>
                     <Input
                       id="zipCode"
                       {...registerProfile('zipCode')}
-                      className={cn(profileErrors.zipCode && "border-red-500 focus-visible:ring-red-500")}
-                      placeholder="1108"
-                      maxLength={4}
+                      className={cn(profileErrors.zipCode && 'border-red-500 focus-visible:ring-red-500')}
+                      placeholder="12345"
+                      maxLength={10}
                     />
                     {profileErrors.zipCode && (
                       <p className="text-sm text-red-500 flex items-center gap-1">
-                        <AlertCircle className="w-3 h-3" />
-                        {profileErrors.zipCode.message}
+                        <AlertCircle className="w-3 h-3" />{profileErrors.zipCode.message}
                       </p>
                     )}
                   </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="country">Country</Label>
-                  <Input
-                    id="country"
-                    {...registerProfile('country')}
-                    disabled
-                    className="bg-secondary/50"
-                    value="Philippines"
-                  />
+                  <div className="space-y-2">
+                    <Label htmlFor="country">Country *</Label>
+                    <Input
+                      id="country"
+                      {...registerProfile('country')}
+                      className={cn(profileErrors.country && 'border-red-500 focus-visible:ring-red-500')}
+                      placeholder="USA"
+                    />
+                    {profileErrors.country && (
+                      <p className="text-sm text-red-500 flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" />{profileErrors.country.message}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -677,30 +574,23 @@ export default function ClientSettingsPage() {
                 <Textarea
                   id="notes"
                   {...registerProfile('notes')}
-                  className={cn(profileErrors.notes && "border-red-500 focus-visible:ring-red-500")}
+                  className={cn(profileErrors.notes && 'border-red-500 focus-visible:ring-red-500')}
                   placeholder="Any additional information..."
                   rows={3}
                 />
                 <div className="flex justify-between">
                   {profileErrors.notes ? (
                     <p className="text-sm text-red-500 flex items-center gap-1">
-                      <AlertCircle className="w-3 h-3" />
-                      {profileErrors.notes.message}
+                      <AlertCircle className="w-3 h-3" />{profileErrors.notes.message}
                     </p>
-                  ) : (
-                    <span />
-                  )}
+                  ) : <span />}
                   <span className="text-xs text-muted-foreground">
                     {watchProfile('notes')?.length || 0}/500
                   </span>
                 </div>
               </div>
 
-              <Button 
-                type="submit" 
-                disabled={isProfileSubmitting || !isProfileDirty} 
-                className="w-full md:w-auto"
-              >
+              <Button type="submit" disabled={isProfileSubmitting || !isProfileDirty} className="w-full md:w-auto">
                 <Save className="w-4 h-4 mr-2" />
                 {isProfileSubmitting ? 'Saving...' : 'Save Profile'}
               </Button>
@@ -708,7 +598,7 @@ export default function ClientSettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Communication Preferences */}
+        {/* ── COMMUNICATION PREFERENCES ──────────────────────────────── */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -728,86 +618,21 @@ export default function ClientSettingsPage() {
                   control={controlProfile}
                   render={({ field }) => (
                     <Select value={field.value} onValueChange={field.onChange}>
-                      <SelectTrigger className={cn(profileErrors.communicationPreference && "border-red-500")}>
+                      <SelectTrigger>
                         <SelectValue placeholder="Select method" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="email">Email</SelectItem>
                         <SelectItem value="phone">Phone Call</SelectItem>
-                        <SelectItem value="sms">SMS/Text</SelectItem>
-                        <SelectItem value="zoom">Zoom Interview</SelectItem>
+                        <SelectItem value="sms">SMS / Text</SelectItem>
+                        <SelectItem value="zoom">Zoom</SelectItem>
                       </SelectContent>
                     </Select>
                   )}
                 />
               </div>
 
-              <Separator />
-
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Email Notifications</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Receive updates via email
-                    </p>
-                  </div>
-                  <Controller
-                    name="emailNotifications"
-                    control={controlProfile}
-                    render={({ field }) => (
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    )}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>SMS Notifications</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Receive text message alerts
-                    </p>
-                  </div>
-                  <Controller
-                    name="smsNotifications"
-                    control={controlProfile}
-                    render={({ field }) => (
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    )}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Appointment Reminders</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Get reminders before shelter visits
-                    </p>
-                  </div>
-                  <Controller
-                    name="appointmentReminders"
-                    control={controlProfile}
-                    render={({ field }) => (
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    )}
-                  />
-                </div>
-              </div>
-
-              <Button 
-                type="submit" 
-                disabled={isProfileSubmitting || !isProfileDirty} 
-                className="w-full md:w-auto"
-              >
+              <Button type="submit" disabled={isProfileSubmitting || !isProfileDirty} className="w-full md:w-auto">
                 <Save className="w-4 h-4 mr-2" />
                 Save Preferences
               </Button>
@@ -815,16 +640,14 @@ export default function ClientSettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Password Change */}
+        {/* ── CHANGE PASSWORD ────────────────────────────────────────── */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Lock className="w-5 h-5" />
               Change Password
             </CardTitle>
-            <CardDescription>
-              Update your password to keep your account secure
-            </CardDescription>
+            <CardDescription>Update your password to keep your account secure</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmitPassword(onSubmitPassword)} className="space-y-4">
@@ -834,13 +657,12 @@ export default function ClientSettingsPage() {
                   id="currentPassword"
                   type="password"
                   {...registerPassword('currentPassword')}
-                  className={cn(passwordErrors.currentPassword && "border-red-500 focus-visible:ring-red-500")}
+                  className={cn(passwordErrors.currentPassword && 'border-red-500 focus-visible:ring-red-500')}
                   placeholder="Enter current password"
                 />
                 {passwordErrors.currentPassword && (
                   <p className="text-sm text-red-500 flex items-center gap-1">
-                    <AlertCircle className="w-3 h-3" />
-                    {passwordErrors.currentPassword.message}
+                    <AlertCircle className="w-3 h-3" />{passwordErrors.currentPassword.message}
                   </p>
                 )}
               </div>
@@ -852,59 +674,43 @@ export default function ClientSettingsPage() {
                     id="newPassword"
                     type={showPassword ? 'text' : 'password'}
                     {...registerPassword('newPassword')}
-                    className={cn("pr-10", passwordErrors.newPassword && "border-red-500 focus-visible:ring-red-500")}
+                    className={cn('pr-10', passwordErrors.newPassword && 'border-red-500 focus-visible:ring-red-500')}
                     placeholder="Enter new password"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
+                  <button type="button" onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
                 {passwordErrors.newPassword && (
                   <p className="text-sm text-red-500 flex items-center gap-1">
-                    <AlertCircle className="w-3 h-3" />
-                    {passwordErrors.newPassword.message}
+                    <AlertCircle className="w-3 h-3" />{passwordErrors.newPassword.message}
                   </p>
                 )}
-                
-                {/* Password Strength Indicator */}
                 {newPasswordValue && (
                   <div className="space-y-2 mt-2">
                     <div className="flex gap-1 h-1">
-                      {[...Array(6)].map((_, i) => (
-                        <div
-                          key={i}
-                          className={cn(
-                            "flex-1 rounded-full transition-all duration-300",
-                            i < passwordStrength ? strengthColors[passwordStrength - 1] : "bg-gray-200"
-                          )}
-                        />
+                      {[...Array(5)].map((_, i) => (
+                        <div key={i} className={cn('flex-1 rounded-full transition-all duration-300',
+                          i < passwordStrength ? strengthColors[passwordStrength - 1] : 'bg-gray-200'
+                        )} />
                       ))}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Strength: <span className={cn("font-medium", strengthColors[passwordStrength - 1]?.replace('bg-', 'text-'))}>
-                        {strengthLabels[passwordStrength]}
-                      </span>
+                      Strength: <span className="font-medium">{strengthLabels[passwordStrength] || 'Very Weak'}</span>
                     </p>
                     <ul className="text-xs text-muted-foreground space-y-1">
-                      <li className={cn(newPasswordValue.length >= 8 && "text-green-600 flex items-center gap-1")}>
-                        {newPasswordValue.length >= 8 ? <CheckCircle2 className="w-3 h-3" /> : '•'} At least 8 characters
-                      </li>
-                      <li className={cn(/[A-Z]/.test(newPasswordValue) && "text-green-600 flex items-center gap-1")}>
-                        {/[A-Z]/.test(newPasswordValue) ? <CheckCircle2 className="w-3 h-3" /> : '•'} One uppercase letter
-                      </li>
-                      <li className={cn(/[a-z]/.test(newPasswordValue) && "text-green-600 flex items-center gap-1")}>
-                        {/[a-z]/.test(newPasswordValue) ? <CheckCircle2 className="w-3 h-3" /> : '•'} One lowercase letter
-                      </li>
-                      <li className={cn(/[0-9]/.test(newPasswordValue) && "text-green-600 flex items-center gap-1")}>
-                        {/[0-9]/.test(newPasswordValue) ? <CheckCircle2 className="w-3 h-3" /> : '•'} One number
-                      </li>
-                      <li className={cn(/[^A-Za-z0-9]/.test(newPasswordValue) && "text-green-600 flex items-center gap-1")}>
-                        {/[^A-Za-z0-9]/.test(newPasswordValue) ? <CheckCircle2 className="w-3 h-3" /> : '•'} One special character
-                      </li>
+                      {[
+                        [newPasswordValue.length >= 8,         'At least 8 characters'],
+                        [/[A-Z]/.test(newPasswordValue),       'One uppercase letter'],
+                        [/[a-z]/.test(newPasswordValue),       'One lowercase letter'],
+                        [/[0-9]/.test(newPasswordValue),       'One number'],
+                        [/[^A-Za-z0-9]/.test(newPasswordValue),'One special character'],
+                      ].map(([met, label], i) => (
+                        <li key={i} className={cn(met && 'text-green-600 flex items-center gap-1')}>
+                          {met ? <CheckCircle2 className="w-3 h-3" /> : '•'} {label as string}
+                        </li>
+                      ))}
                     </ul>
                   </div>
                 )}
@@ -917,31 +723,22 @@ export default function ClientSettingsPage() {
                     id="confirmPassword"
                     type={showConfirmPassword ? 'text' : 'password'}
                     {...registerPassword('confirmPassword')}
-                    className={cn("pr-10", passwordErrors.confirmPassword && "border-red-500 focus-visible:ring-red-500")}
+                    className={cn('pr-10', passwordErrors.confirmPassword && 'border-red-500 focus-visible:ring-red-500')}
                     placeholder="Confirm new password"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
+                  <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                     {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
                 {passwordErrors.confirmPassword && (
                   <p className="text-sm text-red-500 flex items-center gap-1">
-                    <AlertCircle className="w-3 h-3" />
-                    {passwordErrors.confirmPassword.message}
+                    <AlertCircle className="w-3 h-3" />{passwordErrors.confirmPassword.message}
                   </p>
                 )}
               </div>
 
-              <Button
-                type="submit"
-                disabled={isPasswordSubmitting}
-                variant="default"
-                className="w-full md:w-auto"
-              >
+              <Button type="submit" disabled={isPasswordSubmitting} className="w-full md:w-auto">
                 <Lock className="w-4 h-4 mr-2" />
                 {isPasswordSubmitting ? 'Changing...' : 'Change Password'}
               </Button>

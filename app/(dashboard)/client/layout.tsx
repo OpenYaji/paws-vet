@@ -9,10 +9,24 @@ import { Menu } from 'lucide-react';
 export default function ClientDashboardLayout({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
-  const [profile, setProfile] = useState<any>(null); // State for first/last name
+  const [profile, setProfile] = useState<any>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const router = useRouter();
+
+  // Lock body/html scroll — only the content panel should scroll
+  useEffect(() => {
+    document.documentElement.style.overflow = 'hidden';
+    document.documentElement.style.height = '100%';
+    document.body.style.overflow = 'hidden';
+    document.body.style.height = '100%';
+    return () => {
+      document.documentElement.style.overflow = '';
+      document.documentElement.style.height = '';
+      document.body.style.overflow = '';
+      document.body.style.height = '';
+    };
+  }, []);
 
   useEffect(() => {
     async function checkAuth() {
@@ -23,7 +37,6 @@ export default function ClientDashboardLayout({ children }: { children: React.Re
         return;
       }
 
-      // Fetch profile details from the client_profiles table
       const { data: profileData } = await supabase
         .from('client_profiles')
         .select('first_name, last_name')
@@ -49,30 +62,33 @@ export default function ClientDashboardLayout({ children }: { children: React.Re
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      {/* Desktop Sidebar Container */}
-      <div className="hidden md:flex flex-shrink-0 border-r border-border bg-card h-full">
+    <div className="flex h-screen w-screen overflow-hidden bg-background">
+
+      {/* Desktop Sidebar — completely fixed, never scrolls */}
+      <div className="hidden md:flex flex-shrink-0 h-screen overflow-hidden">
         <ClientSidebar
           profile={profile}
-          collapsed={collapsed} 
+          collapsed={collapsed}
           setCollapsed={setCollapsed}
           mobileOpen={mobileOpen}
           setMobileOpen={setMobileOpen}
         />
       </div>
 
-      {/* Mobile Sidebar Container */}
+      {/* Mobile Sidebar */}
       <div className="md:hidden">
-         <ClientSidebar
-            profile={profile}
-            collapsed={collapsed} 
-            setCollapsed={setCollapsed}
-            mobileOpen={mobileOpen}
-            setMobileOpen={setMobileOpen}
-          />
+        <ClientSidebar
+          profile={profile}
+          collapsed={collapsed}
+          setCollapsed={setCollapsed}
+          mobileOpen={mobileOpen}
+          setMobileOpen={setMobileOpen}
+        />
       </div>
-      
-      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+
+      {/* Main content — ONLY this scrolls */}
+      <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-y-auto overflow-x-hidden">
+        {/* Mobile header */}
         <header className="md:hidden border-b border-border bg-card px-4 py-3 flex items-center justify-between sticky top-0 z-20">
           <button onClick={() => setMobileOpen(true)} className="p-2 hover:bg-accent rounded-lg">
             <Menu size={24} />
