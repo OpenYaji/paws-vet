@@ -7,15 +7,19 @@ import { supabase } from '@/lib/auth-client';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
-import type{ Notification } from '@/types/notifications';
+import type{ Notification } from '@/types/notifications'; //Interfaces
 import { getNotificationIcon, timeAgo } from '@/lib/notification-utils';
+import { mockNotifications, simulateNewNotification } from '@/mocks/notifications'; //Mocks for development/testing
 
 interface NotificationBellProps {
   userId: string;
   className?: string;
+  enableMockSimulation?: boolean; // Enable simulated notifications in dev
 }
 
-export function NotificationBell({ userId, className = '' }: NotificationBellProps) {
+const USE_MOCK_DATA = process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_USE_MOCK === 'true';
+
+export function NotificationBell({ userId, className = '', enableMockSimulation = false }: NotificationBellProps) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notifLoading, setNotifLoading] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -28,6 +32,24 @@ export function NotificationBell({ userId, className = '' }: NotificationBellPro
     if (!userId) return;
     
     setNotifLoading(true);
+
+    if (USE_MOCK_DATA) {
+        console.log('📱 Using mock notifications');
+        // Simulate network delay
+        await new Promise(resolve => setTimeout(resolve, 500));
+        setNotifications(mockNotifications);
+        
+        // Set initial count and show unread indicator for mock data
+        if (prevNotificationCountRef.current === 0) {
+          prevNotificationCountRef.current = mockNotifications.length;
+          setHasUnread(true); // Show unread indicator initially in dev mode
+        }
+        
+        setNotifLoading(false);
+        setNotifFetched(true);
+        return;
+      }
+    
     try {
       const { data, error } = await supabase
         .from('notification_logs')
@@ -59,9 +81,16 @@ export function NotificationBell({ userId, className = '' }: NotificationBellPro
     fetchNotifications();
   }, [notifOpen, notifFetched, userId, fetchNotifications]);
 
+  // Load mock data immediately on mount in dev mode
+  useEffect(() => {
+    if (USE_MOCK_DATA && !notifFetched && userId) {
+      fetchNotifications();
+    }
+  }, [USE_MOCK_DATA, notifFetched, userId, fetchNotifications]);
+
   // Set up real-time subscription
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || USE_MOCK_DATA) return;
 
     const subscription = supabase
       .channel('notification-logs-changes')
@@ -109,6 +138,33 @@ export function NotificationBell({ userId, className = '' }: NotificationBellPro
       setHasUnread(false);
     }
   }, [notifOpen]);
+
+  // Simulate receiving new notifications in development mode
+  useEffect(() => {
+    if (!USE_MOCK_DATA || !enableMockSimulation) return;
+
+    console.log('🔔 Mock notification simulation enabled - new notification every 10 seconds');
+    
+    const interval = setInterval(() => {
+      const newNotif = simulateNewNotification();
+      console.log('📬 Simulated new notification:', newNotif);
+      
+      setNotifications(prev => [newNotif, ...prev].slice(0, 20));
+      setHasUnread(true);
+      
+      // Show visual feedback
+      if (document.visibilityState !== 'visible') {
+        if (Notification.permission === 'granted') {
+          new Notification(newNotif.subject || 'New Notification', {
+            body: newNotif.content,
+            icon: '/favicon.ico'
+          });
+        }
+      }
+    }, 10000); // Every 10 seconds
+
+    return () => clearInterval(interval);
+  }, [enableMockSimulation]);
 
   return (
     <Popover open={notifOpen} onOpenChange={setNotifOpen}>
@@ -189,7 +245,25 @@ export function NotificationBell({ userId, className = '' }: NotificationBellPro
             </Button>
           </div>
         )}
+        {USE_MOCK_DATA && (
+          <div className="p-2 border-t bg-yellow-50 dark:bg-yellow-950/20">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="w-full text-xs"
+              onClick={() => {
+                const newNotif = simulateNewNotification();
+                setNotifications(prev => [newNotif, ...prev].slice(0, 20));
+                setHasUnread(true);
+                console.log('🧪 Manually triggered mock notification:', newNotif);
+              }}
+            >
+              🧪 Simulate New Notification (Dev)
+            </Button>
+          </div>
+        )}
       </PopoverContent>
     </Popover>
   );
 }
+

@@ -1,102 +1,75 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/auth-client';
+import { useState } from 'react';
 import useSWR, { mutate } from 'swr';
+import { supabase } from '@/lib/auth-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from "@/components/ui/label";
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  Stethoscope, Thermometer, Weight, Activity, Heart, 
-  FileText, ClipboardCheck, AlertCircle 
+import { Separator } from '@/components/ui/separator';
+import {   Stethoscope, Thermometer, Weight, Activity, Heart,   FileText, ClipboardCheck, AlertCircle, CheckCircle, User
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { useToast } from '@/hooks/use-toast';
 
-// 1. Fetcher: Get today's patients who are ready (Checked In or Confirmed)
-const fetchQueue = async () => {
-  const today = new Date().toISOString().split('T')[0];
-  const { data, error } = await supabase
-    .from('appointments')
-    .select(`
-      id,
-      scheduled_start,
-      appointment_status,
-      pets (
-        id,
-        name,
-        species,
-        breed,
-        gender,
-        date_of_birth,
-        client_profiles (first_name, last_name)
-      )
-    `)
-    .gte('scheduled_start', `${today}T00:00:00`)
-    .lt('scheduled_start', `${today}T23:59:59`)
-    // We look for 'checked-in' (passed triage) or 'confirmed' (skipped triage)
-    .in('appointment_status', ['checked-in', 'confirmed', 'in-consultation']) 
-    .order('scheduled_start', { ascending: true });
-
-  if (error) throw error;
-  return data;
-};
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export default function ConsultationPage() {
-  const { data: queue = [], isLoading } = useSWR('consultation-queue', fetchQueue);
+  const { data: queue = [], isLoading } = useSWR('/api/consultations', fetcher);
   const [selectedAppt, setSelectedAppt] = useState<any | null>(null);
-  const [triageData, setTriageData] = useState<any | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const { toast } = useToast();
 
-  // Form State for Medical Record
-  const [record, setRecord] = useState({
-    chief_complaint: '',
-    examination_findings: '',
-    diagnosis: '',
-    treatment_plan: '',
-    follow_up_instructions: '',
-    next_appointment: ''
+  // Ensure queue is always an array
+  const safeQueue = Array.isArray(queue) ? queue : [];
+
+  // SOAP Form State
+  const [soap, setSoap] = useState({
+    subjective: '',
+    objective: '',
+    assessment: '',
+    plan: ''
   });
 
-  // 2. When a patient is selected, fetch their Triage Data
-  useEffect(() => {
-    if (!selectedAppt) return;
+  const handleSelectPatient = (appt: any) => {
+    setSelectedAppt(appt);
+    // Pre-fill subjective with chief complaint from tri age if available
+    if (appt.triage_records && appt.triage_records[0]?.chief_complaint) {
+      setSoap(prev => ({
+        ...prev,
+        subjective: appt.triage_records[0].chief_complaint
+      }));
+    } else {
+      // Reset form
+      setSoap({
+        subjective: '',
+        objective: '',
+        assessment: '',
+        plan: ''
+      });
+    }
+  };
 
-    const loadTriage = async () => {
-      const { data } = await supabase
-        .from('triage_records')
-        .select('*')
-        .eq('appointment_id', selectedAppt.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
-      
-      setTriageData(data || null);
-      
-      // Auto-fill complaint if available
-      if (data?.chief_complaint) {
-        setRecord(prev => ({ ...prev, chief_complaint: data.chief_complaint }));
-      }
-    };
-    
-    loadTriage();
-    // Reset form
-    setRecord({
-       chief_complaint: '', examination_findings: '', diagnosis: '', 
-       treatment_plan: '', follow_up_instructions: '', next_appointment: ''
-    });
-  }, [selectedAppt]);
-
-  // 3. Save Medical Record
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!selectedAppt) return;
+
+    // Validation
+    if (!soap.assessment) {
+      toast({
+        title: "Validation Error",
+        description: "Assessment (Diagnosis) is required",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setIsSaving(true);
 
     try {
-      // A. Get Vet Profile ID (Required by Schema)
+      // Get veterinarian profile ID
       const { data: { user } } = await supabase.auth.getUser();
       const { data: vetProfile } = await supabase
         .from('veterinarian_profiles')
@@ -104,274 +77,313 @@ export default function ConsultationPage() {
         .eq('user_id', user?.id)
         .single();
 
-      if (!vetProfile) throw new Error("Vet profile not found");
+      if (!vetProfile) {
+        throw new Error("Veterinarian profile not found");
+      }
 
-      // B. Create Medical Record
-      const recordNumber = `MR-${Date.now().toString().slice(-6)}`; // Simple ID Gen
-      
-      const { error } = await supabase
-        .from('medical_records')
-        .insert([{
-          record_number: recordNumber,
+      const response = await fetch('/api/consultations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           appointment_id: selectedAppt.id,
           pet_id: selectedAppt.pets.id,
           veterinarian_id: vetProfile.id,
-          visit_date: new Date().toISOString(),
-          chief_complaint: record.chief_complaint,
-          examination_findings: record.examination_findings,
-          diagnosis: record.diagnosis,
-          treatment_plan: record.treatment_plan,
-          follow_up_instructions: record.follow_up_instructions,
-          next_appointment_recommended: record.next_appointment || null,
-          record_created_by: vetProfile.id,
-        }]);
+          ...soap
+        })
+      });
 
-      if (error) throw error;
+      const result = await response.json();
 
-      // C. Update Appointment to "Completed"
-      await supabase
-        .from('appointments')
-        .update({ appointment_status: 'completed' })
-        .eq('id', selectedAppt.id);
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to save consultation');
+      }
 
-      alert("Consultation saved successfully!");
-      mutate('consultation-queue');
+      toast({
+        title: "Consultation Complete",
+        description: result.message || "You may now issue prescriptions for this patient.",
+      });
+
+      // Refresh the queue
+      mutate('/api/consultations');
+      
+      // Reset
       setSelectedAppt(null);
+      setSoap({
+        subjective: '',
+        objective: '',
+        assessment: '',
+        plan: ''
+      });
 
     } catch (error: any) {
-      alert('Error saving record: ' + error.message);
+      toast({
+        title: "Error",
+        description: error.message || 'Failed to save consultation',
+        variant: "destructive"
+      });
     } finally {
       setIsSaving(false);
     }
   };
 
+  // Get triage data for display
+  const getTriageData = () => {
+    if (!selectedAppt?.triage_records || selectedAppt.triage_records.length === 0) {
+      return null;
+    }
+    return selectedAppt.triage_records[0];
+  };
+
+  const triageData = getTriageData();
+
   return (
-    <div className="h-[calc(100vh-100px)] flex flex-col gap-6 max-w-7xl mx-auto">
+    <div className="h-[calc(100vh-100px)] flex flex-col gap-6 max-w-7xl mx-auto p-6">
       <div>
         <h1 className="text-3xl font-bold text-foreground">Consultation Room</h1>
-        <p className="text-muted-foreground">Examine patients and create medical records</p>
+        <p className="text-muted-foreground">Examine patients and create medical records (SOAP Notes)</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 h-full overflow-hidden">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 overflow-hidden">
         
         {/* --- LEFT: PATIENT QUEUE --- */}
-        <div className="lg:col-span-3 flex flex-col gap-3 overflow-y-auto pr-2 border-r">
-          <h3 className="font-semibold text-gray-700 flex items-center gap-2">
-            <ClipboardCheck size={18} /> Ready for Exam ({queue.length})
-          </h3>
+        <div className="lg:col-span-3 flex flex-col gap-3 overflow-y-auto pr-2">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-gray-700 flex items-center gap-2">
+              <ClipboardCheck size={18} /> Triaged Patients
+            </h3>
+            <Badge variant="secondary">{safeQueue.length}</Badge>
+          </div>
           
           {isLoading ? (
             <div className="text-sm text-gray-400">Loading queue...</div>
-          ) : queue.length === 0 ? (
+          ) : safeQueue.length === 0 ? (
             <div className="p-4 text-center border border-dashed rounded bg-gray-50 text-gray-400 text-sm">
-              No patients waiting.
+              No patients ready for consultation.
             </div>
           ) : (
-            queue.map((appt: any) => (
+            safeQueue.map((appt: any) => (
               <div 
                 key={appt.id}
-                onClick={() => setSelectedAppt(appt)}
+                onClick={() => handleSelectPatient(appt)}
                 className={`p-3 rounded-lg border cursor-pointer transition-all ${
                   selectedAppt?.id === appt.id 
-                    ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500 shadow-sm' 
-                    : 'bg-white border-gray-200 hover:border-blue-200'
+                    ? 'bg-blue-50 border-blue-500 ring-2 ring-blue-500 shadow-md' 
+                    : 'bg-white border-gray-200 hover:border-blue-300 hover:shadow-sm'
                 }`}
               >
-                <div className="flex justify-between items-start">
-                  <span className="font-bold text-gray-800">{appt.pets.name}</span>
-                  <Badge variant="secondary" className="text-[10px] h-5">
-                    {format(new Date(appt.scheduled_start), 'h:mm a')}
+                <div className="flex justify-between items-start mb-1">
+                  <span className="font-bold text-gray-800">{appt.pets?.name}</span>
+                  <Badge variant="outline" className="text-[10px] h-5 bg-green-50">
+                    <CheckCircle size={10} className="mr-1" /> Triaged
                   </Badge>
                 </div>
-                <div className="text-xs text-gray-500 mt-1">
-                  {appt.pets.species} ({appt.pets.gender})
+                <div className="text-xs text-gray-500 mb-1">
+                  {appt.pets?.species} • {appt.pets?.breed}
                 </div>
-                {appt.appointment_status === 'checked-in' && (
-                   <span className="text-[10px] text-green-600 font-medium flex items-center gap-1 mt-1">
-                     <CheckCircle2 size={10} /> Triaged
-                   </span>
+                <div className="text-xs text-gray-400 flex items-center gap-1">
+                  <User size={10} />
+                  {appt.pets?.client_profiles?.first_name} {appt.pets?.client_profiles?.last_name}
+                </div>
+                {appt.triage_records && appt.triage_records[0]?.triage_level && (
+                  <Badge 
+                    variant="secondary" 
+                    className={`mt-2 text-[10px] ${
+                      appt.triage_records[0].triage_level === 'Critical' ? 'bg-red-100 text-red-700' :
+                      appt.triage_records[0].triage_level === 'Urgent' ? 'bg-orange-100 text-orange-700' :
+                      'bg-gray-100 text-gray-700'
+                    }`}
+                  >
+                    {appt.triage_records[0].triage_level}
+                  </Badge>
                 )}
               </div>
             ))
           )}
         </div>
 
-        {/* --- RIGHT: WORKSPACE --- */}
-        <div className="lg:col-span-9 flex flex-col h-full overflow-y-auto pb-10">
+        {/* --- RIGHT: CONSULTATION WORKSPACE --- */}
+        <div className="lg:col-span-9 flex flex-col overflow-y-auto">
           {selectedAppt ? (
-            <div className="space-y-6">
-              
-              {/* 1. Header & Triage Summary */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Patient Card */}
-                <Card className="bg-blue-900 text-white border-none">
-                  <CardContent className="p-4">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h2 className="text-2xl font-bold">{selectedAppt.pets.name}</h2>
-                        <p className="opacity-80 text-sm">
-                          {selectedAppt.pets.breed} • {selectedAppt.pets.gender}
-                        </p>
-                      </div>
-                      <Stethoscope size={32} className="opacity-20" />
+            <div className="space-y-4">
+              {/* Patient Header */}
+              <Card className="border-t-4 border-t-blue-500">
+                <CardHeader className="pb-3">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <CardTitle className="text-2xl">{selectedAppt.pets?.name}</CardTitle>
+                      <p className="text-sm text-gray-500 mt-1">
+                        {selectedAppt.pets?.species} • {selectedAppt.pets?.breed} • {selectedAppt.pets?.gender}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        Owner: {selectedAppt.pets?.client_profiles?.first_name} {selectedAppt.pets?.client_profiles?.last_name}
+                      </p>
                     </div>
-                    <div className="mt-4 pt-4 border-t border-blue-700/50 flex gap-6 text-sm">
-                      <div>
-                        <span className="block opacity-60 text-xs">Owner</span>
-                        {selectedAppt.pets.client_profiles?.first_name} {selectedAppt.pets.client_profiles?.last_name}
+                    <Badge variant="outline" className="text-lg px-3 py-1">
+                      {format(new Date(selectedAppt.scheduled_start), 'h:mm a')}
+                    </Badge>
+                  </div>
+                </CardHeader>
+              </Card>
+
+              {/* Triage Vitals (Read-Only Reference) */}
+              {triageData && (
+                <Card>
+                  <CardHeader className="pb-3 bg-gray-50/50">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Activity size={16} className="text-green-600" />
+                      Vitals from Triage
+                      <Badge variant="secondary" className="text-xs">
+                        {format(new Date(triageData.created_at), 'h:mm a')}
+                      </Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                      <div className="text-center p-3 bg-blue-50 rounded-lg">
+                        <Weight size={18} className="mx-auto text-blue-600 mb-1" />
+                        <div className="text-2xl font-bold text-gray-900">{triageData.weight || 'N/A'}</div>
+                        <div className="text-xs text-gray-500">kg</div>
                       </div>
-                      <div>
-                         <span className="block opacity-60 text-xs">Date</span>
-                         {format(new Date(), 'MMM dd, yyyy')}
+                      <div className="text-center p-3 bg-red-50 rounded-lg">
+                        <Thermometer size={18} className="mx-auto text-red-600 mb-1" />
+                        <div className="text-2xl font-bold text-gray-900">{triageData.temperature || 'N/A'}</div>
+                        <div className="text-xs text-gray-500">°C</div>
+                      </div>
+                      <div className="text-center p-3 bg-pink-50 rounded-lg">
+                        <Heart size={18} className="mx-auto text-pink-600 mb-1" />
+                        <div className="text-2xl font-bold text-gray-900">{triageData.heart_rate || 'N/A'}</div>
+                        <div className="text-xs text-gray-500">bpm</div>
+                      </div>
+                      <div className="text-center p-3 bg-purple-50 rounded-lg">
+                        <Activity size={18} className="mx-auto text-purple-600 mb-1" />
+                        <div className="text-2xl font-bold text-gray-900">{triageData.respiratory_rate || 'N/A'}</div>
+                        <div className="text-xs text-gray-500">bpm</div>
+                      </div>
+                      <div className="text-center p-3 bg-gray-50 rounded-lg">
+                        <Stethoscope size={18} className="mx-auto text-gray-600 mb-1" />
+                        <div className="text-sm font-bold text-gray-900">{triageData.mucous_membrane || 'N/A'}</div>
+                        <div className="text-xs text-gray-500">MM</div>
                       </div>
                     </div>
                   </CardContent>
                 </Card>
+              )}
 
-                {/* Triage/Vitals Card */}
-                <Card className={`${triageData ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-dashed'}`}>
-                   <CardHeader className="pb-2">
-                     <CardTitle className="text-sm font-medium flex items-center gap-2 text-gray-600">
-                       <Activity size={16} /> Triage Vitals
-                       {!triageData && <span className="text-xs font-normal text-red-400">(Not recorded)</span>}
-                     </CardTitle>
-                   </CardHeader>
-                   <CardContent>
-                     {triageData ? (
-                       <div className="grid grid-cols-3 gap-4 text-center">
-                         <div>
-                            <div className="flex items-center justify-center gap-1 text-gray-500 text-xs mb-1"><Weight size={12}/> Wt</div>
-                            <span className="font-bold text-lg">{triageData.weight}kg</span>
-                         </div>
-                         <div>
-                            <div className="flex items-center justify-center gap-1 text-gray-500 text-xs mb-1"><Thermometer size={12}/> Temp</div>
-                            <span className={`font-bold text-lg ${triageData.temperature > 39 ? 'text-red-600' : ''}`}>
-                                {triageData.temperature}°C
-                            </span>
-                         </div>
-                         <div>
-                            <div className="flex items-center justify-center gap-1 text-gray-500 text-xs mb-1"><Heart size={12}/> HR</div>
-                            <span className="font-bold text-lg">{triageData.heart_rate}</span>
-                         </div>
-                         <div className="col-span-3 text-left mt-2 text-xs bg-white p-2 rounded border">
-                           <span className="font-semibold">Notes:</span> {triageData.notes || 'No triage notes.'}
-                         </div>
-                       </div>
-                     ) : (
-                       <div className="text-sm text-gray-400 text-center py-2">
-                         Nurse has not entered vitals yet.
-                       </div>
-                     )}
-                   </CardContent>
-                </Card>
-              </div>
-
-              {/* 2. The Medical Record Form */}
+              {/* SOAP Notes Form */}
               <Card>
-                <CardHeader>
+                <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
                   <CardTitle className="flex items-center gap-2">
-                    <FileText className="text-blue-600" /> Medical Record
+                    <FileText size={20} className="text-blue-600" />
+                    SOAP Medical Record
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="pt-6">
                   <form onSubmit={handleSubmit} className="space-y-6">
                     
+                    {/* Subjective */}
                     <div className="space-y-2">
-                      <Label className="text-blue-800 font-semibold">Chief Complaint / History (Subjective)</Label>
+                      <Label className="text-base font-semibold text-gray-900 flex items-center gap-2">
+                        <span className="bg-blue-500 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm">S</span>
+                        Subjective
+                      </Label>
+                      <p className="text-xs text-gray-500 ml-8">Patient history, owner's report, chief complaint</p>
                       <Textarea 
-                        placeholder="Why is the patient here? History of illness..." 
-                        className="min-h-[80px]"
-                        value={record.chief_complaint}
-                        onChange={e => setRecord({...record, chief_complaint: e.target.value})}
+                        value={soap.subjective}
+                        onChange={(e) => setSoap({...soap, subjective: e.target.value})}
+                        placeholder="e.g., Owner reports pet has been vomiting for 2 days, not eating well..."
+                        rows={3}
+                        className="ml-8 resize-none"
                       />
                     </div>
 
+                    <Separator />
+
+                    {/* Objective */}
                     <div className="space-y-2">
-                      <Label className="text-blue-800 font-semibold">Examination Findings (Objective)</Label>
+                      <Label className="text-base font-semibold text-gray-900 flex items-center gap-2">
+                        <span className="bg-green-500 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm">O</span>
+                        Objective
+                      </Label>
+                      <p className="text-xs text-gray-500 ml-8">Physical examination findings, observable facts</p>
                       <Textarea 
-                        placeholder="EENT, Heart/Lungs, Abdomen palpation, Musculoskeletal..." 
-                        className="min-h-[100px]"
-                        value={record.examination_findings}
-                        onChange={e => setRecord({...record, examination_findings: e.target.value})}
+                        value={soap.objective}
+                        onChange={(e) => setSoap({...soap, objective: e.target.value})}
+                        placeholder="e.g., Abdomen slightly distended, mild dehydration noted, heart and lungs clear..."
+                        rows={4}
+                        className="ml-8 resize-none"
                       />
                     </div>
 
-                    <div className="space-y-2">
-                      <Label className="text-blue-800 font-semibold">Diagnosis (Assessment)</Label>
-                      <Input 
-                        placeholder="Primary diagnosis..." 
-                        className="font-medium"
-                        value={record.diagnosis}
-                        onChange={e => setRecord({...record, diagnosis: e.target.value})}
-                      />
-                    </div>
+                    <Separator />
 
+                    {/* Assessment */}
                     <div className="space-y-2">
-                      <Label className="text-blue-800 font-semibold">Treatment Plan (Plan)</Label>
+                      <Label className="text-base font-semibold text-gray-900 flex items-center gap-2">
+                        <span className="bg-orange-500 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm">A</span>
+                        Assessment (Diagnosis) <span className="text-red-500">*</span>
+                      </Label>
+                      <p className="text-xs text-gray-500 ml-8">Diagnosis, differential diagnoses</p>
                       <Textarea 
-                        placeholder="Medications given, procedures performed, tests ordered..." 
-                        className="min-h-[80px]"
-                        value={record.treatment_plan}
-                        onChange={e => setRecord({...record, treatment_plan: e.target.value})}
+                        value={soap.assessment}
+                        onChange={(e) => setSoap({...soap, assessment: e.target.value})}
+                        placeholder="e.g., Acute gastroenteritis, rule out dietary indiscretion..."
+                        rows={3}
+                        className="ml-8 resize-none"
+                        required
                       />
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Follow-up Instructions</Label>
-                        <Input 
-                          placeholder="e.g. Monitor appetite" 
-                          value={record.follow_up_instructions}
-                          onChange={e => setRecord({...record, follow_up_instructions: e.target.value})}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Next Appointment Recommended</Label>
-                        <Input 
-                          type="date" 
-                          value={record.next_appointment}
-                          onChange={e => setRecord({...record, next_appointment: e.target.value})}
-                        />
-                      </div>
+                    <Separator />
+
+                    {/* Plan */}
+                    <div className="space-y-2">
+                      <Label className="text-base font-semibold text-gray-900 flex items-center gap-2">
+                        <span className="bg-purple-500 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm">P</span>
+                        Plan (Treatment)
+                      </Label>
+                      <p className="text-xs text-gray-500 ml-8">Treatment plan, medications, follow-up instructions</p>
+                      <Textarea 
+                        value={soap.plan}
+                        onChange={(e) => setSoap({...soap, plan: e.target.value})}
+                        placeholder="e.g., Prescribe anti-emetic, bland diet for 3 days, recheck in 1 week if no improvement..."
+                        rows={4}
+                        className="ml-8 resize-none"
+                      />
                     </div>
 
-                    <div className="pt-4 flex justify-end gap-3 border-t">
-                      <Button type="button" variant="outline">Save Draft</Button>
-                      <Button type="submit" className="bg-blue-600 hover:bg-blue-700 min-w-[200px]" disabled={isSaving}>
-                        {isSaving ? 'Finalizing...' : 'Finalize Record'}
+                    <Separator className="my-6" />
+
+                    {/* Action Buttons */}
+                    <div className="flex justify-end gap-3 pt-4">
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        onClick={() => setSelectedAppt(null)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button 
+                        type="submit" 
+                        disabled={isSaving || !soap.assessment}
+                        className="bg-blue-600 hover:bg-blue-700 w-64"
+                      >
+                        {isSaving ? 'Saving...' : '✓ Finish Consultation'}
                       </Button>
                     </div>
 
                   </form>
                 </CardContent>
               </Card>
-
             </div>
           ) : (
-            <div className="h-full flex flex-col items-center justify-center text-gray-400">
-               <Stethoscope size={64} className="mb-4 opacity-10" />
-               <h2 className="text-xl font-semibold text-gray-600">No Patient Selected</h2>
-               <p>Select a patient from the queue to start the consultation.</p>
+            <div className="h-full flex flex-col items-center justify-center text-gray-400 border-2 border-dashed rounded-xl bg-gray-50/50">
+              <Stethoscope size={64} className="mb-4 opacity-20" />
+              <h3 className="text-xl font-medium text-gray-600">No Patient Selected</h3>
+              <p className="text-sm mt-2">Select a patient from the queue to begin consultation.</p>
             </div>
           )}
         </div>
-
       </div>
     </div>
   );
-}
-
-// Helper icon for missing CheckedIn
-function CheckCircle2({ size }: { size: number }) {
-  return (
-    <svg 
-      xmlns="http://www.w3.org/2000/svg" 
-      width={size} height={size} 
-      viewBox="0 0 24 24" fill="none" 
-      stroke="currentColor" strokeWidth="3" 
-      strokeLinecap="round" strokeLinejoin="round"
-    >
-      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
-    </svg>
-  )
 }

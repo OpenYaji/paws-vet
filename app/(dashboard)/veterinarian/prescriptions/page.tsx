@@ -15,16 +15,21 @@ import Link from 'next/link';
 const fetcher = (url: string) => fetch(url).then(res => res.json());
 
 export default function PrescriptionsPage() {
-  const { data: prescriptions = [], isLoading } = useSWR('prescriptions-list', fetcher);
+  const { data: prescriptions = [], isLoading } = useSWR('/api/prescriptions', fetcher);
   const [searchTerm, setSearchTerm] = useState('');
-
+  
   // Filter Logic
-  const filteredList = prescriptions.filter((rx: any) => 
-    rx.medication_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    rx.pets?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    rx.pets?.owners?.full_name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
+  const filteredList = Array.isArray(prescriptions) ? prescriptions.filter((rx: any) => {
+    const petName = rx.pets?.name || '';
+    const ownerFirstName = rx.pets?.owners?.first_name || '';
+    const ownerLastName = rx.pets?.owners?.last_name || '';
+    const ownerName = `${ownerFirstName} ${ownerLastName}`.trim();
+    
+    return rx.medication_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      petName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      ownerName.toLowerCase().includes(searchTerm.toLowerCase());
+  }) : [];
+  
   return (
     <div className="space-y-6 max-w-7xl mx-auto p-6">
       
@@ -71,11 +76,11 @@ export default function PrescriptionsPage() {
                   <div>
                     <h3 className="font-bold text-lg text-foreground">{rx.medication_name} <span className="text-sm font-normal text-muted-foreground">({rx.dosage})</span></h3>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
-                      <span className="font-medium text-foreground">Patient: {rx.pets?.name}</span>
+                      <span className="font-medium text-foreground">Patient: {rx.pets?.name || 'Unknown'}</span>
                       <span className="text-muted-foreground/50">•</span>
-                      <span>{rx.pets?.species}</span>
+                      <span>{rx.pets?.species || 'N/A'}</span>
                       <span className="text-muted-foreground/50">•</span>
-                      <span>Owner: {rx.pets?.owners?.full_name}</span>
+                      <span>Owner: {rx.pets?.owners ? `${rx.pets.owners.first_name} ${rx.pets.owners.last_name}` : 'Unknown'}</span>
                     </div>
                     <p className="text-sm text-muted-foreground mt-2">
                       <span className="font-medium">Sig:</span> {rx.frequency} for {rx.duration}
@@ -85,12 +90,17 @@ export default function PrescriptionsPage() {
 
                 {/* Right: Status & Date */}
                 <div className="text-right flex flex-col items-end gap-2">
-                   <Badge variant={rx.status === 'Active' ? 'default' : 'secondary'} className={rx.status === 'Active' ? 'bg-primary' : ''}>
-                     {rx.status}
+                   <Badge variant={rx.dispensed_date ? 'default' : 'secondary'} className={rx.dispensed_date ? 'bg-green-600' : 'bg-amber-500'}>
+                     {rx.dispensed_date ? 'Dispensed' : 'Pending'}
                    </Badge>
                    <span className="text-xs text-muted-foreground">
                      Issued: {new Date(rx.created_at).toLocaleDateString()}
                    </span>
+                   {rx.dispensed_date && (
+                     <span className="text-xs text-muted-foreground">
+                       Dispensed: {new Date(rx.dispensed_date).toLocaleDateString()}
+                     </span>
+                   )}
                 </div>
 
               </CardContent>

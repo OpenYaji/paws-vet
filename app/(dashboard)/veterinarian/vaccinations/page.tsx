@@ -17,37 +17,15 @@ import {
 } from "@/components/ui/select";
 import { Syringe, Calendar, ShieldCheck, Search, AlertCircle, Check } from 'lucide-react';
 import { format, addYears, addMonths } from 'date-fns';
+import { create } from 'domain';
 
-// --- FETCHERS ---
-
-// 1. Fetch Vaccination History
-const fetchHistory = async () => {
-  const { data, error } = await supabase
-    .from('vaccination_records')
-    .select(`
-      *,
-      pets (id, name, species, breed, client_profiles(last_name))
-    `)
-    .order('administered_date', { ascending: false })
-    .limit(50);
-  if (error) throw error;
-  return data;
-};
-
-// 2. Fetch Pets List (For the "Add Vaccine" dropdown)
-const fetchPets = async () => {
-  const { data, error } = await supabase
-    .from('pets')
-    .select('id, name, species, client_profiles(last_name)')
-    .order('name');
-  if (error) throw error;
-  return data;
-};
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export default function VaccinationsPage() {
-  const { data: history = [], isLoading: loadingHistory } = useSWR('vaccine-history', fetchHistory);
-  const { data: petsList = [] } = useSWR('pets-list', fetchPets); // For the dropdown
-  
+  const { data = {}, isLoading } = useSWR('/api/vaccinations', fetcher);
+
+  const history = data?.history || [];
+  const petsList = data?.pets || [];
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -69,50 +47,29 @@ export default function VaccinationsPage() {
     setIsSaving(true);
 
     try {
-      // Get Vet ID
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data: vet } = await supabase
-        .from('veterinarian_profiles')
-        .select('id')
-        .eq('user_id', user?.id)
-        .single();
+      const response = await fetch('/api/vaccinations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...formData,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString() 
+        })
+      });
+      
+      const result = await response.json();
 
-      if (!vet) throw new Error("Vet profile not found");
-
-      // Insert Record
-      const { error } = await supabase
-        .from('vaccination_records')
-        .insert([{
-          pet_id: formData.pet_id,
-          vaccine_name: formData.vaccine_name,
-          vaccine_type: formData.vaccine_type,
-          batch_number: formData.batch_number,
-          administered_date: formData.administered_date,
-          next_due_date: formData.next_due_date,
-          administered_by: vet.id,
-          side_effects_noted: formData.notes
-        }]);
-
-      if (error) throw error;
-
-      alert("Vaccination logged successfully!");
-      mutate('vaccine-history'); // Refresh list
-      setIsModalOpen(false);
-      setFormData({ ...formData, vaccine_name: '', batch_number: '', notes: '' }); // Reset partial
+      if(!response.ok){
+        throw new Error(result.error || 'Failed to log vaccination');
+      }
       
     } catch (error: any) {
       alert("Error: " + error.message);
     } finally {
       setIsSaving(false);
+      mutate('api/vaccinations');
     }
   };
-
-  // Filter History Search
-  const filteredHistory = history.filter((rec: any) => 
-    rec.pets?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    rec.vaccine_name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
   return (
     <div className="space-y-6 max-w-7xl mx-auto p-2">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -246,13 +203,16 @@ export default function VaccinationsPage() {
               </div>
             </CardHeader>
             <CardContent>
-              {loadingHistory ? (
+              {/* 1. Check isLoading first */}
+              {isLoading ? (
                 <div className="p-8 text-center text-gray-400">Loading records...</div>
-              ) : filteredHistory.length === 0 ? (
+              ) : history.length === 0 ? (
+                /* 2. Then check if list is empty */
                 <div className="p-8 text-center text-gray-400 border border-dashed rounded-lg bg-gray-50">
                   No vaccination records found.
                 </div>
               ) : (
+                /* 3. Finally, render the list */
                 <div className="rounded-md border">
                   <div className="grid grid-cols-12 gap-4 p-4 font-medium text-sm bg-gray-50 border-b text-gray-600">
                     <div className="col-span-3">Patient</div>
@@ -260,7 +220,7 @@ export default function VaccinationsPage() {
                     <div className="col-span-3">Date Given</div>
                     <div className="col-span-3">Next Due</div>
                   </div>
-                  {filteredHistory.map((rec: any) => (
+                  {history.map((rec: any) => (
                     <div key={rec.id} className="grid grid-cols-12 gap-4 p-4 text-sm items-center hover:bg-gray-50 border-b last:border-0 transition-colors">
                       <div className="col-span-3">
                         <div className="font-bold text-gray-800">{rec.pets?.name}</div>

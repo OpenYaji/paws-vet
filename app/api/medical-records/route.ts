@@ -8,17 +8,47 @@ const supabase = createClient(
 
 export async function GET(request: NextRequest) {
   try {
-    const { data, error } = await supabase
+    const { searchParams } = new URL(request.url);
+    const petId = searchParams.get('pet_id');
+
+    let query = supabase
       .from('medical_records')
-      .select('*')
-      .order('record_date', { ascending: false });
+      .select(`
+        *,
+        appointments (
+          id,
+          appointment_number,
+          scheduled_start,
+          reason_for_visit
+        ),
+        pets (
+          id,
+          name,
+          species
+        ),
+        veterinarian:veterinarian_profiles!medical_records_veterinarian_id_fkey (
+          id,
+          first_name,
+          last_name
+        )
+      `)
+      .order('visit_date', { ascending: false });
+
+    // Filter by pet_id if provided
+    if (petId) {
+      query = query.eq('pet_id', petId);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
+      console.error('Medical records fetch error:', error);
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
-    return NextResponse.json(data);
+    return NextResponse.json(data || []);
   } catch (error) {
+    console.error('Medical records server error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

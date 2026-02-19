@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Calendar } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
   Table,
@@ -19,10 +20,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Calendar, Search, Filter, Eye, Phone, Mail } from 'lucide-react';
+import { Search, Filter, Eye, Phone, Mail } from 'lucide-react';
 import { Appointment } from '@/types/appointments';
 
-const statusColors = {
+import HeatmapCalendar from '@/components/appointments/heatmap-calendar';
+import DailyDetailPanel from '@/components/appointments/daily-detail-panel';
+import StatsDashboard from '@/components/appointments/stats-dashboard';
+
+const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
   confirmed: 'bg-blue-100 text-blue-800',
   in_progress: 'bg-purple-100 text-purple-800',
@@ -31,7 +36,7 @@ const statusColors = {
   no_show: 'bg-gray-100 text-gray-800',
 };
 
-const appointmentTypes = {
+const appointmentTypes: Record<string, string> = {
   checkup: 'Checkup',
   consultation: 'Consultation',
   vaccination: 'Vaccination',
@@ -42,134 +47,228 @@ const appointmentTypes = {
   followup: 'Follow-up',
 };
 
+const SLOTS_PER_DAY = 17; // 9:00–17:00 in 30-min increments
+const ROWS_PER_PAGE = 7;
+
 export default function AppointmentsPage() {
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
   const [veterinarians, setVeterinarians] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [showDetails, setShowDetails] = useState(false);
 
-  // Filters
+  // Calendar & date
+  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const [selectedDate, setSelectedDate] = useState<string>(todayStr);
+
+  // Filters for table
   const [statusFilter, setStatusFilter] = useState('all');
-  const [dateFilter, setDateFilter] = useState('');
-  const [vetFilter, setVetFilter] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [vetFilter, setVetFilter] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
 
-  useEffect(() => {
-    fetchVeterinarians();
-    fetchAppointments();
-  }, [statusFilter, dateFilter, vetFilter, searchQuery]);
-
-  const fetchVeterinarians = async () => {
-    try {
-      const response = await fetch('/api/veterinarians');
-      const data = await response.json();
-      setVeterinarians(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error('Error fetching veterinarians:', error);
-      setVeterinarians([]);
-    }
-  };
-
-  const fetchAppointments = async () => {
+  // Fetch all appointments for the month (broad fetch)
+  const fetchAppointments = useCallback(async () => {
     setLoading(true);
+    setCurrentPage(1);
     try {
       const params = new URLSearchParams();
       if (statusFilter !== 'all') params.append('status', statusFilter);
-      if (dateFilter) params.append('date', dateFilter);
       if (vetFilter) params.append('veterinarian', vetFilter);
       if (searchQuery) params.append('search', searchQuery);
 
       const response = await fetch(`/api/appointments?${params.toString()}`);
-      
       if (!response.ok) {
-        console.error('Failed to fetch appointments:', response.status);
-        setAppointments([]);
+        setAllAppointments([]);
         setLoading(false);
         return;
       }
-
       const data = await response.json();
-      console.log('Fetched appointments:', data);
-      setAppointments(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error('Error fetching appointments:', error);
-      setAppointments([]);
+      setAllAppointments(Array.isArray(data) ? data : []);
+    } catch {
+      setAllAppointments([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [statusFilter, vetFilter, searchQuery]);
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+  const fetchVeterinarians = useCallback(async () => {
+    try {
+      const response = await fetch('/api/veterinarians');
+      const data = await response.json();
+      setVeterinarians(Array.isArray(data) ? data : []);
+    } catch {
+      setVeterinarians([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchVeterinarians();
+  }, [fetchVeterinarians]);
+
+  useEffect(() => {
+    fetchAppointments();
+  }, [fetchAppointments]);
+
+  // --- Derived data ---
+
+  // Heatmap counts: { "2025-01-15": 4 }
+  const appointmentCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    allAppointments.forEach((apt) => {
+      if (!apt.scheduled_start) return;
+      const dateKey = new Date(apt.scheduled_start).toISOString().split('T')[0];
+      counts[dateKey] = (counts[dateKey] || 0) + 1;
+    });
+    return counts;
+  }, [allAppointments]);
+
+  // Appointments for selected date
+  const selectedDateAppointments = useMemo(() => {
+    if (!selectedDate) return [];
+    return allAppointments.filter((apt) => {
+      if (!apt.scheduled_start) return false;
+      const dateKey = new Date(apt.scheduled_start).toISOString().split('T')[0];
+      return dateKey === selectedDate;
+    });
+  }, [allAppointments, selectedDate]);
+
+  // Stats
+  const appointmentsToday = useMemo(() => {
+    return allAppointments.filter((apt) => {
+      if (!apt.scheduled_start) return false;
+      return new Date(apt.scheduled_start).toISOString().split('T')[0] === todayStr;
+    }).length;
+  }, [allAppointments, todayStr]);
+
+  const upcoming7Days = useMemo(() => {
+    const now = new Date();
+    const in7 = new Date(now);
+    in7.setDate(in7.getDate() + 7);
+    return allAppointments.filter((apt) => {
+      if (!apt.scheduled_start) return false;
+      const d = new Date(apt.scheduled_start);
+      return d >= now && d <= in7;
+    }).length;
+  }, [allAppointments]);
+
+  const { monthlyBooked, monthlyCapacity } = useMemo(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    // Count only weekdays for capacity (Mon–Sat = 6 days/week)
+    let workDays = 0;
+    for (let d = 1; d <= daysInMonth; d++) {
+      const day = new Date(year, month, d).getDay();
+      if (day !== 0) workDays++; // exclude Sunday
+    }
+
+    const booked = allAppointments.filter((apt) => {
+      if (!apt.scheduled_start) return false;
+      const d = new Date(apt.scheduled_start);
+      return d.getFullYear() === year && d.getMonth() === month;
+    }).length;
+
+    return {
+      monthlyBooked: booked,
+      monthlyCapacity: workDays * SLOTS_PER_DAY,
+    };
+  }, [allAppointments]);
+
+  // --- Pagination ---
+  const totalPages = Math.max(1, Math.ceil(allAppointments.length / ROWS_PER_PAGE));
+  const paginatedAppointments = useMemo(() => {
+    const start = (currentPage - 1) * ROWS_PER_PAGE;
+    return allAppointments.slice(start, start + ROWS_PER_PAGE);
+  }, [allAppointments, currentPage]);
+
+  // --- Helpers ---
+
+  const formatDate = (dateString: string) =>
+    new Date(dateString).toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
     });
-  };
 
-  const formatTime = (dateString: string) => {
-    return new Date(dateString).toLocaleTimeString('en-US', {
+  const formatTime = (dateString: string) =>
+    new Date(dateString).toLocaleTimeString('en-US', {
       hour: 'numeric',
       minute: '2-digit',
       hour12: true,
     });
-  };
 
   const handleViewDetails = (appointment: Appointment) => {
     setSelectedAppointment(appointment);
     setShowDetails(true);
   };
 
-  const stats = {
-    total: Array.isArray(appointments) ? appointments.length : 0,
-    pending: Array.isArray(appointments) ? appointments.filter(a => a?.appointment_status === 'pending').length : 0,
-    confirmed: Array.isArray(appointments) ? appointments.filter(a => a?.appointment_status === 'confirmed').length : 0,
-    completed: Array.isArray(appointments) ? appointments.filter(a => a?.appointment_status === 'completed').length : 0,
+  const handleAddWalkIn = (date: string, time: string) => {
+    // Placeholder: you can wire this to a creation dialog or API
+    alert(`Add walk-in for ${date} at ${time}`);
   };
 
   return (
-    <main className="p-6 space-y-6">
+    <main className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold">Appointments</h1>
-          <p className="text-muted-foreground">View and manage all appointments</p>
-        </div>
-      </div>
+{/* ═══════════ HEADER SECTION ═══════════ */}
+{/* ═══════════ APPOINTMENTS HEADER ═══════════ */}
+<div className="flex items-center gap-3 mb-6">
+  {/* Icon Container using theme variables */}
+  <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center">
+    <Calendar className="h-5 w-5 text-primary-foreground" />
+  </div>
+  
+  <div>
+    <h1 className="text-2xl font-bold text-foreground">Appointments</h1>
+    <p className="text-sm text-muted-foreground">
+      View and manage all pet clinic schedules and visits
+    </p>
+  </div>
+</div>
+      {/* Stats Dashboard */}
+      <StatsDashboard
+        appointmentsToday={appointmentsToday}
+        upcoming7Days={upcoming7Days}
+        monthlyBooked={monthlyBooked}
+        monthlyCapacity={monthlyCapacity}
+      />
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-card border border-border rounded-lg p-4">
-          <p className="text-sm text-muted-foreground">Total</p>
-          <p className="text-2xl font-bold">{stats.total}</p>
+      {/* Calendar + Daily Detail */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Heatmap Calendar — 2 cols */}
+        <div className="lg:col-span-2">
+          <HeatmapCalendar
+            appointmentCounts={appointmentCounts}
+            selectedDate={selectedDate}
+            onDateSelect={setSelectedDate}
+          />
         </div>
-        <div className="bg-card border border-border rounded-lg p-4">
-          <p className="text-sm text-muted-foreground">Pending</p>
-          <p className="text-2xl font-bold text-yellow-600">{stats.pending}</p>
-        </div>
-        <div className="bg-card border border-border rounded-lg p-4">
-          <p className="text-sm text-muted-foreground">Confirmed</p>
-          <p className="text-2xl font-bold text-blue-600">{stats.confirmed}</p>
-        </div>
-        <div className="bg-card border border-border rounded-lg p-4">
-          <p className="text-sm text-muted-foreground">Completed</p>
-          <p className="text-2xl font-bold text-green-600">{stats.completed}</p>
+
+        {/* Daily Detail Panel — 1 col */}
+        <div className="lg:col-span-1 min-h-[400px]">
+          <DailyDetailPanel
+            selectedDate={selectedDate}
+            appointments={selectedDateAppointments}
+            onAddWalkIn={handleAddWalkIn}
+          />
         </div>
       </div>
 
       {/* Filters */}
-      <div className="bg-card border border-border rounded-lg p-4 space-y-4">
+      <div className="bg-card border border-border rounded-xl shadow-sm p-4 space-y-4">
         <div className="flex items-center gap-2">
           <Filter className="w-4 h-4 text-muted-foreground" />
           <h3 className="font-semibold">Filters</h3>
         </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="text-sm font-medium mb-2 block">Search</label>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
                 placeholder="Appointment #, reason..."
                 value={searchQuery}
@@ -197,15 +296,6 @@ export default function AppointmentsPage() {
           </div>
 
           <div>
-            <label className="text-sm font-medium mb-2 block">Date</label>
-            <Input
-              type="date"
-              value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value)}
-            />
-          </div>
-
-          <div>
             <label className="text-sm font-medium mb-2 block">Veterinarian</label>
             <select
               value={vetFilter}
@@ -228,7 +318,6 @@ export default function AppointmentsPage() {
             size="sm"
             onClick={() => {
               setStatusFilter('all');
-              setDateFilter('');
               setVetFilter('');
               setSearchQuery('');
             }}
@@ -239,7 +328,7 @@ export default function AppointmentsPage() {
       </div>
 
       {/* Appointments Table */}
-      <div className="bg-card border border-border rounded-lg overflow-hidden">
+      <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
@@ -259,14 +348,14 @@ export default function AppointmentsPage() {
                   Loading appointments...
                 </TableCell>
               </TableRow>
-            ) : appointments.length === 0 ? (
+            ) : allAppointments.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                   No appointments found
                 </TableCell>
               </TableRow>
             ) : (
-              appointments.map((appointment) => (
+              paginatedAppointments.map((appointment) => (
                 <TableRow key={appointment.id}>
                   <TableCell className="font-mono text-sm">
                     {appointment.appointment_number}
@@ -286,21 +375,23 @@ export default function AppointmentsPage() {
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline">
-                      {appointmentTypes[appointment.appointment_type]}
+                      {appointmentTypes[appointment.appointment_type] || appointment.appointment_type}
                     </Badge>
                   </TableCell>
                   <TableCell>
                     <div>
                       <p className="font-medium">{formatDate(appointment.scheduled_start)}</p>
                       <p className="text-sm text-muted-foreground">
-                        {formatTime(appointment.scheduled_start)} - {formatTime(appointment.scheduled_end)}
+                        {formatTime(appointment.scheduled_start)} –{' '}
+                        {formatTime(appointment.scheduled_end)}
                       </p>
                     </div>
                   </TableCell>
                   <TableCell>
                     <div>
                       <p className="font-medium">
-                        Dr. {appointment.veterinarian?.first_name} {appointment.veterinarian?.last_name}
+                        Dr. {appointment.veterinarian?.first_name}{' '}
+                        {appointment.veterinarian?.last_name}
                       </p>
                       {appointment.veterinarian?.specializations && (
                         <p className="text-xs text-muted-foreground">
@@ -328,6 +419,38 @@ export default function AppointmentsPage() {
             )}
           </TableBody>
         </Table>
+
+        {/* Pagination Controls */}
+        {!loading && allAppointments.length > ROWS_PER_PAGE && (
+          <div className="flex items-center justify-between border-t border-border px-4 py-3">
+            <p className="text-sm text-muted-foreground">
+              Showing {(currentPage - 1) * ROWS_PER_PAGE + 1}–
+              {Math.min(currentPage * ROWS_PER_PAGE, allAppointments.length)} of{' '}
+              {allAppointments.length}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage((p) => p - 1)}
+              >
+                Previous
+              </Button>
+              <span className="text-sm font-medium">
+                Page {currentPage} of {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage((p) => p + 1)}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Details Dialog */}
@@ -343,12 +466,13 @@ export default function AppointmentsPage() {
           {selectedAppointment && (
             <div className="space-y-6">
               {/* Status and Type */}
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 <Badge className={statusColors[selectedAppointment.appointment_status]}>
                   {selectedAppointment.appointment_status.replace('_', ' ')}
                 </Badge>
                 <Badge variant="outline">
-                  {appointmentTypes[selectedAppointment.appointment_type as keyof typeof appointmentTypes] || selectedAppointment.appointment_type}
+                  {appointmentTypes[selectedAppointment.appointment_type] ||
+                    selectedAppointment.appointment_type}
                 </Badge>
                 {selectedAppointment.is_emergency && (
                   <Badge variant="destructive">Emergency</Badge>
@@ -358,11 +482,19 @@ export default function AppointmentsPage() {
               {/* Pet Information */}
               <div>
                 <h4 className="font-semibold mb-2">Pet Information</h4>
-                <div className="bg-secondary/20 rounded-lg p-4 space-y-2">
-                  <p><span className="font-medium">Name:</span> {selectedAppointment.pet?.name}</p>
-                  <p><span className="font-medium">Species:</span> {selectedAppointment.pet?.species}</p>
+                <div className="bg-secondary/20 rounded-xl p-4 space-y-2">
+                  <p>
+                    <span className="font-medium">Name:</span> {selectedAppointment.pet?.name}
+                  </p>
+                  <p>
+                    <span className="font-medium">Species:</span>{' '}
+                    {selectedAppointment.pet?.species}
+                  </p>
                   {selectedAppointment.pet?.breed && (
-                    <p><span className="font-medium">Breed:</span> {selectedAppointment.pet.breed}</p>
+                    <p>
+                      <span className="font-medium">Breed:</span>{' '}
+                      {selectedAppointment.pet.breed}
+                    </p>
                   )}
                 </div>
               </div>
@@ -370,8 +502,12 @@ export default function AppointmentsPage() {
               {/* Owner Information */}
               <div>
                 <h4 className="font-semibold mb-2">Owner Information</h4>
-                <div className="bg-secondary/20 rounded-lg p-4 space-y-2">
-                  <p><span className="font-medium">Name:</span> {selectedAppointment.client?.first_name} {selectedAppointment.client?.last_name}</p>
+                <div className="bg-secondary/20 rounded-xl p-4 space-y-2">
+                  <p>
+                    <span className="font-medium">Name:</span>{' '}
+                    {selectedAppointment.client?.first_name}{' '}
+                    {selectedAppointment.client?.last_name}
+                  </p>
                   <div className="flex items-center gap-2">
                     <Phone className="w-4 h-4" />
                     <span>{selectedAppointment.client?.phone}</span>
@@ -386,13 +522,15 @@ export default function AppointmentsPage() {
               {/* Veterinarian */}
               <div>
                 <h4 className="font-semibold mb-2">Assigned Veterinarian</h4>
-                <div className="bg-secondary/20 rounded-lg p-4">
+                <div className="bg-secondary/20 rounded-xl p-4">
                   <p className="font-medium">
-                    Dr. {selectedAppointment.veterinarian?.first_name} {selectedAppointment.veterinarian?.last_name}
+                    Dr. {selectedAppointment.veterinarian?.first_name}{' '}
+                    {selectedAppointment.veterinarian?.last_name}
                   </p>
                   {selectedAppointment.veterinarian?.specializations && (
                     <p className="text-sm text-muted-foreground">
-                      Specializations: {selectedAppointment.veterinarian.specializations.join(', ')}
+                      Specializations:{' '}
+                      {selectedAppointment.veterinarian.specializations.join(', ')}
                     </p>
                   )}
                 </div>
@@ -401,20 +539,38 @@ export default function AppointmentsPage() {
               {/* Appointment Details */}
               <div>
                 <h4 className="font-semibold mb-2">Appointment Details</h4>
-                <div className="bg-secondary/20 rounded-lg p-4 space-y-2">
-                  <p><span className="font-medium">Scheduled:</span> {formatDate(selectedAppointment.scheduled_start)} at {formatTime(selectedAppointment.scheduled_start)}</p>
-                  <p><span className="font-medium">Duration:</span> {formatTime(selectedAppointment.scheduled_start)} - {formatTime(selectedAppointment.scheduled_end)}</p>
-                  <p><span className="font-medium">Reason:</span> {selectedAppointment.reason_for_visit}</p>
+                <div className="bg-secondary/20 rounded-xl p-4 space-y-2">
+                  <p>
+                    <span className="font-medium">Scheduled:</span>{' '}
+                    {formatDate(selectedAppointment.scheduled_start)} at{' '}
+                    {formatTime(selectedAppointment.scheduled_start)}
+                  </p>
+                  <p>
+                    <span className="font-medium">Duration:</span>{' '}
+                    {formatTime(selectedAppointment.scheduled_start)} –{' '}
+                    {formatTime(selectedAppointment.scheduled_end)}
+                  </p>
+                  <p>
+                    <span className="font-medium">Reason:</span>{' '}
+                    {selectedAppointment.reason_for_visit}
+                  </p>
                   {selectedAppointment.special_instructions && (
-                    <p><span className="font-medium">Special Instructions:</span> {selectedAppointment.special_instructions}</p>
+                    <p>
+                      <span className="font-medium">Special Instructions:</span>{' '}
+                      {selectedAppointment.special_instructions}
+                    </p>
                   )}
                 </div>
               </div>
 
               {/* Action Buttons */}
               <div className="flex gap-2 pt-4">
-                <Button variant="outline" className="flex-1">Edit</Button>
-                <Button variant="outline" className="flex-1">Cancel Appointment</Button>
+                <Button variant="outline" className="flex-1">
+                  Edit
+                </Button>
+                <Button variant="outline" className="flex-1">
+                  Cancel Appointment
+                </Button>
                 <Button className="flex-1 bg-primary">Check In</Button>
               </div>
             </div>

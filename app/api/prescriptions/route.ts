@@ -1,5 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
+import { createServerClient } from '@supabase/auth-helpers-nextjs';
+import { se } from 'date-fns/locale';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || '',
@@ -8,72 +11,209 @@ const supabase = createClient(
 
 export async function GET(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { appointment_id, medication_name, pet_id, veterinarian_id } = body;
+      const cookieStore = await cookies();
+      
+      const authClient = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+          cookies: {
+            getAll() { return cookieStore.getAll(); },
+            setAll(cookiesToSet) {
+              try {
+                cookiesToSet.forEach(({ name, value, options }) => 
+                  cookieStore.set(name, value, options)
+                )
+              } catch {}
+            },
+          },
+        }
+      );
 
-        // --- STEP 1: VALIDATION (Check if Consultation Exists) ---
+      const { data: { user }, error: authError } = await authClient.auth.getUser();
+
+      if (authError || !user || user.user_metadata.role !== 'veterinarian') {
+          return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      
+      const { searchParams } = new URL(request.url);
+      const search = searchParams.get('search');
+
+      let query = supabase
+        .from('prescriptions')
+        .select(`
+          *,
+          medical_record:medical_records!prescriptions_medical_record_id_fkey (
+            id,
+            record_number,
+            visit_date,
+            chief_complaint,
+            appointment_id,
+            pet_id
+          ),
+          prescribed_by_vet:veterinarian_profiles!prescriptions_prescribed_by_fkey (
+            id,
+            first_name,
+            last_name
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      const { data: prescriptionsData, error: prescriptionsError } = await query;
+    
+      if (prescriptionsError) {
+        console.error('Prescriptions fetch error:', prescriptionsError);
+        return NextResponse.json({ error: prescriptionsError.message }, { status: 400 });
+      }
+
+      // Fetch pet data for each prescription
+      const prescriptionsWithPets = await Promise.all(
+        (prescriptionsData || []).map(async (prescription: any) => {
+          const { data: pet } = await supabase
+            .from('pets')
+            .select(`
+              id,
+              name,
+              species,
+              breed,
+              owners:client_profiles!pets_owner_id_fkey (
+                id,
+                first_name,
+                last_name,
+                phone
+              )
+            `)
+            .eq('id', prescription.medical_record?.pet_id)
+            .single();
+
+          return {
+            ...prescription,
+            pets: pet
+          };
+        })
+      );
         
-        if (!appointment_id) {
-            return NextResponse.json(
-                { error: 'Appointment ID is required to link this prescription.' }, 
-                { status: 400 }
-            );
+      return NextResponse.json(prescriptionsWithPets, { status: 200 });
+    }
+  catch (error) {
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+    
+export async function POST(request: NextRequest) {
+  try {
+    const cookieStore = await cookies();
+        
+    const authClient = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+          cookies: {
+            getAll() { return cookieStore.getAll(); },
+            setAll(cookiesToSet) {
+              try {
+                cookiesToSet.forEach(({ name, value, options }) => 
+                cookieStore.set(name, value, options)
+                )
+              } catch (error) {
+                console.error('Error setting cookies:', error);
+              }
+            },
+          },
+        }
+      );
+    
+      const { data: { user }, error: authError } = await authClient.auth.getUser();
+    
+      if (authError || !user || user.user_metadata.role !== 'veterinarian') {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+    
+      const body = await request.json();
+      const { medical_record_id, prescribed_by, medication_name } = body;
+    
+      if (!medical_record_id) {
+        return NextResponse.json(
+          { error: 'Medical Record ID is required to link this prescription.' }, 
+          { status: 400 }
+        );
+      }
+
+      if (!prescribed_by) {
+        return NextResponse.json(
+          { error: 'Prescribed by (veterinarian ID) is required.' }, 
+          { status: 400 }
+        );
+      }
+
+      // Verify the medical record exists
+      const { data: medicalRecord, error: recordError } = await supabase
+        .from('medical_records')
+        .select('id, pet_id')
+        .eq('id', medical_record_id)
+        .single();
+
+      if (recordError || !medicalRecord) {
+        return NextResponse.json(
+          { error: 'Medical record not found.' }, 
+          { status: 404 }
+        );
+      }
+
+      const { data: prescriptionData, error: prescriptionError } = await supabase
+        .from('prescriptions')
+        .insert([{
+          medical_record_id,
+          prescribed_by,
+          medication_name,
+          dosage: body.dosage,
+          frequency: body.frequency,
+          duration: body.duration,
+          instructions: body.instructions,
+          form: body.form || null,
+          quantity: body.quantity || null,
+          refills_allowed: body.refills_allowed || 0,
+          is_controlled_substance: body.is_controlled_substance || false
+        }])
+        .select()
+        .single();
+
+        if (prescriptionError) {
+            return NextResponse.json({ error: prescriptionError.message }, { status: 400 });
         }
 
-        // Check if the appointment exists and has a valid status
-        const { data: appointment, error: apptError } = await supabase
-            .from('appointments')
-            .select('appointment_status')
-            .eq('id', appointment_id)
-            .single();
-
-        if (apptError || !appointment) {
-             return NextResponse.json(
-                { error: 'Consultation record not found.' }, 
-                { status: 404 }
-            );
-        }
-
-        // Optional: Enforce that the consultation must be active or finished
-        // (Prevent prescribing for 'scheduled' or 'cancelled' appointments)
-        const validStatuses = ['in-consultation', 'completed'];
-        if (!validStatuses.includes(appointment.appointment_status)) {
-            return NextResponse.json(
-                { error: `Cannot prescribe. Consultation status is currently: ${appointment.appointment_status}` }, 
-                { status: 403 } // Forbidden
-            );
-        }
-
-        // --- STEP 2: SAVE PRESCRIPTION ---
-
-        const { data, error } = await supabase
-            .from('prescriptions')
-            .insert([{
-                appointment_id,     // Link it to the consultation
-                pet_id,
-                veterinarian_id,
-                medication_name,
-                dosage: body.dosage,
-                frequency: body.frequency,
-                duration: body.duration,
-                instructions: body.instructions,
-                status: 'pending'   // Default status
-            }])
-            .select()
-            .single();
-
-        if (error) {
-            return NextResponse.json({ error: error.message }, { status: 400 });
-        }
-
-        return NextResponse.json(data, { status: 201 });
+        return NextResponse.json(prescriptionData, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function PUT(request: NextRequest) {
   try {
+    const cookieStore = await cookies();
+        
+        const authClient = createServerClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          {
+            cookies: {
+              getAll() { return cookieStore.getAll(); },
+              setAll(cookiesToSet) {
+                 try {
+                   cookiesToSet.forEach(({ name, value, options }) => 
+                     cookieStore.set(name, value, options)
+                   )
+                 } catch {}
+              },
+            },
+          }
+        );
+    
+        const { data: { user }, error: authError } = await authClient.auth.getUser();
+    
+        if (authError || !user || user.user_metadata.role !== 'veterinarian') {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
     const body = await request.json();
 
     if (!body.name || !body.owner_id || !body.species) {
@@ -136,5 +276,35 @@ export async function DELETE(request: NextRequest) {
 }
 
 export async function UPDATE(request: NextRequest) {
-    const { data: { user }} = await supabase.auth.getUser();
+    try{
+      const cookieStore = await cookies();
+        
+        const authClient = createServerClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          {
+            cookies: {
+              getAll() { return cookieStore.getAll(); },
+              setAll(cookiesToSet) {
+                 try {
+                   cookiesToSet.forEach(({ name, value, options }) => 
+                     cookieStore.set(name, value, options)
+                   )
+                 } catch {}
+              },
+            },
+          }
+        );
+
+        const { data: { user }, error: authError } = await authClient.auth.getUser();
+
+        if (authError || !user || user.user_metadata.role !== 'veterinarian') {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const body = await request.json();
+    }
+    catch(error: any){
+      return NextResponse.json({ error: 'Internal server error: ' + error.message }, { status: 500 });
+    }
 }

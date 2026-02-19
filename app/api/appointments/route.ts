@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
     const date = searchParams.get('date');
     const veterinarian = searchParams.get('veterinarian');
     const search = searchParams.get('search');
+    const petId = searchParams.get('pet_id');
 
     // Build the query with proper joins
     let query = supabase
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
           client:client_profiles!pets_owner_id_fkey(
             id,
             first_name,
-            last_name,
+            last_name,  
             phone,
             email:users!client_profiles_user_id_fkey(email)
           )
@@ -71,6 +72,10 @@ export async function GET(request: NextRequest) {
 
     if (veterinarian) {
       query = query.eq('veterinarian_id', veterinarian);
+    }
+
+    if (petId) {
+      query = query.eq('pet_id', petId);
     }
 
     if (search) {
@@ -166,7 +171,7 @@ export async function POST(request: NextRequest) {
       pet_id: body.pet_id,
       veterinarian_id: veterinarianId,
       booked_by: bookedBy,
-      appointment_type: body.appointment_type || 'consultation', // Changed from 'checkup' to 'consultation'
+      appointment_type: body.appointment_type || 'consultation',
       appointment_status: body.appointment_status || 'pending',
       scheduled_start: body.scheduled_start,
       scheduled_end: body.scheduled_end,
@@ -239,4 +244,74 @@ async function getDefaultVeterinarian(supabase: any): Promise<string> {
   }
   
   return data.id;
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const supabase = getSupabaseClient();
+    const body = await request.json();
+
+    console.log('=== PATCH /api/appointments ===');
+    console.log('Update request body:', body);
+    console.log('Appointment ID:', body.id);
+    console.log('Updates:', { 
+      appointment_status: body.appointment_status, 
+      checked_in_at: body.checked_in_at,
+      scheduled_start: body.scheduled_start,
+      scheduled_end: body.scheduled_end
+    });
+
+    if (!body.id) {
+      return NextResponse.json({ 
+        error: 'Missing appointment ID' 
+      }, { status: 400 });
+    }
+
+    // First, fetch the current appointment to log it
+    const { data: current } = await supabase
+      .from('appointments')
+      .select('id, appointment_status, checked_in_at, scheduled_start')
+      .eq('id', body.id)
+      .single();
+    
+    console.log('Current appointment state:', current);
+
+    // Remove id from update payload
+    const { id, ...updateData } = body;
+
+    // Perform the update
+    const { data, error } = await supabase
+      .from('appointments')
+      .update(updateData)
+      .eq('id', id)
+      .select();
+
+    if (error) {
+      console.error('Update failed:', error);
+      return NextResponse.json({ 
+        error: error.message,
+        details: error.details || 'Update failed',
+        hint: error.hint || ''
+      }, { status: 400 });
+    }
+
+    if (!data || data.length === 0) {
+      console.error('No appointment found with ID:', id);
+      return NextResponse.json({ 
+        error: 'Appointment not found' 
+      }, { status: 404 });
+    }
+
+    console.log('Update successful! New state:', data[0]);
+    console.log('Status changed from', current?.appointment_status, 'to', data[0].appointment_status);
+    console.log('Checked in at:', data[0].checked_in_at);
+
+    return NextResponse.json(data[0]);
+  } catch (error: any) {
+    console.error('Server error updating appointment:', error);
+    return NextResponse.json({ 
+      error: 'Internal server error',
+      details: error.message || 'Unknown error occurred'
+    }, { status: 500 });
+  }
 }
