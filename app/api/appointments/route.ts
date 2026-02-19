@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
     const date = searchParams.get('date');
     const veterinarian = searchParams.get('veterinarian');
     const search = searchParams.get('search');
+    const petId = searchParams.get('pet_id');
 
     // Build the query with proper joins
     let query = supabase
@@ -71,6 +72,10 @@ export async function GET(request: NextRequest) {
 
     if (veterinarian) {
       query = query.eq('veterinarian_id', veterinarian);
+    }
+
+    if (petId) {
+      query = query.eq('pet_id', petId);
     }
 
     if (search) {

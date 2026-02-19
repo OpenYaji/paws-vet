@@ -14,7 +14,8 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Loader2, X } from 'lucide-react';
+import { Plus, Search, Loader2, X, Calendar } from 'lucide-react';
+import { format } from 'date-fns';
 
 interface IssuePrescriptionProps {
   onPrescriptionIssued: () => void;
@@ -29,6 +30,9 @@ export default function IssuePrescription({ onPrescriptionIssued }: IssuePrescri
   const [searchResults, setSearchResults] = useState<any[]>([]);
 
   const [selectedPet, setSelectedPet] = useState<any>(null);
+  const [selectedMedicalRecord, setSelectedMedicalRecord] = useState<any>(null);
+  const [medicalRecords, setMedicalRecords] = useState<any[]>([]);
+  const [loadingRecords, setLoadingRecords] = useState(false);
 
   const [formData, setFormData] = useState({
     medication_name: '',
@@ -68,15 +72,52 @@ export default function IssuePrescription({ onPrescriptionIssued }: IssuePrescri
     return () => clearTimeout(timer);
   }, [petSearch]);
 
+  // Fetch medical records when pet is selected
+  useEffect(() => {
+    const fetchMedicalRecords = async () => {
+      if (!selectedPet) {
+        setMedicalRecords([]);
+        setSelectedMedicalRecord(null);
+        return;
+      }
+
+      setLoadingRecords(true);
+      try {
+        const res = await fetch(`/api/medical-records?pet_id=${selectedPet.id}`);
+        const data = await res.json();
+        
+        if (Array.isArray(data)) {
+          setMedicalRecords(data);
+          
+          // Auto-select if only one medical record exists
+          if (data.length === 1) {
+            setSelectedMedicalRecord(data[0]);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch medical records", error);
+      } finally {
+        setLoadingRecords(false);
+      }
+    };
+
+    fetchMedicalRecords();
+  }, [selectedPet]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedPet) return;
+    if (!selectedPet || !selectedMedicalRecord) {
+      alert('Please select both a patient and a medical record.');
+      return;
+    }
 
     setIsSaving(true);
     try {
       const payload = {
-        pet_id: selectedPet.id,
-        ...formData
+        medical_record_id: selectedMedicalRecord.id,
+        prescribed_by: selectedMedicalRecord.veterinarian_id,
+        ...formData,
+        instructions: formData.notes // Map notes to instructions as API expects
       };
 
       const res = await fetch('/api/prescriptions', {
@@ -105,6 +146,8 @@ export default function IssuePrescription({ onPrescriptionIssued }: IssuePrescri
 
   const resetForm = () => {
     setSelectedPet(null);
+    setSelectedMedicalRecord(null);
+    setMedicalRecords([]);
     setPetSearch('');
     setFormData({
       medication_name: '',
@@ -202,6 +245,51 @@ export default function IssuePrescription({ onPrescriptionIssued }: IssuePrescri
             )}
           </div>
 
+          {/* --- Medical Record Selection (Only show if pet is selected) --- */}
+          {selectedPet && (
+            <div className="space-y-2">
+              <Label>Select Medical Record / Visit</Label>
+              {loadingRecords ? (
+                <div className="flex items-center justify-center p-4 border rounded-md bg-muted/50">
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  <span className="text-sm text-muted-foreground">Loading medical records...</span>
+                </div>
+              ) : medicalRecords.length === 0 ? (
+                <div className="p-4 border border-dashed rounded-md bg-amber-50 border-amber-200">
+                  <p className="text-sm text-amber-800">
+                    No medical records found for this patient. Prescriptions must be linked to a completed consultation with a medical record.
+                  </p>
+                </div>
+              ) : (
+                <Select 
+                  value={selectedMedicalRecord?.id?.toString()} 
+                  onValueChange={(val) => {
+                    const record = medicalRecords.find(r => r.id.toString() === val);
+                    setSelectedMedicalRecord(record);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select medical record..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {medicalRecords.map((record) => (
+                      <SelectItem key={record.id} value={record.id.toString()}>
+                        <div className="flex flex-col">
+                          <span className="font-medium">
+                            {format(new Date(record.visit_date || record.created_at), 'MMM dd, yyyy')}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {record.chief_complaint || 'General Consultation'} • {record.record_number}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          )}
+
           {/* --- Form Fields --- */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -259,7 +347,11 @@ export default function IssuePrescription({ onPrescriptionIssued }: IssuePrescri
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
-            <Button type="submit" disabled={isSaving || !selectedPet} className="bg-green-600 hover:bg-green-700">
+            <Button 
+              type="submit" 
+              disabled={isSaving || !selectedPet || !selectedMedicalRecord} 
+              className="bg-green-600 hover:bg-green-700"
+            >
               {isSaving ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Issuing...
