@@ -64,6 +64,7 @@ export async function GET(request: NextRequest) {
           phone
         )
       `)
+      .neq('is_archived', true) // Not equal to true to exclude archived pets
       .order('name', { ascending: true });
     
     if (targetClientId) {
@@ -141,15 +142,48 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    const cookieStore = await cookies();
+    
+    const authClient = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() { return cookieStore.getAll(); },
+          setAll(cookiesToSet) {
+             try {
+               cookiesToSet.forEach(({ name, value, options }) => 
+                 cookieStore.set(name, value, options)
+               )
+             } catch {}
+          },
+        },
+      }
+    );
+
+    // Get the authenticated user
+    const { data: { user }, error: authError } = await authClient.auth.getUser();
+
+    // Allow only veterinarians to update pet records
+    if (authError || !user || user.user_metadata.role !== 'veterinarian') {
+      return NextResponse.json(
+        { error: 'Unauthorized: Access restricted to Veterinarians.' }, 
+        { status: 401 }
+      );
+    }
+
     const searchParams = new URL(request.url).searchParams;
     const id = searchParams.get('id');
 
     if (!id) return NextResponse.json({ error: 'Pet ID is required' }, { status: 400 });
 
-    const { error } = await supabase.from('pets').delete().eq('id', id);
+    const { error } = await supabase
+    .from('pets')
+    .update({ archived: true })
+    .eq('id', id);
 
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-    return NextResponse.json({ message: 'Pet deleted successfully' }, { status: 200 });
+    return NextResponse.json({ message: 'Pet archived successfully' }, { status: 200 });
   } catch (err: any) {
     return NextResponse.json({ error: 'Internal server error: ' + err.message }, { status: 500 });
   }
@@ -157,6 +191,37 @@ export async function DELETE(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
+    // Authenticate user and ensure they are a veterinarian
+    const cookieStore = await cookies();
+    
+    const authClient = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() { return cookieStore.getAll(); },
+          setAll(cookiesToSet) {
+             try {
+               cookiesToSet.forEach(({ name, value, options }) => 
+                 cookieStore.set(name, value, options)
+               )
+             } catch {}
+          },
+        },
+      }
+    );
+
+    // Get the authenticated user
+    const { data: { user }, error: authError } = await authClient.auth.getUser();
+
+    // Allow only veterinarians to update pet records
+    if (authError || !user || user.user_metadata.role !== 'veterinarian') {
+      return NextResponse.json(
+        { error: 'Unauthorized: Access restricted to Veterinarians.' }, 
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const searchParams = new URL(request.url).searchParams;
     let id = searchParams.get('id') || body.id;
