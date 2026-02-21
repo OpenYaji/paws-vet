@@ -182,11 +182,6 @@ export default function AppointmentsPage() {
     setActionType('triage');
 
     const checkInTime = new Date().toISOString();
-    console.log('=== CHECKING IN PATIENT ===');
-    console.log('Appointment ID:', selectedAppt.id);
-    console.log('Pet Name:', selectedAppt.pet?.name);
-    console.log('Check-in time:', checkInTime);
-    console.log('Current status:', selectedAppt.appointment_status);
 
     try{
       // Use API endpoint to bypass RLS issues
@@ -371,22 +366,6 @@ export default function AppointmentsPage() {
                    disabled={isProcessing}
                  >
                    Close
-                 </Button>
-                 
-                 <Button 
-                   className="bg-blue-600 hover:bg-blue-700"
-                   onClick={() => handleReschedule()}
-                   disabled={isProcessing}
-                 >
-                   {isProcessing && actionType === 'reschedule' ? 'Rescheduling...' : 'Reschedule'}
-                 </Button>
-
-                 <Button 
-                   className="bg-red-600 hover:bg-red-700" 
-                   onClick={handleNoShow}
-                   disabled={isProcessing}
-                 >
-                   {isProcessing && actionType === 'noshow' ? 'Processing...' : 'Mark No-Show'}
                  </Button>
 
                  <Button 
