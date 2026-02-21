@@ -39,7 +39,6 @@ export default function AddNewPet({ onPetAdded }: AddNewPetProps) {
     breed: '',
     color: '',
     weight: '',
-    owner_id: '',
     photo_url: '',
   });
 
@@ -73,8 +72,8 @@ export default function AddNewPet({ onPetAdded }: AddNewPetProps) {
     setIsSaving(true);
 
     try {
-      if (!newPet.name || !newPet.owner_id || !newPet.species) {
-        alert("Please fill in Name, Species, and Owner ID");
+      if (!newPet.name || !newPet.species) {
+        alert("Please fill in Name and Species");
         setIsSaving(false);
         return;
       }
@@ -109,7 +108,6 @@ export default function AddNewPet({ onPetAdded }: AddNewPetProps) {
           breed: newPet.breed,
           color: newPet.color,
           weight: newPet.weight,
-          owner_id: newPet.owner_id,
           photo_url: uploadedImageUrl,
         }),
       });
@@ -123,7 +121,7 @@ export default function AddNewPet({ onPetAdded }: AddNewPetProps) {
       // 3. Success
       onPetAdded(); // Notify parent to refresh list
       setIsAddOpen(false);
-      setNewPet({ name: '', species: '', breed: '', color: '', weight: '', owner_id: '', photo_url: '' });
+      setNewPet({ name: '', species: '', breed: '', color: '', weight: '', photo_url: '' });
       setSelectedImageFile(null);
       setImagePreviewUrl(null);
 
@@ -239,19 +237,6 @@ export default function AddNewPet({ onPetAdded }: AddNewPetProps) {
                 onChange={(e) => setNewPet({ ...newPet, weight: e.target.value })}
               />
             </div>
-          </div>
-
-          {/* Owner ID */}
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="owner" className="text-right">Owner ID</Label>
-            <Input
-              id="owner"
-              placeholder="UUID"
-              value={newPet.owner_id}
-              onChange={(e) => setNewPet({ ...newPet, owner_id: e.target.value })}
-              className="col-span-3"
-              required
-            />
           </div>
 
           <DialogFooter>
