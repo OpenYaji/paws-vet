@@ -4,10 +4,12 @@ import { NextRequest, NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+// Get Supabase Client as an Admin for server-side operations
 function getSupabaseClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
+  // Ensure environment variables are set
   if (!supabaseUrl || !supabaseKey) {
     throw new Error('Missing Supabase environment variables');
   }
@@ -17,9 +19,11 @@ function getSupabaseClient() {
 
 export async function GET(request: NextRequest) {
   try {
+    // Log incoming query parameters for debugging
     const supabase = getSupabaseClient();
     const { searchParams } = new URL(request.url);
     
+    // Extract query parameters with logging
     const status = searchParams.get('status');
     const date = searchParams.get('date');
     const veterinarian = searchParams.get('veterinarian');
@@ -59,6 +63,7 @@ export async function GET(request: NextRequest) {
       query = query.eq('appointment_status', status);
     }
 
+    //Check if there is a date
     if (date) {
       const startOfDay = new Date(date);
       startOfDay.setHours(0, 0, 0, 0);
@@ -70,20 +75,25 @@ export async function GET(request: NextRequest) {
         .lte('scheduled_start', endOfDay.toISOString());
     }
 
+    // Check if there is a veterinarian filter
     if (veterinarian) {
       query = query.eq('veterinarian_id', veterinarian);
     }
 
+    // Check if there is a pet_id filter
     if (petId) {
       query = query.eq('pet_id', petId);
     }
 
+    // Apply search filter across multiple fields
     if (search) {
       query = query.or(`appointment_number.ilike.%${search}%,reason_for_visit.ilike.%${search}%`);
     }
 
+    // Log the final query for debugging
     const { data, error } = await query;
 
+    // Check for errors and log them
     if (error) {
       console.error('Supabase error:', error);
       return NextResponse.json({ 
@@ -118,6 +128,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    //Initialize Supabase client and parse request body
     const supabase = getSupabaseClient();
     const body = await request.json();
 
