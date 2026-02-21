@@ -11,12 +11,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, Eye, Edit, FileText } from 'lucide-react';
+import {
+  Search,
+  Eye,
+  Edit,
+  FileText,
+  Trash2
+} from 'lucide-react';
 import Link from 'next/link';
 import AddNewPet from '@/components/veterinarian/pets/add-new-pet';
 import useSWR, { mutate } from 'swr';
 
-// 1. Define Fetcher (Keep this outside or import it)
+// Define Fetcher (Keep this outside or import it)
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 interface Pet {
@@ -39,17 +45,91 @@ interface Pet {
 }
 
 export default function PatientsPage() {
-  // 2. FIX: Use the URL as the key for SWR
+  // FIX: Use the URL as the key for SWR
   // The 'data' will be undefined initially, so we default to [] to prevent crashes
   const { data: pets = [], isLoading } = useSWR('/api/pets', fetcher, {
     revalidateOnFocus: false,
   });
 
+  // State for search, filters, and sorting
   const [searchTerm, setSearchTerm] = useState('');
   const [speciesFilter, setSpeciesFilter] = useState('all');
   const [sortBy, setSortBy] = useState('name');
+  const [sortByColor, setSortByColor] = useState('default');
 
-  // 3. Logic safe to run now that pets defaults to []
+  //Toast notifications for actions like adding, editing, or deleting pets can be implemented here using a library like react-toastify or your custom toast component.
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    // Implement your toast logic here
+    console.log(`${type.toUpperCase()}: ${message}`);
+  };
+
+  // Delete pet function
+  const handleArchivePet = async (petId: string) => {
+    if (!confirm('Are you sure you want to archive this pet? This action cannot be undone.')) {
+      return;
+    }
+
+    // Hide the pet from the UI
+    mutate('/api/pets', (currentPets: any[] | undefined) => {
+      return currentPets ? currentPets.filter(pet => pet.id !== petId) : [];
+    }, false)
+
+    try{
+      // Use PATCH call to archive the pet
+      const response = await fetch(`/api/pets/${petId}`, {
+        method: 'PATCH',
+        headers:{
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ is_archived: true })
+      });
+
+      // Check if the response is successful
+      if (response.ok) {
+        showToast('Pet archived successfully');
+        mutate('/api/pets'); // Refresh the pet list after deletion
+      }
+      else{
+        // Throw new error when 400 and 500
+        const errorData = await response.json();
+        console.error('Archive failed with status:', response.status, errorData); // Debug logging
+        throw new Error(errorData.error || errorData.message || 'Failed to delete pet');
+      }
+    }
+    catch(error){
+      console.error('Error deleting pet:', error);
+      showToast('Failed to delete pet. Please try again.', 'error');
+    }
+  };
+
+  // Update the Pet's Information
+  const handleUpdatePet = async(petId: string, updatedData: Partial<Pet>) => {
+    try{
+      // Use PATCH call to update the pet
+      const response = await fetch(`/api/pets/${petId}`, {
+        method: 'PATCH',
+        headers:{
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updatedData)
+      });
+
+      if (response.ok) {
+        showToast('Pet updated successfully');
+        mutate('/api/pets'); // Refresh the pet list after update
+      }
+      else{
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to update pet');
+      }
+    }
+    catch(error: any){
+      console.error('Error updating pet:', error);
+      showToast(`Failed to update pet: ${error.message}`, 'error');
+    }
+  };
+  
+  // Logic safe to run now that pets defaults to []
   const petsArray = Array.isArray(pets) ? pets : [];
   const filteredPets = petsArray
     .filter((pet: Pet) => {
@@ -94,7 +174,7 @@ export default function PatientsPage() {
 
   // Refreshes the list manually (e.g. via the Refresh button or after adding a pet)
   const refreshData = () => {
-    mutate('/api/pets'); // FIX: Must match the key used in useSWR
+    mutate('/api/pets');
   };
 
   if (isLoading) {
@@ -310,24 +390,27 @@ export default function PatientsPage() {
 
                   {/* Actions */}
                   <div className="flex gap-2 justify-center md:justify-end">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      title="View Details"
-                      onClick={() => console.log('View details:', pet.id)}
-                    >
-                      <Link href={`/veterinarian/pets/${pet.id}`}>
+                    <Link href={`/veterinarian/pets/${pet.id}`}>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        title="View Details"
+                      >
                         <Eye className="h-4 w-4" />
-                      </Link>
-                    </Button>
+                      </Button>
+                    </Link>
+
                     <Button
                       variant="outline"
                       size="icon"
                       title="Edit Record"
-                      onClick={() => console.log('Edit record:', pet.id)}
+                      onClick={() => handleUpdatePet(pet.id, { 
+                        name: pet.name + ' (Edited)'
+                      })}
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
+                    
                     <Button
                       variant="outline"
                       size="icon"
@@ -335,6 +418,15 @@ export default function PatientsPage() {
                       onClick={() => console.log('View history:', pet.id)}
                     >
                       <FileText className="h-4 w-4" />
+                    </Button>
+                    
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      title="Archive Pet"
+                      onClick={() => handleArchivePet(pet.id)}
+                    >
+                        <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
