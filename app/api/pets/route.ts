@@ -35,25 +35,49 @@ export async function GET(request: NextRequest) {
       },
     );
 
+    // Token in the Headers
+    const authHeader = request.headers.get("Authorization");
+    const token = authHeader ? authHeader.replace('Bearer ', '') : null;
+
+    // Get the authenticated user
     const {
       data: { user },
       error: authError,
-    } = await authClient.auth.getUser();
+    } = token
+      ? await supabase.auth.getUser(token)
+      : await authClient.auth.getUser();
 
+    const userRole = user?.user_metadata?.role || user?.app_metadata?.role;
+
+    // Validate that the user is authenticated and has the veterinarian role
     if (authError || !user || user.user_metadata.role !== "veterinarian") {
+      //Debug Log
+      console.log("Auth Failed - User:", user, "Auth Error:", authError);
+
       return NextResponse.json(
-        { error: "Unauthorized: Access restricted to Veterinarians." },
+        { error: "Unauthorized: Access restricted, For Veterinarians only." },
         { status: 401 },
       );
     }
 
-    const searchParams = new URL(request.url).searchParams;
-    const targetClientId = searchParams.get("client_id");
+    // Apply pagination
+    const url = new URL(request.url);
+    const page = parseInt(url.searchParams.get("page") || "1");
+    const limit = parseInt(url.searchParams.get("limit") || "20");
 
-    let query = supabase
-      .from("pets")
-      .select(
-        `
+    // Calculate the range for pagination
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    try{
+      // Fetch pets with pagination and exclude archived pets
+      const {
+        data,
+        error,
+        count
+      } = await supabase
+      .from('pets')
+      .select(`
         id,
         owner_id,
         name,
@@ -63,32 +87,40 @@ export async function GET(request: NextRequest) {
         gender,
         weight,
         microchip_number,
+        photo_url,
+        is_spayed_neutered,
+        behavioral_notes,
+        special_needs,
+        current_medical_status,
         client_profiles (
           id,
           first_name,
           last_name,
           phone
         )
-      `,
-      )
+        `,
+        { count: 'exact' })
+      .range(from, to) // Only fetch the requested chunk of data
       .neq("is_archived", true) // Not equal to true to exclude archived pets
       .order("name", { ascending: true });
 
-    if (targetClientId) {
-      query = query.eq("owner_id", targetClientId);
+      if(error) throw error;
+
+      return NextResponse.json({
+        data: data,
+        total: count,
+        page: page,
+      });
+
+    } catch (error: any) {
+      return NextResponse.json({
+        error: "Internal Server Error: " + error.message,
+        console: "Error fetching pets: " + error.message,
+      });
     }
-
-    const { data, error } = await query;
-
-    if (error) {
-      console.error("Error fetching pets:", error);
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-
-    return NextResponse.json(data, { status: 200 });
   } catch (error: any) {
     return NextResponse.json(
-      { error: "Internal Server Error: " + error.message },
+      { error: "Internal server error: " + error.message },
       { status: 500 },
     );
   }
@@ -98,10 +130,8 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    console.log("POST /api/pets - body:", body);
-
     // Required Field Validations
-    if (!body.name || !body.owner_id || !body.species || !body.date_of_birth) {
+    if (!body.name || !body.species || !body.date_of_birth) {
       return NextResponse.json(
         {
           error:
@@ -125,7 +155,7 @@ export async function POST(request: NextRequest) {
       .from("pets")
       .insert([
         {
-          owner_id: body.owner_id,
+          owner_id: body.owner_id || null,
           name: body.name,
           species: body.species,
           breed: body.breed || null,
@@ -142,7 +172,17 @@ export async function POST(request: NextRequest) {
           is_active: true,
         },
       ])
-      .select()
+      .select(`
+        *,
+        client_profiles (
+          id,
+          first_name,
+          last_name,
+          phone,
+          email,
+          address_line1
+        )
+      `)
       .single();
 
     if (error) {
