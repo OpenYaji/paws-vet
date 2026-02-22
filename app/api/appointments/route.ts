@@ -1,17 +1,20 @@
-import { createClient } from '@supabase/supabase-js';
-import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from "@supabase/supabase-js";
+import { NextRequest, NextResponse } from "next/server";
+import { createClient as createSupabaseServerClient } from "@/utils/supabase/server";
 
-export const dynamic = 'force-dynamic';
-export const runtime = 'nodejs';
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 // Get Supabase Client as an Admin for server-side operations
 function getSupabaseClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const supabaseKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   // Ensure environment variables are set
   if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Missing Supabase environment variables');
+    throw new Error("Missing Supabase environment variables");
   }
 
   return createClient(supabaseUrl, supabaseKey);
@@ -22,18 +25,19 @@ export async function GET(request: NextRequest) {
     // Log incoming query parameters for debugging
     const supabase = getSupabaseClient();
     const { searchParams } = new URL(request.url);
-    
+
     // Extract query parameters with logging
-    const status = searchParams.get('status');
-    const date = searchParams.get('date');
-    const veterinarian = searchParams.get('veterinarian');
-    const search = searchParams.get('search');
-    const petId = searchParams.get('pet_id');
+    const status = searchParams.get("status");
+    const date = searchParams.get("date");
+    const veterinarian = searchParams.get("veterinarian");
+    const search = searchParams.get("search");
+    const petId = searchParams.get("pet_id");
 
     // Build the query with proper joins
     let query = supabase
-      .from('appointments')
-      .select(`
+      .from("appointments")
+      .select(
+        `
         *,
         pet:pets!appointments_pet_id_fkey(
           id,
@@ -55,12 +59,13 @@ export async function GET(request: NextRequest) {
           last_name,
           specializations
         )
-      `)
-      .order('scheduled_start', { ascending: false });
+      `,
+      )
+      .order("scheduled_start", { ascending: false });
 
     // Apply filters
-    if (status && status !== 'all') {
-      query = query.eq('appointment_status', status);
+    if (status && status !== "all") {
+      query = query.eq("appointment_status", status);
     }
 
     //Check if there is a date
@@ -69,25 +74,27 @@ export async function GET(request: NextRequest) {
       startOfDay.setHours(0, 0, 0, 0);
       const endOfDay = new Date(date);
       endOfDay.setHours(23, 59, 59, 999);
-      
+
       query = query
-        .gte('scheduled_start', startOfDay.toISOString())
-        .lte('scheduled_start', endOfDay.toISOString());
+        .gte("scheduled_start", startOfDay.toISOString())
+        .lte("scheduled_start", endOfDay.toISOString());
     }
 
     // Check if there is a veterinarian filter
     if (veterinarian) {
-      query = query.eq('veterinarian_id', veterinarian);
+      query = query.eq("veterinarian_id", veterinarian);
     }
 
     // Check if there is a pet_id filter
     if (petId) {
-      query = query.eq('pet_id', petId);
+      query = query.eq("pet_id", petId);
     }
 
     // Apply search filter across multiple fields
     if (search) {
-      query = query.or(`appointment_number.ilike.%${search}%,reason_for_visit.ilike.%${search}%`);
+      query = query.or(
+        `appointment_number.ilike.%${search}%,reason_for_visit.ilike.%${search}%`,
+      );
     }
 
     // Log the final query for debugging
@@ -95,12 +102,15 @@ export async function GET(request: NextRequest) {
 
     // Check for errors and log them
     if (error) {
-      console.error('Supabase error:', error);
-      return NextResponse.json({ 
-        error: error.message,
-        details: error.details || 'Query failed',
-        hint: error.hint || ''
-      }, { status: 400 });
+      console.error("Supabase error:", error);
+      return NextResponse.json(
+        {
+          error: error.message,
+          details: error.details || "Query failed",
+          hint: error.hint || "",
+        },
+        { status: 400 },
+      );
     }
 
     // Transform the data to flatten the nested client structure
@@ -112,17 +122,20 @@ export async function GET(request: NextRequest) {
         name: appointment.pet?.name,
         species: appointment.pet?.species,
         breed: appointment.pet?.breed,
-      }
+      },
     }));
 
-    console.log('Fetched appointments:', transformedData.length);
+    console.log("Fetched appointments:", transformedData.length);
     return NextResponse.json(transformedData);
   } catch (error: any) {
-    console.error('Server error:', error);
-    return NextResponse.json({ 
-      error: 'Internal server error',
-      details: error.message || 'Unknown error'
-    }, { status: 500 });
+    console.error("Server error:", error);
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        details: error.message || "Unknown error",
+      },
+      { status: 500 },
+    );
   }
 }
 
@@ -132,28 +145,34 @@ export async function POST(request: NextRequest) {
     const supabase = getSupabaseClient();
     const body = await request.json();
 
-    console.log('Received appointment data:', body);
+    console.log("Received appointment data:", body);
 
     // Validate required fields
     if (!body.pet_id || !body.scheduled_start || !body.scheduled_end) {
-      console.error('Missing required fields:', { 
-        pet_id: body.pet_id, 
-        scheduled_start: body.scheduled_start, 
-        scheduled_end: body.scheduled_end 
+      console.error("Missing required fields:", {
+        pet_id: body.pet_id,
+        scheduled_start: body.scheduled_start,
+        scheduled_end: body.scheduled_end,
       });
-      return NextResponse.json({ 
-        error: 'Missing required fields',
-        details: 'pet_id, scheduled_start, and scheduled_end are required' 
-      }, { status: 400 });
+      return NextResponse.json(
+        {
+          error: "Missing required fields",
+          details: "pet_id, scheduled_start, and scheduled_end are required",
+        },
+        { status: 400 },
+      );
     }
 
     // Get the current user from auth header
-    const authHeader = request.headers.get('authorization');
+    const authHeader = request.headers.get("authorization");
     let bookedBy = body.booked_by;
 
     if (authHeader) {
-      const token = authHeader.replace('Bearer ', '');
-      const { data: { user }, error } = await supabase.auth.getUser(token);
+      const token = authHeader.replace("Bearer ", "");
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser(token);
       if (user) {
         bookedBy = user.id;
       }
@@ -168,11 +187,14 @@ export async function POST(request: NextRequest) {
       try {
         veterinarianId = await getDefaultVeterinarian(supabase);
       } catch (error) {
-        console.error('No veterinarian available:', error);
-        return NextResponse.json({ 
-          error: 'No veterinarian available',
-          details: 'Please contact the clinic to schedule an appointment' 
-        }, { status: 400 });
+        console.error("No veterinarian available:", error);
+        return NextResponse.json(
+          {
+            error: "No veterinarian available",
+            details: "Please contact the clinic to schedule an appointment",
+          },
+          { status: 400 },
+        );
       }
     }
 
@@ -182,147 +204,176 @@ export async function POST(request: NextRequest) {
       pet_id: body.pet_id,
       veterinarian_id: veterinarianId,
       booked_by: bookedBy,
-      appointment_type: body.appointment_type || 'consultation',
-      appointment_status: body.appointment_status || 'pending',
+      appointment_type: body.appointment_type || "consultation",
+      appointment_status: body.appointment_status || "pending",
       scheduled_start: body.scheduled_start,
       scheduled_end: body.scheduled_end,
-      reason_for_visit: body.reason_for_visit || 'General appointment',
+      reason_for_visit: body.reason_for_visit || "General appointment",
       special_instructions: body.special_instructions || null,
       is_emergency: body.is_emergency || false,
     };
 
-    console.log('Creating appointment with data:', appointmentData);
+    console.log("Creating appointment with data:", appointmentData);
 
     const { data, error } = await supabase
-      .from('appointments')
-      .insert([appointmentData])
-      .select(`
+      .from("appointments")
+      .insert([appointmentData]).select(`
         *,
         pet:pets(id, name, species, breed, owner_id),
         veterinarian:veterinarian_profiles(id, first_name, last_name)
       `);
 
     if (error) {
-      console.error('Database error creating appointment:', error);
-      return NextResponse.json({ 
-        error: error.message,
-        details: error.details || 'Database constraint violation',
-        hint: error.hint || ''
-      }, { status: 400 });
+      console.error("Database error creating appointment:", error);
+      return NextResponse.json(
+        {
+          error: error.message,
+          details: error.details || "Database constraint violation",
+          hint: error.hint || "",
+        },
+        { status: 400 },
+      );
     }
 
     if (!data || data.length === 0) {
-      console.error('No data returned after insert');
-      return NextResponse.json({ 
-        error: 'Failed to create appointment',
-        details: 'No data returned from database' 
-      }, { status: 500 });
+      console.error("No data returned after insert");
+      return NextResponse.json(
+        {
+          error: "Failed to create appointment",
+          details: "No data returned from database",
+        },
+        { status: 500 },
+      );
     }
 
-    console.log('Appointment created successfully:', data[0]);
+    console.log("Appointment created successfully:", data[0]);
     return NextResponse.json(data[0], { status: 201 });
   } catch (error: any) {
-    console.error('Server error creating appointment:', error);
-    return NextResponse.json({ 
-      error: 'Internal server error',
-      details: error.message || 'Unknown error occurred'
-    }, { status: 500 });
+    console.error("Server error creating appointment:", error);
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        details: error.message || "Unknown error occurred",
+      },
+      { status: 500 },
+    );
   }
 }
 
 // Helper function to get a default veterinarian
 async function getDefaultVeterinarian(supabase: any): Promise<string> {
   const { data, error } = await supabase
-    .from('veterinarian_profiles')
-    .select('id')
-    .eq('employment_status', 'full_time')
+    .from("veterinarian_profiles")
+    .select("id")
+    .eq("employment_status", "full_time")
     .limit(1)
     .single();
-  
+
   if (error || !data) {
     // Try without employment status filter
     const { data: anyVet, error: anyError } = await supabase
-      .from('veterinarian_profiles')
-      .select('id')
+      .from("veterinarian_profiles")
+      .select("id")
       .limit(1)
       .single();
-    
+
     if (anyError || !anyVet) {
-      throw new Error('No veterinarian available');
+      throw new Error("No veterinarian available");
     }
-    
+
     return anyVet.id;
   }
-  
+
   return data.id;
 }
 
 export async function PATCH(request: NextRequest) {
   try {
-    const supabase = getSupabaseClient();
+    const supabase = await createSupabaseServerClient();
+
+    // Get the current user
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 },
+      );
+    }
+
     const body = await request.json();
 
-    console.log('=== PATCH /api/appointments ===');
-    console.log('Update request body:', body);
-    console.log('Appointment ID:', body.id);
-    console.log('Updates:', { 
-      appointment_status: body.appointment_status, 
-      checked_in_at: body.checked_in_at,
-      scheduled_start: body.scheduled_start,
-      scheduled_end: body.scheduled_end
-    });
-
     if (!body.id) {
-      return NextResponse.json({ 
-        error: 'Missing appointment ID' 
-      }, { status: 400 });
+      return NextResponse.json(
+        {
+          error: "Missing appointment ID",
+        },
+        { status: 400 },
+      );
     }
 
     // First, fetch the current appointment to log it
     const { data: current } = await supabase
-      .from('appointments')
-      .select('id, appointment_status, checked_in_at, scheduled_start')
-      .eq('id', body.id)
+      .from("appointments")
+      .select("id, appointment_status, checked_in_at, scheduled_start")
+      .eq("id", body.id)
       .single();
-    
-    console.log('Current appointment state:', current);
+
+    console.log("Current appointment state:", current);
 
     // Remove id from update payload
     const { id, ...updateData } = body;
 
     // Perform the update
     const { data, error } = await supabase
-      .from('appointments')
+      .from("appointments")
       .update(updateData)
-      .eq('id', id)
+      .eq("id", id)
       .select();
 
     if (error) {
-      console.error('Update failed:', error);
-      return NextResponse.json({ 
-        error: error.message,
-        details: error.details || 'Update failed',
-        hint: error.hint || ''
-      }, { status: 400 });
+      console.error("Update failed:", error);
+      return NextResponse.json(
+        {
+          error: error.message,
+          details: error.details || "Update failed",
+          hint: error.hint || "",
+        },
+        { status: 400 },
+      );
     }
 
     if (!data || data.length === 0) {
-      console.error('No appointment found with ID:', id);
-      return NextResponse.json({ 
-        error: 'Appointment not found' 
-      }, { status: 404 });
+      console.error("No appointment found with ID:", id);
+      return NextResponse.json(
+        {
+          error: "Appointment not found",
+        },
+        { status: 404 },
+      );
     }
 
-    console.log('Update successful! New state:', data[0]);
-    console.log('Status changed from', current?.appointment_status, 'to', data[0].appointment_status);
-    console.log('Checked in at:', data[0].checked_in_at);
+    console.log("Update successful! New state:", data[0]);
+    console.log(
+      "Status changed from",
+      current?.appointment_status,
+      "to",
+      data[0].appointment_status,
+    );
+    console.log("Checked in at:", data[0].checked_in_at);
 
     return NextResponse.json(data[0]);
   } catch (error: any) {
-    console.error('Server error updating appointment:', error);
-    return NextResponse.json({ 
-      error: 'Internal server error',
-      details: error.message || 'Unknown error occurred'
-    }, { status: 500 });
+    console.error("Server error updating appointment:", error);
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        details: error.message || "Unknown error occurred",
+      },
+      { status: 500 },
+    );
   }
 }
