@@ -1,4 +1,4 @@
-import { createBrowserClient } from '@supabase/ssr';
+import { createBrowserClient } from "@supabase/ssr";
 
 export const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -8,12 +8,20 @@ export const supabase = createBrowserClient(
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
-      flowType: 'pkce',
+      flowType: "pkce",
     },
-  }
+  },
 );
 
-export async function signUp(email: string, password: string, userData: { name: string; role: 'pet_owner' | 'veterinarian' | 'admin'; clinic_id?: string }) {
+export async function signUp(
+  email: string,
+  password: string,
+  userData: {
+    name: string;
+    role: "pet_owner" | "veterinarian" | "admin";
+    clinic_id?: string;
+  },
+) {
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
@@ -39,8 +47,13 @@ export async function signOut() {
   return { error };
 }
 
-export async function getCurrentUser() {
-  const { data, error } = await supabase.auth.getUser();
+export async function getCurrentUser(supabase: any, id: string) {
+  const { data, error } = await supabase
+    .from("users")
+    .select("*")
+    .eq("id", id)
+    .single();
+
   return { data, error };
 }
 

@@ -2,7 +2,7 @@
 
 import { useSWRConfig } from 'swr';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import useSWR from 'swr';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,6 +17,7 @@ import Link from 'next/link';
 import { createClient } from '@/utils/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
+// Simple fetcher function for SWR
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export default function AppointmentsPage() {
@@ -31,7 +32,55 @@ export default function AppointmentsPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [actionType, setActionType] = useState<'noshow' | 'reschedule' | 'triage' | null>(null);
 
+  // Auto-check for no-shows when page loads and periodically
+  useEffect(() => {
+    const checkNoShows = async () => {
+      try {
+        console.log('Checking for missed appointments...');
+        const response = await fetch('/api/appointments/check-no-shows', {
+          method: 'POST',
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          console.log('No-show check result:', result);
+          
+          // If any appointments were updated, refresh the list
+          if (result.updated && result.updated > 0) {
+            console.log(`Auto-marked ${result.updated} appointment(s) as no-show`);
+            mutate('/api/appointments');
+            
+            // Optional: Show toast notification
+            toast({
+              title: "Appointments Updated",
+              description: `${result.updated} appointment(s) automatically marked as no-show`,
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error checking for no-shows:', error);
+        // Silently fail - don't show error to user as this is a background task
+      }
+    };
+
+    // Run check on mount
+    checkNoShows();
+
+    // Set up interval to check periodically (every 5 minutes)
+    const interval = setInterval(checkNoShows, 5 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [mutate, toast]);
+
   const appointmentDates = appointments.map((app: any) => parseISO(app.scheduled_start));
+
+  // Helper function to get access token for server-side API calls (if needed)
+  async function getAccessToken() {
+    const { data } = await supabase.auth.getSession();
+    const token = data?.session?.access_token;
+    if(!token) throw new Error("No access token found");
+    return token;
+  }
 
   const selectedDateAppointments = appointments.filter((app: any) => {
     if (!date) return false;
@@ -182,11 +231,6 @@ export default function AppointmentsPage() {
     setActionType('triage');
 
     const checkInTime = new Date().toISOString();
-    console.log('=== CHECKING IN PATIENT ===');
-    console.log('Appointment ID:', selectedAppt.id);
-    console.log('Pet Name:', selectedAppt.pet?.name);
-    console.log('Check-in time:', checkInTime);
-    console.log('Current status:', selectedAppt.appointment_status);
 
     try{
       // Use API endpoint to bypass RLS issues
@@ -371,22 +415,6 @@ export default function AppointmentsPage() {
                    disabled={isProcessing}
                  >
                    Close
-                 </Button>
-                 
-                 <Button 
-                   className="bg-blue-600 hover:bg-blue-700"
-                   onClick={() => handleReschedule()}
-                   disabled={isProcessing}
-                 >
-                   {isProcessing && actionType === 'reschedule' ? 'Rescheduling...' : 'Reschedule'}
-                 </Button>
-
-                 <Button 
-                   className="bg-red-600 hover:bg-red-700" 
-                   onClick={handleNoShow}
-                   disabled={isProcessing}
-                 >
-                   {isProcessing && actionType === 'noshow' ? 'Processing...' : 'Mark No-Show'}
                  </Button>
 
                  <Button 
