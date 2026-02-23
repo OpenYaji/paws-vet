@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { 
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter 
 } from "@/components/ui/dialog";
-import { Clock, Calendar as CalendarIcon, User, FileText, MapPin, Eye } from 'lucide-react';
+import { Clock, Calendar as CalendarIcon, User, FileText, MapPin, Eye, FileBarChart } from 'lucide-react';
 import { format, isSameDay, parseISO } from 'date-fns';
 import Link from 'next/link';
 import { createClient } from '@/utils/supabase/client';
@@ -31,6 +31,12 @@ export default function AppointmentsPage() {
   const [selectedAppt, setSelectedAppt] = useState<any>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [actionType, setActionType] = useState<'noshow' | 'reschedule' | 'triage' | null>(null);
+  
+  // Report state
+  const [showReportDialog, setShowReportDialog] = useState(false);
+  const [reportDate, setReportDate] = useState<Date | undefined>(new Date());
+  const [reportData, setReportData] = useState<any>(null);
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
   // Auto-check for no-shows when page loads and periodically
   useEffect(() => {
@@ -281,11 +287,72 @@ export default function AppointmentsPage() {
     }
   }
 
+  const handleGenerateReport = async () => {
+    if (!reportDate) {
+      toast({
+        title: "Error",
+        description: "Please select a date for the report",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsGeneratingReport(true);
+    try {
+      const formattedDate = format(reportDate, 'yyyy-MM-dd');
+      const response = await fetch(`/api/appointments/appointment-reports?date=${formattedDate}`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to generate report');
+      }
+
+      const data = await response.json();
+      setReportData(data);
+      
+      toast({
+        title: "Success",
+        description: "Report generated successfully",
+      });
+    } catch (error: any) {
+      console.error('Error generating report:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to generate report",
+        variant: "destructive"
+      });
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  };
+
+  const downloadReportAsJSON = () => {
+    if (!reportData) return;
+    
+    const dataStr = JSON.stringify(reportData, null, 2);
+    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+    const exportFileDefaultName = `appointment-report-${format(reportDate || new Date(), 'yyyy-MM-dd')}.json`;
+    
+    const linkElement = document.createElement('a');
+    linkElement.setAttribute('href', dataUri);
+    linkElement.setAttribute('download', exportFileDefaultName);
+    linkElement.click();
+  };
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto p-6">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">My Schedule</h1>
-        <p className="text-muted-foreground">Manage your patient appointments</p>
+      <div className="flex justify-between items-start">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">My Schedule</h1>
+          <p className="text-muted-foreground">Manage your patient appointments</p>
+        </div>
+        <Button 
+          variant="outline" 
+          className="gap-2"
+          onClick={() => setShowReportDialog(true)}
+        >
+          <FileBarChart className="h-4 w-4" />
+          Generate Report
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
@@ -427,6 +494,203 @@ export default function AppointmentsPage() {
                </DialogFooter>
              </>
            )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Report Dialog */}
+      <Dialog open={showReportDialog} onOpenChange={setShowReportDialog}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Generate Appointment Report</DialogTitle>
+            <DialogDescription>
+              Select a date to generate a weekly report (Sunday to Saturday)
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Select Date</label>
+              <div className="flex justify-center border rounded-md p-4">
+                <Calendar
+                  mode="single"
+                  selected={reportDate}
+                  onSelect={setReportDate}
+                  className="rounded-md"
+                />
+              </div>
+              {reportDate && (
+                <p className="text-sm text-muted-foreground text-center">
+                  Report will cover the week containing {format(reportDate, 'MMMM do, yyyy')}
+                </p>
+              )}
+            </div>
+
+            {!reportData ? (
+              <div className="flex justify-center">
+                <Button 
+                  onClick={handleGenerateReport}
+                  disabled={isGeneratingReport || !reportDate}
+                  className="gap-2"
+                >
+                  <FileBarChart className="h-4 w-4" />
+                  {isGeneratingReport ? 'Generating...' : 'Generate Report'}
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-semibold">Report Results</h3>
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={downloadReportAsJSON}
+                    >
+                      Download JSON
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        setReportData(null);
+                        setReportDate(new Date());
+                      }}
+                    >
+                      New Report
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  {/* Period */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm">Report Period</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm">
+                        {format(new Date(reportData.period.start), 'MMMM do, yyyy')} - {format(new Date(reportData.period.end), 'MMMM do, yyyy')}
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  {/* Total */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm">Total Appointments</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-3xl font-bold">{reportData.total_appointments}</p>
+                    </CardContent>
+                  </Card>
+
+                  {/* By Status */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm">By Status</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        {Object.entries(reportData.by_status).map(([status, count]) => (
+                          <div key={status} className="p-3 bg-muted rounded-lg">
+                            <p className="text-xs text-muted-foreground uppercase">{status}</p>
+                            <p className="text-2xl font-bold">{count as number}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* By Type */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm">By Type</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        {Object.entries(reportData.by_type).map(([type, count]) => (
+                          <div key={type} className="p-3 bg-muted rounded-lg">
+                            <p className="text-xs text-muted-foreground uppercase">{type}</p>
+                            <p className="text-2xl font-bold">{count as number}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* By Day */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm">By Day of Week</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        {Object.entries(reportData.by_day).map(([day, count]) => (
+                          <div key={day} className="flex justify-between items-center p-2 bg-muted rounded">
+                            <span className="text-sm font-medium">{day}</span>
+                            <Badge variant="secondary">{count as number}</Badge>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* By Veterinarian */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm">By Veterinarian</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        {Object.entries(reportData.by_veterinarian).map(([vet, count]) => (
+                          <div key={vet} className="flex justify-between items-center p-2 bg-muted rounded">
+                            <span className="text-sm font-medium">{vet}</span>
+                            <Badge variant="secondary">{count as number}</Badge>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Appointments List */}
+                  {reportData.appointments && reportData.appointments.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-sm">Appointments Included in Report</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-2 max-h-60 overflow-y-auto">
+                          {reportData.appointments.map((apt: any) => (
+                            <div key={apt.id} className="p-2 bg-muted rounded text-xs">
+                              <div className="flex justify-between">
+                                <span className="font-medium">ID: {apt.id}</span>
+                                <Badge variant="outline" className="text-xs">{apt.appointment_status}</Badge>
+                              </div>
+                              <div className="text-muted-foreground mt-1">
+                                {format(new Date(apt.scheduled_start), 'EEE, MMM do, yyyy h:mm a')} - {apt.appointment_type}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setShowReportDialog(false);
+                setReportData(null);
+              }}
+            >
+              Close
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
