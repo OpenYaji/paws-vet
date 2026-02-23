@@ -52,7 +52,7 @@ export default function ClientDashboardPage() {
 
         // Fetch pets using the API endpoint (bypasses RLS issues)
         try {
-          const petsResponse = await fetch(`/api/pets?client_id=${profile.id}`);
+          const petsResponse = await fetch(`/api/client/pets?client_id=${profile.id}`);
           
           if (!petsResponse.ok) {
             console.error('Failed to fetch pets:', petsResponse.status);

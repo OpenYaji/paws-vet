@@ -152,7 +152,7 @@ export default function ClientAppointmentsPage() {
     setLoading(true);
     try {
       console.log('Fetching pets for client:', clientId);
-      const response = await fetch(`/api/pets?client_id=${clientId}`);
+      const response = await fetch(`/api/client/pets?client_id=${clientId}`);
       
       if (!response.ok) {
         console.error('Failed to fetch pets:', response.status, response.statusText);
