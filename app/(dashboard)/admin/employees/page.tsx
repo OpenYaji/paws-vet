@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { StatCardSkeleton, Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@/components/ui/skeleton";
 import { BoringAvatar } from "@/components/ui/boring-avatar";
 import { Sparkline } from "@/components/ui/sparkline";
 import { TagInput } from "@/components/ui/tag-input";
@@ -21,12 +21,6 @@ const EMPLOYMENT_STATUS_OPTIONS = [
     { value: "part_time", label: "Part Time" },
     { value: "contract", label: "Contract" },
     { value: "intern", label: "Intern" },
-];
-
-const SPECIALIZATION_OPTIONS = [
-    "Surgery", "Dermatology", "Cardiology", "Dentistry", "Oncology",
-    "Ophthalmology", "Neurology", "Orthopedics", "Avian", "Exotic Animals",
-    "Internal Medicine", "Emergency Care", "Grooming", "Nutrition",
 ];
 
 const INITIAL_FORM: Record<string, any> = {
@@ -242,14 +236,6 @@ export default function EmployeesPage() {
 
     const clearFilters = () => { setSearch(""); setRoleFilter(""); setStatusFilter(""); setSpecFilter([]); };
 
-    const totalActive = employees.filter((e) => e.account_status === "active").length;
-    const totalAdmins = employees.filter((e) => e.role === "admin").length;
-    const totalVets = employees.filter((e) => e.role === "veterinarian").length;
-    const totalSuspended = employees.filter((e) => e.account_status === "suspended").length;
-
-    const adminPct = employees.length ? (totalAdmins / employees.length) * 100 : 0;
-    const vetPct = employees.length ? (totalVets / employees.length) * 100 : 0;
-
     const hasActiveFilters = search || roleFilter || statusFilter || specFilter.length > 0;
 
     const getStatusBadge = (emp: any) => {
@@ -306,57 +292,6 @@ export default function EmployeesPage() {
                 </div>
             </div>
 
-            {/* Stats row */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                {loading ? (
-                    <><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /></>
-                ) : (
-                    <>
-                        <div className="bg-card rounded-2xl border border-border p-5 flex items-center gap-5 md:col-span-2 lg:col-span-1">
-                            <div className="relative h-[72px] w-[72px] flex-shrink-0">
-                                <svg viewBox="0 0 36 36" className="h-full w-full -rotate-90">
-                                    <circle cx="18" cy="18" r="14" fill="none" className="stroke-muted" strokeWidth="4" />
-                                    <circle cx="18" cy="18" r="14" fill="none" className="stroke-primary" strokeWidth="4"
-                                        strokeDasharray={`${adminPct * 0.88} ${88 - adminPct * 0.88}`} strokeDashoffset="0" strokeLinecap="round" />
-                                    <circle cx="18" cy="18" r="14" fill="none" className="stroke-primary/50" strokeWidth="4"
-                                        strokeDasharray={`${vetPct * 0.88} ${88 - vetPct * 0.88}`} strokeDashoffset={`-${adminPct * 0.88}`} strokeLinecap="round" />
-                                </svg>
-                                <span className="absolute inset-0 flex items-center justify-center text-sm font-bold text-foreground">
-                                    {employees.length}
-                                </span>
-                            </div>
-                            <div className="min-w-0">
-                                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Team</p>
-                                <div className="flex items-center gap-2 text-xs text-foreground">
-                                    <span className="h-2 w-2 rounded-full bg-primary" /> Admin {totalAdmins}
-                                </div>
-                                <div className="flex items-center gap-2 text-xs text-foreground mt-1">
-                                    <span className="h-2 w-2 rounded-full bg-primary/50" /> Vets {totalVets}
-                                </div>
-                            </div>
-                        </div>
-
-                        <StatCard icon={
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                            </svg>
-                        } label="Active" value={totalActive} />
-
-                        <StatCard icon={
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                            </svg>
-                        } label="Veterinarians" value={totalVets} />
-
-                        <StatCard icon={
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
-                            </svg>
-                        } label="Suspended" value={totalSuspended} />
-                    </>
-                )}
-            </div>
-
             {/* Shift Roster View */}
             {showRoster && (
                 <div className="mb-6">
@@ -399,23 +334,6 @@ export default function EmployeesPage() {
                             Clear
                         </button>
                     )}
-                </div>
-
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Specializations:</span>
-                    {SPECIALIZATION_OPTIONS.map((spec) => (
-                        <button
-                            key={spec}
-                            onClick={() => setSpecFilter((prev) =>
-                                prev.includes(spec) ? prev.filter((s) => s !== spec) : [...prev, spec]
-                            )}
-                            className={`px-2.5 py-1 text-[11px] font-medium rounded-lg border transition
-                                ${specFilter.includes(spec)
-                                    ? "bg-primary/10 text-primary border-primary/30"
-                                    : "bg-card text-muted-foreground border-border hover:border-muted-foreground/30"}`}>
-                            {spec}
-                        </button>
-                    ))}
                 </div>
             </div>
 
@@ -736,8 +654,6 @@ export default function EmployeesPage() {
                                     {form.role === "veterinarian" && (
                                         <>
                                             <SectionLabel>Veterinarian Details</SectionLabel>
-
-                                            {/* License Management Section */}
                                             <div className="bg-muted/50 rounded-xl p-4 border border-border space-y-3">
                                                 <div className="flex items-center gap-2 mb-1">
                                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-muted-foreground" viewBox="0 0 20 20" fill="currentColor">
@@ -820,11 +736,11 @@ export default function EmployeesPage() {
                 </div>
             )}
 
-            {/* ========== DELETE / SUSPEND MODAL ========== */}
+            {/* ========== SUSPEND MODAL ========== */}
             {showDeleteModal && deleteTarget && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center">
                     <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowDeleteModal(false)} />
-                    <div className="relative bg-card rounded-2xl shadow-2xl w-full max-w-md mx-4 border border-border overflow-hidden">
+                    <div className="relative bg-card rounded-2xl shadow-2xl w-full max-md mx-4 border border-border overflow-hidden">
                         <div className="bg-destructive/10 px-6 py-5 flex items-center gap-4">
                             <div className="h-11 w-11 rounded-xl bg-card border border-destructive/20 flex items-center justify-center flex-shrink-0">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-destructive" viewBox="0 0 20 20" fill="currentColor">
@@ -860,20 +776,6 @@ export default function EmployeesPage() {
 }
 
 /* ==================== SUB-COMPONENTS ==================== */
-
-function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
-    return (
-        <div className="bg-card rounded-2xl border border-border p-5 flex items-center gap-4">
-            <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-                {icon}
-            </div>
-            <div>
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</p>
-                <p className="text-xl font-bold text-foreground mt-0.5">{value}</p>
-            </div>
-        </div>
-    );
-}
 
 function ActionBtn({ onClick, title, hoverColor, children }: { onClick: () => void; title: string; hoverColor: string; children: React.ReactNode }) {
     return (
