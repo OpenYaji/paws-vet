@@ -84,7 +84,7 @@ export default function POSPage() {
   const [selectedPet, setSelectedPet] = useState<string>('');
   const [notes, setNotes] = useState('');
   const [discount, setDiscount] = useState(0);
-  const [tax, setTax] = useState(12);
+  const [tax, setTax] = useState(0);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
