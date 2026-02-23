@@ -16,6 +16,7 @@ import {
   Receipt,
   Menu,
   IdCard,
+  Logs,
   ChartLine,
   X,
   ChartColumn,
@@ -70,6 +71,7 @@ const menuItems: MenuItem[] = [
     { name: 'Sales Report', icon: <ChartLine size={20} />, path: '/admin/sales-report' },
 
     { name: 'Employees', icon: <IdCard size={20} />, path: '/admin/employees' },
+    { name: 'Logs', icon: <Logs size={20} />, path: '/admin/logs' },
 
     { name: 'Settings', icon: <Settings size={20} />, path: '/admin/settings' },
     { name: 'Help Support', icon: <LifeBuoy size={20} />, path: '/admin/help' },
