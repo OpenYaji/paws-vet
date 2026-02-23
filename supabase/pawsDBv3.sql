@@ -248,6 +248,7 @@ CREATE TABLE public.notification_logs (
   error_message text,
   related_entity_type character varying,
   related_entity_id uuid,
+  is_read boolean DEFAULT false,
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT notification_logs_pkey PRIMARY KEY (id),
   CONSTRAINT notification_logs_recipient_id_fkey FOREIGN KEY (recipient_id) REFERENCES public.users(id)

@@ -7,44 +7,31 @@ import {
   Users,
   PawPrint,
   Calendar,
-  LayoutDashboard,
   Settings,
   Activity,
 } from 'lucide-react';
 
-// BUG FIX: useSearchParams must be inside a Suspense boundary in Next.js 13+.
-// Moved the nav logic into a child component wrapped in Suspense.
+// REMOVED: LayoutDashboard icon — no dashboard tab
+
 function ClientAdminNav() {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const currentTab = searchParams.get('tab') || 'clients';
-  // BUG FIX: was checking === '/client-admin' but the actual path in the
-  // (dashboard) route group is resolved differently. Check that it ends with
-  // 'client-admin' with no further segments.
   const isMainPage = /\/client-admin\/?$/.test(pathname);
 
   const handleTabClick = (tab: string) => {
     router.push(`/client-admin?tab=${tab}`);
   };
 
+  // REMOVED: Dashboard nav item — CMS-only interface
   const navItems = [
-    {
-      name: 'Dashboard',
-      value: 'dashboard',
-      icon: LayoutDashboard,
-      active: currentTab === 'dashboard' && isMainPage,
-    },
     {
       name: 'Clients',
       value: 'clients',
       icon: Users,
-      // BUG FIX: was always marking Clients as active on sub-pages, which
-      // caused all nav items to appear active simultaneously.
-      active: (currentTab === 'clients' || !isMainPage) && isMainPage
-        ? currentTab === 'clients'
-        : false,
+      active: currentTab === 'clients' && isMainPage,
     },
     {
       name: 'Pets',
@@ -62,7 +49,6 @@ function ClientAdminNav() {
 
   return (
     <>
-      {/* Top Navigation Bar */}
       <div className="nav-bar">
         <div className="nav-container">
           <div className="nav-inner">
@@ -71,10 +57,9 @@ function ClientAdminNav() {
                 <div className="brand-icon">
                   <PawPrint size={20} />
                 </div>
-                <span className="brand-name">PAWS <span className="brand-suffix">CMS</span></span>
+                <span className="brand-name">PawsVet <span className="brand-suffix">CMS</span></span>
               </Link>
 
-              {/* Tabs — only on main page */}
               {isMainPage && (
                 <nav className="nav-tabs">
                   {navItems.map((item) => {
@@ -94,11 +79,10 @@ function ClientAdminNav() {
               )}
             </div>
 
-            {/* Right side controls */}
             <div className="nav-right">
               <div className="status-dot" title="System online">
                 <Activity size={14} />
-                <span></span>
+                <span>Live</span>
               </div>
               <button className="icon-btn" aria-label="Settings">
                 <Settings size={18} />
@@ -108,7 +92,6 @@ function ClientAdminNav() {
         </div>
       </div>
 
-      {/* Mobile Navigation */}
       {isMainPage && (
         <div className="mobile-nav">
           <nav className="mobile-nav-inner">
@@ -180,7 +163,6 @@ export default function ClientAdminLayout({
           -webkit-font-smoothing: antialiased;
         }
 
-        /* ── NAV ── */
         .nav-bar {
           background: var(--navy);
           border-bottom: 1px solid var(--navy-700);
@@ -270,7 +252,6 @@ export default function ClientAdminLayout({
         }
         .icon-btn:hover { background: var(--navy-800); color: white; }
 
-        /* ── MOBILE NAV ── */
         .mobile-nav {
           background: var(--navy-800);
           border-bottom: 1px solid var(--navy-700);
@@ -298,12 +279,10 @@ export default function ClientAdminLayout({
         .mobile-tab:hover { background: var(--navy-700); color: white; }
         .mobile-tab--active { background: rgba(13,148,136,0.2); color: var(--teal-light); }
 
-        /* ── GLOBAL PAGE STYLES ── */
         main { min-height: calc(100vh - 60px); }
 
         .page { max-width: 1400px; margin: 0 auto; padding: 32px 24px; }
 
-        /* ── CARDS ── */
         .card {
           background: white;
           border: 1px solid var(--border);
@@ -318,7 +297,6 @@ export default function ClientAdminLayout({
         .card-body { padding: 24px; }
         .card-title { font-size: 17px; font-weight: 650; color: var(--navy); margin: 0; }
 
-        /* ── BUTTONS ── */
         .btn {
           display: inline-flex; align-items: center; gap: 7px;
           padding: 9px 18px;
@@ -362,7 +340,6 @@ export default function ClientAdminLayout({
         .btn-sm { padding: 6px 12px; font-size: 13px; }
         .btn-icon { padding: 8px; }
 
-        /* ── BADGES / STATUS ── */
         .badge {
           display: inline-flex; align-items: center; gap: 4px;
           padding: 3px 10px;
@@ -377,7 +354,6 @@ export default function ClientAdminLayout({
         .badge-gray { background: #f1f5f9; color: var(--slate); }
         .badge-teal { background: var(--teal-pale); color: var(--teal); }
 
-        /* ── FORM ELEMENTS ── */
         .form-group { display: flex; flex-direction: column; gap: 5px; }
         .form-label {
           font-size: 13px; font-weight: 600; color: var(--navy-700);
@@ -406,7 +382,6 @@ export default function ClientAdminLayout({
         .form-hint { font-size: 12px; color: var(--slate); }
         .form-error { font-size: 12px; color: var(--red); }
 
-        /* ── TABLE ── */
         .table-wrap { overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; }
         th {
@@ -431,7 +406,6 @@ export default function ClientAdminLayout({
         tbody tr { transition: background 0.1s; }
         tbody tr:hover { background: #fafcff; }
 
-        /* ── GRID HELPERS ── */
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
         .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
         .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
@@ -443,7 +417,6 @@ export default function ClientAdminLayout({
           .grid-4 { grid-template-columns: 1fr 1fr; }
         }
 
-        /* ── STAT CARDS ── */
         .stat-card {
           background: white;
           border: 1px solid var(--border);
@@ -464,7 +437,6 @@ export default function ClientAdminLayout({
           flex-shrink: 0;
         }
 
-        /* ── LOADING ── */
         .loading-state {
           display: flex; flex-direction: column; align-items: center;
           justify-content: center; padding: 80px 24px; gap: 16px;
@@ -479,7 +451,6 @@ export default function ClientAdminLayout({
         }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* ── EMPTY STATE ── */
         .empty-state {
           padding: 60px 24px;
           text-align: center;
@@ -496,7 +467,6 @@ export default function ClientAdminLayout({
         .empty-state h3 { font-size: 16px; font-weight: 650; color: var(--navy-700); margin: 0 0 6px; }
         .empty-state p { font-size: 14px; margin: 0; }
 
-        /* ── ALERT / TOAST STYLES ── */
         .alert {
           padding: 14px 18px;
           border-radius: var(--radius);
@@ -508,7 +478,6 @@ export default function ClientAdminLayout({
         .alert-warning { background: var(--yellow-pale); color: #92400e; border: 1px solid #fcd34d; }
         .alert-info { background: var(--blue-pale); color: #1d4ed8; border: 1px solid #93c5fd; }
 
-        /* ── MISC ── */
         .page-header { margin-bottom: 28px; }
         .page-header h1 {
           font-size: 26px; font-weight: 750; color: var(--navy);
@@ -536,7 +505,6 @@ export default function ClientAdminLayout({
         .link-blue { color: var(--blue); text-decoration: none; }
         .link-blue:hover { text-decoration: underline; }
 
-        /* ── TABS (for detail pages) ── */
         .tab-bar {
           display: flex; gap: 0;
           border-bottom: 2px solid var(--border);
@@ -567,7 +535,6 @@ export default function ClientAdminLayout({
         }
         .tab-item--active .tab-count { background: var(--teal-pale); color: var(--teal); border-color: var(--teal); }
 
-        /* ── SECTION ── */
         .section { margin-bottom: 24px; }
         .section-title {
           font-size: 15px; font-weight: 700; color: var(--navy);
@@ -575,7 +542,6 @@ export default function ClientAdminLayout({
         }
         .section-title svg { color: var(--teal); }
 
-        /* ── ANIMATIONS ── */
         @keyframes fadeUp {
           from { opacity: 0; transform: translateY(8px); }
           to   { opacity: 1; transform: translateY(0); }
@@ -585,7 +551,6 @@ export default function ClientAdminLayout({
         .animate-in-delay-2 { animation-delay: 0.1s; }
         .animate-in-delay-3 { animation-delay: 0.15s; }
 
-        /* ── CHECKBOX ── */
         .checkbox-label {
           display: flex; align-items: center; gap: 8px;
           cursor: pointer; font-size: 14px; color: var(--navy-700);
@@ -597,7 +562,6 @@ export default function ClientAdminLayout({
           cursor: pointer;
         }
 
-        /* ── SELECT ── */
         select.form-input {
           appearance: none;
           background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
@@ -607,7 +571,6 @@ export default function ClientAdminLayout({
           cursor: pointer;
         }
 
-        /* ── EMERGENCY BADGE ── */
         .emergency-alert {
           display: flex; align-items: center; gap: 8px;
           padding: 10px 14px;
@@ -618,7 +581,6 @@ export default function ClientAdminLayout({
           font-size: 14px; font-weight: 600;
         }
 
-        /* ── TEXTAREA ── */
         textarea.form-input {
           resize: vertical;
           min-height: 88px;
@@ -626,10 +588,9 @@ export default function ClientAdminLayout({
       `}</style>
 
       <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-        {/* BUG FIX: Wrap in Suspense so useSearchParams doesn't cause build error */}
         <Suspense fallback={
           <div className="nav-bar" style={{ height: 60, display: 'flex', alignItems: 'center', paddingLeft: 24 }}>
-            <div className="brand-name" style={{ color: 'white' }}>PAWS CMS</div>
+            <div className="brand-name" style={{ color: 'white' }}>PawsVet CMS</div>
           </div>
         }>
           <ClientAdminNav />

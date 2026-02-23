@@ -462,6 +462,7 @@ CREATE TABLE notification_logs (
     error_message TEXT,
     related_entity_type VARCHAR(50), -- 'appointment', 'invoice', etc.
     related_entity_id UUID,
+    is_read BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

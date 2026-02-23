@@ -213,79 +213,73 @@ export default function ClientAppointmentsPage() {
   };
 
   const handleConfirmAppointment = async () => {
-    console.log('Attempting to create appointment...');
-    console.log('Selected Pet:', selectedPet);
-    console.log('Selected Service:', selectedService);
-    console.log('Selected Date:', selectedDate);
-    console.log('Selected Time:', selectedTime);
-    console.log('User ID:', userId);
-    console.log('Client ID:', clientId);
+  console.log('Attempting to create appointment...');
 
-    if (!selectedPet || !selectedService || !selectedDate || !selectedTime) {
-      alert('Missing appointment details. Please complete all steps.');
-      return;
-    }
+  if (!selectedPet || !selectedService || !selectedDate || !selectedTime) {
+    alert('Missing appointment details. Please complete all steps.');
+    return;
+  }
 
-    if (!userId) {
-      alert('User session expired. Please refresh the page and login again.');
-      return;
-    }
-    
-    const [hours, minutes] = selectedTime.split(':').map(Number);
-    const scheduledStart = new Date(selectedDate);
-    scheduledStart.setHours(hours, minutes, 0, 0);
-    
-    const scheduledEnd = new Date(scheduledStart);
-    scheduledEnd.setMinutes(scheduledEnd.getMinutes() + selectedService.duration_minutes);
+  if (!userId) {
+    alert('User session expired. Please refresh the page and login again.');
+    return;
+  }
+  
+  const [hours, minutes] = selectedTime.split(':').map(Number);
+  const scheduledStart = new Date(selectedDate);
+  scheduledStart.setHours(hours, minutes, 0, 0);
+  
+  const scheduledEnd = new Date(scheduledStart);
+  scheduledEnd.setMinutes(scheduledEnd.getMinutes() + selectedService.duration_minutes);
 
-    try {
-      const appointmentData = {
-        pet_id: selectedPet.id,
-        booked_by: userId,
-        appointment_type: selectedService.id,
-        scheduled_start: scheduledStart.toISOString(),
-        scheduled_end: scheduledEnd.toISOString(),
-        reason_for_visit: selectedService.name,
-        appointment_status: 'pending',
-        is_emergency: selectedService.id === 'emergency',
-      };
+  try {
+    const appointmentData = {
+      pet_id: selectedPet.id,
+      booked_by: userId,
+      // FIX: do NOT send appointment_type from frontend — API defaults to 'consultation'
+      scheduled_start: scheduledStart.toISOString(),
+      scheduled_end: scheduledEnd.toISOString(),
+      reason_for_visit: selectedService.name,
+      appointment_status: 'pending',
+      is_emergency: selectedService.id === 'emergency',
+    };
 
-      console.log('Creating appointment with data:', appointmentData);
+    console.log('Creating appointment with data:', appointmentData);
 
-      const response = await fetch('/api/appointments', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(appointmentData),
-      });
+    const response = await fetch('/api/appointments', {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(appointmentData),
+    });
 
-      const result = await response.json();
-      console.log('Appointment response:', result);
+    const result = await response.json();
+    console.log('Appointment response:', result);
 
-      if (!response.ok) {
-        console.error('Failed to create appointment. Status:', response.status);
-        console.error('Error details:', result);
-        
-        let errorMessage = 'Failed to create appointment.';
-        if (result.error) {
-          errorMessage += ` Error: ${result.error}`;
-        }
-        if (result.details) {
-          errorMessage += ` Details: ${result.details}`;
-        }
-        
-        alert(errorMessage);
-        return;
+    if (!response.ok) {
+      console.error('Failed to create appointment. Status:', response.status);
+      console.error('Error details:', result);
+      
+      let errorMessage = 'Failed to create appointment.';
+      if (result.error) {
+        errorMessage += ` Error: ${result.error}`;
       }
-
-      console.log('Appointment created successfully:', result);
-      setBookingStep('success');
-    } catch (error) {
-      console.error('Unexpected error creating appointment:', error);
-      alert('An unexpected error occurred. Please try again.');
+      if (result.details) {
+        errorMessage += ` Details: ${result.details}`;
+      }
+      
+      alert(errorMessage);
+      return;
     }
-  };
+
+    console.log('Appointment created successfully:', result);
+    setBookingStep('success');
+  } catch (error) {
+    console.error('Unexpected error creating appointment:', error);
+    alert('An unexpected error occurred. Please try again.');
+  }
+};
 
   const generateGoogleCalendarLink = () => {
     if (!selectedPet || !selectedService || !selectedDate || !selectedTime) return '';

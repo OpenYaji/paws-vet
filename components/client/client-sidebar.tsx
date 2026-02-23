@@ -1,89 +1,104 @@
 "use client"
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { supabase } from '@/lib/auth-client';
 import {
   LayoutDashboard, Calendar, PawPrint, Wallet, HandPlatter,
-  Settings, ShoppingBasket, Menu, X, LogOut,
-  Bell, Check, CheckCircle, AlertCircle, Info, HelpCircle
+  Settings, ShoppingBasket, X, LogOut,
+  Bell, Check, Info,
+  Database, Clock, CreditCard, AlertTriangle, HelpCircle,
 } from "lucide-react";
 
 // =============================================
-// MOCK NOTIFICATIONS - Edit these freely
+// NOTIFICATION BELL
+// Dropdown opens below the bell, anchored to
+// the bell's actual screen position via
+// getBoundingClientRect — NOT fixed top-right.
 // =============================================
 interface Notification {
   id: string;
-  type: 'appointment' | 'reminder' | 'info' | 'alert';
-  title: string;
-  message: string;
+  notification_type: string;
+  subject?: string;
+  content: string;
   is_read: boolean;
   created_at: string;
-  link?: string;
+  related_entity_type?: string;
+  related_entity_id?: string;
 }
 
-const MOCK_NOTIFICATIONS: Notification[] = [
-  {
-    id: '1',
-    type: 'appointment',
-    title: 'Appointment Confirmed',
-    message: 'Your appointment for Buddy on Feb 25, 2026 at 2:00 PM has been confirmed.',
-    is_read: false,
-    created_at: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
-    link: '/client/appointments',
-  },
-  {
-    id: '2',
-    type: 'reminder',
-    title: 'Upcoming Appointment Reminder',
-    message: "Don't forget! You have an appointment tomorrow at 10:00 AM for Ziggy's vaccination.",
-    is_read: false,
-    created_at: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
-    link: '/client/appointments',
-  },
-  {
-    id: '3',
-    type: 'info',
-    title: 'New Service Available',
-    message: "We now offer dental cleaning services! Book an appointment today.",
-    is_read: true,
-    created_at: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-  },
-  {
-    id: '4',
-    type: 'alert',
-    title: 'Vaccination Due Soon',
-    message: "Buddy's rabies vaccination is due in 7 days. Please schedule an appointment.",
-    is_read: true,
-    created_at: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
-    link: '/client/appointments',
-  },
-];
-
-// =============================================
-// NOTIFICATION BELL (Fixed positioning to escape overflow)
-// =============================================
-function NotificationBell({ collapsed }: { collapsed: boolean }) {
-  const [notifications, setNotifications] = useState<Notification[]>(MOCK_NOTIFICATIONS);
+function NotificationBell() {
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
   const bellRef = useRef<HTMLDivElement>(null);
-  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
 
-  // Calculate position when opening
-  useEffect(() => {
-    if (isOpen && bellRef.current) {
-      const rect = bellRef.current.getBoundingClientRect();
-      // Position dropdown to the RIGHT of the bell button
-      setDropdownPosition({
-        top: rect.top + 8, // Slight offset from top of bell
-        left: rect.right + 8 // Open to the right of the bell
-      });
+  const fetchNotifications = useCallback(async (uid: string) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/client/notifications?user_id=${uid}&limit=5`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const notifs: Notification[] = data.notifications || [];
+      setNotifications(notifs);
+      setUnreadCount(notifs.filter(n => !n.is_read).length);
+    } catch (err) {
+      console.error('Failed to fetch notifications:', err);
+    } finally {
+      setLoading(false);
     }
-  }, [isOpen]);
+  }, []);
 
+  // Initialize user and fetch
   useEffect(() => {
+    const init = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUserId(user.id);
+        await fetchNotifications(user.id);
+      }
+    };
+    init();
+  }, [fetchNotifications]);
+
+  // Real-time: auto-refresh when notification_logs changes
+  useEffect(() => {
+    if (!userId) return;
+    const channel = supabase
+      .channel('sidebar-notifications')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'notification_logs', filter: `recipient_id=eq.${userId}` },
+        () => fetchNotifications(userId)
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [userId, fetchNotifications]);
+
+  // Toggle open and calculate position from the bell's location
+  const handleToggle = () => {
+    if (!isOpen && bellRef.current) {
+      const rect = bellRef.current.getBoundingClientRect();
+      const dropdownWidth = 320;
+      // Align left edge of dropdown with left edge of bell
+      // but clamp so it doesn't overflow the right side of the screen
+      let left = rect.left;
+      if (left + dropdownWidth > window.innerWidth - 16) {
+        left = window.innerWidth - dropdownWidth - 16;
+      }
+      setDropdownPos({ top: rect.bottom + 8, left });
+    }
+    setIsOpen(prev => !prev);
+  };
+
+  // Close on outside click
+  useEffect(() => {
+    if (!isOpen) return;
     const handleClickOutside = (e: MouseEvent) => {
       if (bellRef.current && !bellRef.current.contains(e.target as Node)) {
         setIsOpen(false);
@@ -91,155 +106,167 @@ function NotificationBell({ collapsed }: { collapsed: boolean }) {
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [isOpen]);
 
-  const markAsRead = (id: string) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
-  };
-
-  const markAllAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+  const markAsRead = async (id: string, currentIsRead: boolean) => {
+    if (!userId) return;
+    try {
+      await fetch('/api/client/notifications/mark-read', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notification_id: id, is_read: !currentIsRead }),
+      });
+      await fetchNotifications(userId);
+    } catch (err) {
+      console.error('Failed to mark notification:', err);
+    }
   };
 
   const getIcon = (type: string) => {
     switch (type) {
-      case 'appointment': return <Calendar className="w-4 h-4 text-blue-600" />;
-      case 'reminder':    return <AlertCircle className="w-4 h-4 text-yellow-600" />;
-      case 'alert':       return <AlertCircle className="w-4 h-4 text-red-600" />;
-      default:            return <Info className="w-4 h-4 text-gray-500" />;
+      case 'appointment_reminder':
+      case 'appointment_update':
+      case 'appointment_cancelled':
+        return <Calendar className="w-4 h-4 text-blue-600" />;
+      case 'payment_received':
+      case 'payment_due':
+        return <CreditCard className="w-4 h-4 text-green-600" />;
+      case 'system_alert':
+        return <AlertTriangle className="w-4 h-4 text-red-600" />;
+      default:
+        return <Info className="w-4 h-4 text-gray-500" />;
     }
   };
 
   const getIconBg = (type: string) => {
     switch (type) {
-      case 'appointment': return 'bg-blue-100';
-      case 'reminder':    return 'bg-yellow-100';
-      case 'alert':       return 'bg-red-100';
-      default:            return 'bg-gray-100';
+      case 'appointment_reminder':
+      case 'appointment_update': return 'bg-blue-100';
+      case 'appointment_cancelled': return 'bg-red-100';
+      case 'payment_received': return 'bg-green-100';
+      case 'payment_due': return 'bg-yellow-100';
+      case 'system_alert': return 'bg-red-100';
+      default: return 'bg-gray-100';
     }
   };
 
   const formatTime = (dateString: string) => {
     const diff = Date.now() - new Date(dateString).getTime();
     const mins = Math.floor(diff / 60000);
-    const hrs  = Math.floor(mins / 60);
+    const hrs = Math.floor(mins / 60);
     const days = Math.floor(hrs / 24);
-    if (mins < 1)  return 'Just now';
+    if (mins < 1) return 'Just now';
     if (mins < 60) return `${mins}m ago`;
-    if (hrs < 24)  return `${hrs}h ago`;
-    if (days < 7)  return `${days}d ago`;
+    if (hrs < 24) return `${hrs}h ago`;
+    if (days < 7) return `${days}d ago`;
     return new Date(dateString).toLocaleDateString();
   };
 
-  const unreadCount = notifications.filter(n => !n.is_read).length;
-
-  if (collapsed) return null;
-
   return (
-    <>
-      <div ref={bellRef} className="relative">
-        {/* Bell Button */}
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          className="relative p-1.5 hover:bg-accent rounded-lg transition-colors flex items-center justify-center"
-          aria-label="Notifications"
-        >
-          <Bell className="w-5 h-5 text-muted-foreground" />
-          {unreadCount > 0 && (
-            <span className="absolute top-0 right-0 translate-x-1/2 -translate-y-1/2 w-4 h-4 bg-red-500 text-white text-[10px] font-semibold rounded-full flex items-center justify-center leading-none pointer-events-none">
-              {unreadCount > 9 ? '9+' : unreadCount}
-            </span>
-          )}
-        </button>
-      </div>
+    <div ref={bellRef} className="relative">
+      {/* Bell button */}
+      <button
+        onClick={handleToggle}
+        className="relative p-1.5 hover:bg-accent rounded-lg transition-colors flex items-center justify-center"
+        aria-label="Notifications"
+      >
+        <Bell className="w-5 h-5 text-muted-foreground" />
+        {unreadCount > 0 && (
+          <span className="absolute top-0 right-0 translate-x-1/2 -translate-y-1/2 w-4 h-4 bg-red-500 text-white text-[10px] font-semibold rounded-full flex items-center justify-center leading-none pointer-events-none">
+            {unreadCount > 9 ? '9+' : unreadCount}
+          </span>
+        )}
+      </button>
 
-      {/* Fixed Position Dropdown - opens to the RIGHT of sidebar */}
+      {/* Dropdown — positioned dynamically below the bell */}
       {isOpen && (
-        <div 
-          className="fixed w-80 bg-white dark:bg-card rounded-xl shadow-2xl border border-gray-200 dark:border-border z-[100] flex flex-col max-h-[480px]"
-          style={{ 
-            top: `${dropdownPosition.top}px`, 
-            left: `${dropdownPosition.left}px` 
-          }}
-        >
-          {/* Header */}
-          <div className="px-4 py-3 border-b border-gray-200 dark:border-border flex items-center justify-between flex-shrink-0">
-            <div>
-              <h3 className="font-semibold text-sm text-gray-900 dark:text-foreground">Notifications</h3>
-              <p className="text-[11px] text-gray-500 dark:text-muted-foreground">
-                {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up!'}
-              </p>
+        <>
+          {/* Backdrop */}
+          <div className="fixed inset-0 z-[99]" onClick={() => setIsOpen(false)} />
+
+          <div
+            className="fixed w-80 bg-white dark:bg-card rounded-xl shadow-2xl border border-gray-200 dark:border-border z-[100] flex flex-col max-h-[480px]"
+            style={{ top: `${dropdownPos.top}px`, left: `${dropdownPos.left}px` }}
+          >
+            {/* Header */}
+            <div className="px-4 py-3 border-b border-gray-200 dark:border-border flex items-center justify-between flex-shrink-0">
+              <div>
+                <h3 className="font-semibold text-sm text-gray-900 dark:text-foreground">Notifications</h3>
+                <p className="text-[11px] text-gray-500 dark:text-muted-foreground">
+                  {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up!'}
+                </p>
+              </div>
             </div>
-            {unreadCount > 0 && (
-              <button
-                onClick={markAllAsRead}
-                className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-700 font-medium"
+
+            {/* List */}
+            <div className="overflow-y-auto flex-1">
+              {loading ? (
+                <div className="p-8 text-center">
+                  <div className="spinner mx-auto mb-2" />
+                  <p className="text-gray-500 text-xs">Loading...</p>
+                </div>
+              ) : notifications.length === 0 ? (
+                <div className="p-8 text-center">
+                  <Bell className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                  <p className="text-gray-500 text-xs">No notifications yet</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-100 dark:divide-border">
+                  {notifications.map((n) => {
+                    const isUnread = !n.is_read;
+                    return (
+                      <div
+                        key={n.id}
+                        className={`p-3 hover:bg-gray-50 dark:hover:bg-accent transition-colors ${isUnread ? 'bg-blue-50 dark:bg-blue-950/20' : ''}`}
+                      >
+                        <div className="flex gap-2.5">
+                          <div className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${getIconBg(n.notification_type)}`}>
+                            {getIcon(n.notification_type)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-1">
+                              <p className={`text-xs font-medium leading-tight ${isUnread ? 'text-gray-900 dark:text-foreground' : 'text-gray-600 dark:text-muted-foreground'}`}>
+                                {n.subject || n.notification_type.replace(/_/g, ' ')}
+                              </p>
+                              {isUnread && (
+                                <button
+                                  onClick={() => markAsRead(n.id, false)}
+                                  title="Mark as read"
+                                  className="flex-shrink-0"
+                                >
+                                  <Check className="w-3.5 h-3.5 text-blue-500" />
+                                </button>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-gray-500 dark:text-muted-foreground mt-0.5 line-clamp-2">
+                              {n.content}
+                            </p>
+                            <span className="text-[10px] text-gray-400 mt-1 block">
+                              {formatTime(n.created_at)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-4 py-2.5 border-t border-gray-100 dark:border-border bg-gray-50 dark:bg-accent/50 rounded-b-xl flex-shrink-0">
+              <Link
+                href="/client/notifications"
+                onClick={() => setIsOpen(false)}
+                className="block text-center text-xs text-blue-600 hover:text-blue-700 font-medium"
               >
-                <CheckCircle className="w-3.5 h-3.5" />
-                Mark all read
-              </button>
-            )}
+                View all notifications
+              </Link>
+            </div>
           </div>
-
-          {/* List */}
-          <div className="overflow-y-auto flex-1">
-            {notifications.length === 0 ? (
-              <div className="p-8 text-center">
-                <Bell className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                <p className="text-gray-500 text-xs">No notifications yet</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-gray-100 dark:divide-border">
-                {notifications.map((n) => (
-                  <div
-                    key={n.id}
-                    className={`p-3 hover:bg-gray-50 dark:hover:bg-accent transition-colors ${!n.is_read ? 'bg-blue-50 dark:bg-blue-950/20' : ''}`}
-                  >
-                    <div className="flex gap-2.5">
-                      <div className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${getIconBg(n.type)}`}>
-                        {getIcon(n.type)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-1">
-                          <p className={`text-xs font-medium leading-tight ${!n.is_read ? 'text-gray-900 dark:text-foreground' : 'text-gray-600 dark:text-muted-foreground'}`}>
-                            {n.title}
-                          </p>
-                          {!n.is_read && (
-                            <button onClick={() => markAsRead(n.id)} title="Mark as read" className="flex-shrink-0">
-                              <Check className="w-3.5 h-3.5 text-blue-500" />
-                            </button>
-                          )}
-                        </div>
-                        <p className="text-[11px] text-gray-500 dark:text-muted-foreground mt-0.5 line-clamp-2">{n.message}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-[10px] text-gray-400">{formatTime(n.created_at)}</span>
-                          {n.link && (
-                            <a href={n.link} onClick={() => setIsOpen(false)} className="text-[10px] text-blue-600 hover:underline font-medium">
-                              View →
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Footer */}
-          <div className="px-4 py-2.5 border-t border-gray-100 dark:border-border bg-gray-50 dark:bg-accent/50 rounded-b-xl flex-shrink-0">
-            <a
-              href="/client/notifications"
-              onClick={() => setIsOpen(false)}
-              className="block text-center text-xs text-blue-600 hover:text-blue-700 font-medium"
-            >
-              View all notifications
-            </a>
-          </div>
-        </div>
+        </>
       )}
-    </>
+    </div>
   );
 }
 
@@ -270,15 +297,19 @@ export default function ClientSidebar({ collapsed, setCollapsed, mobileOpen, set
     router.push('/login');
   };
 
+  // NOTE: "Notifications" is intentionally removed from nav —
+  // the bell icon in the header already handles it.
   const menuItems: MenuItem[] = [
-    { name: 'Dashboard',     icon: <LayoutDashboard size={20} />, path: '/client/dashboard' },
-    { name: 'Appointments',  icon: <Calendar size={20} />,        path: '/client/appointments' },
-    { name: 'My Pets',       icon: <PawPrint size={20} />,        path: '/client/pets' },
-    { name: 'Products',      icon: <ShoppingBasket size={20} />,  path: '/client/products' },
-    { name: 'Services',      icon: <HandPlatter size={20} />,     path: '/client/services' },
-    { name: 'Transactions',  icon: <Wallet size={20} />,          path: '/client/transactions' },
-    { name: 'FAQ',           icon: <HelpCircle size={20} />,      path: '/client/faq' },
-    { name: 'Settings',      icon: <Settings size={20} />,        path: '/client/settings' },
+    { name: 'Dashboard',    icon: <LayoutDashboard size={20} />, path: '/client/dashboard' },
+    { name: 'Appointments', icon: <Calendar size={20} />,        path: '/client/appointments' },
+    { name: 'History',      icon: <Clock size={20} />,           path: '/client/appointments/history' },
+    { name: 'My Pets',      icon: <PawPrint size={20} />,        path: '/client/pets' },
+    { name: 'Products',     icon: <ShoppingBasket size={20} />,  path: '/client/products' },
+    { name: 'Services',     icon: <HandPlatter size={20} />,     path: '/client/services' },
+    { name: 'Transactions', icon: <Wallet size={20} />,          path: '/client/transactions' },
+    { name: 'FAQ',          icon: <HelpCircle size={20} />,      path: '/client/faq' },
+    { name: 'Settings',     icon: <Settings size={20} />,        path: '/client/settings' },
+    { name: 'Admin CMS',    icon: <Database size={20} />,        path: '/client-admin' },
   ];
 
   const NavLink = ({ item, isActive, isCollapsed = false, isMobileLink = false }: any) => (
@@ -296,7 +327,7 @@ export default function ClientSidebar({ collapsed, setCollapsed, mobileOpen, set
     </li>
   );
 
-  const SidebarContent = ({ isMobileView = false, profile }: { isMobileView?: boolean, profile: any }) => {
+  const SidebarContent = ({ isMobileView = false, profile }: { isMobileView?: boolean; profile: any }) => {
     const isCollapsed = isMobileView ? false : collapsed;
 
     return (
@@ -304,7 +335,7 @@ export default function ClientSidebar({ collapsed, setCollapsed, mobileOpen, set
         <div className="flex flex-col h-full p-4 overflow-hidden">
 
           {/* ── PROFILE HEADER ── */}
-          <header className={`flex items-center mb-8 gap-3 relative ${isCollapsed ? 'justify-center' : ''}`}>
+          <header className={`flex items-center mb-8 gap-3 ${isCollapsed ? 'justify-center' : ''}`}>
             {/* Avatar */}
             <div className="flex-shrink-0 relative w-10 h-10 overflow-hidden rounded-full border-2 border-primary bg-accent">
               <Image
@@ -325,10 +356,8 @@ export default function ClientSidebar({ collapsed, setCollapsed, mobileOpen, set
               </div>
             )}
 
-            {/* Notification Bell - Fixed positioned dropdown opens to the right */}
-            {!isCollapsed && !isMobileView && (
-              <NotificationBell collapsed={isCollapsed} />
-            )}
+            {/* 🔔 Bell — only when sidebar is expanded and not in mobile view */}
+            {!isCollapsed && !isMobileView && <NotificationBell />}
 
             {/* Mobile close button */}
             {isMobileView && (

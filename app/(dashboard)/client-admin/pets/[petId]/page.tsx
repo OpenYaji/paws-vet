@@ -42,6 +42,22 @@ function calcAge(d?: string): string {
   return m < 0 ? `${y - 1} yrs ${12 + m} mo` : `${y} yrs ${m} mo`;
 }
 
+// FIX: Field is defined OUTSIDE PetDetailPage so it's not recreated on every render
+function Field({ label, id, required, error, hint, children }: {
+  label: string; id: string; required?: boolean; error?: string; hint?: string; children: React.ReactNode;
+}) {
+  return (
+    <div className="form-group">
+      <label className="form-label" htmlFor={id}>
+        {label}{required && <span style={{ color: 'var(--red)', marginLeft: 3 }}>*</span>}
+      </label>
+      {children}
+      {hint && !error && <span className="form-hint">{hint}</span>}
+      {error && <span className="form-error"><AlertTriangle size={11} style={{ display: 'inline', marginRight: 3 }} />{error}</span>}
+    </div>
+  );
+}
+
 export default function PetDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -55,7 +71,6 @@ export default function PetDetailPage() {
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Form fields
   const [name, setName] = useState('');
   const [species, setSpecies] = useState('');
   const [breed, setBreed] = useState('');
@@ -121,12 +136,10 @@ export default function PetDetailPage() {
     if (petId) fetchPetData();
   }, [petId, fetchPetData]);
 
-  // BUG FIX: Added validation with per-field errors
   const validate = () => {
     const e: Record<string, string> = {};
     if (!name.trim()) e.name = 'Pet name is required';
     if (!species.trim()) e.species = 'Species is required';
-    // BUG FIX: weight must be > 0 per DB CHECK constraint
     if (weight && (isNaN(parseFloat(weight)) || parseFloat(weight) <= 0)) {
       e.weight = 'Weight must be a positive number';
     }
@@ -209,19 +222,6 @@ export default function PetDetailPage() {
       <div className="alert alert-error" style={{ maxWidth: 400, margin: '60px auto' }}>
         <AlertTriangle size={18} /> Pet not found
       </div>
-    </div>
-  );
-
-  const Field = ({ label, id, required, error, hint, children }: {
-    label: string; id: string; required?: boolean; error?: string; hint?: string; children: React.ReactNode;
-  }) => (
-    <div className="form-group">
-      <label className="form-label" htmlFor={id}>
-        {label}{required && <span style={{ color: 'var(--red)', marginLeft: 3 }}>*</span>}
-      </label>
-      {children}
-      {hint && !error && <span className="form-hint">{hint}</span>}
-      {error && <span className="form-error"><AlertTriangle size={11} style={{ display: 'inline', marginRight: 3 }} />{error}</span>}
     </div>
   );
 
