@@ -16,6 +16,7 @@ import {
   Receipt,
   Menu,
   IdCard,
+  Logs,
   X,
 } from "lucide-react";
 
@@ -65,8 +66,8 @@ const menuItems: MenuItem[] = [
     { name: 'Inventory', icon: <Package size={20} />, path: '/admin/inventory' },
     { name: 'Billing & Invoice', icon: <Receipt size={20} />, path: '/admin/billing' },
     { name: 'Users', icon: <Users size={20} />, path: '/admin/users-management' },
-
     { name: 'Employees', icon: <IdCard size={20} />, path: '/admin/employees' },
+    { name: 'Logs', icon: <Logs size={20} />, path: '/admin/logs' },
 
     { name: 'Settings', icon: <Settings size={20} />, path: '/admin/settings' },
     { name: 'Help Support', icon: <LifeBuoy size={20} />, path: '/admin/help' },
