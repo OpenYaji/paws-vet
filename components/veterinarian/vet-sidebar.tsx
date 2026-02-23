@@ -9,7 +9,7 @@ import {
   LayoutDashboard,
   Users,
   Calendar,
-  PawPrint,
+  Camera,
   Settings,
   LifeBuoy,
   Package,
@@ -17,7 +17,8 @@ import {
   Menu,
   X,
   PillBottle,
-  Syringe
+  Syringe,
+  ShieldAlert
 } from "lucide-react";
 
 interface AdminSidebarProps {
@@ -63,8 +64,9 @@ const menuItems: MenuItem[] = [
     { name: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/veterinarian/dashboard' },
     { name: 'Pet Master File', icon: <Files size={20} />, path: '/veterinarian/pets' },
     { name: 'My Appointments', icon: <Calendar size={20} />, path: '/veterinarian/appointments' },
-    { name: 'Triage', icon: <PawPrint size={20} />, path: '/veterinarian/triage' },
     { name: 'Consultation', icon: <Package size={20} />, path: '/veterinarian/consultation' },
+    { name: 'Neuter', icon: <Camera size={20} />, path: '/veterinarian/capture' },
+    { name: 'Quarantine', icon: <ShieldAlert size={20} />, path: '/veterinarian/quarantine' },
     { name: 'Prescriptions', icon: <PillBottle size={20} />, path: '/veterinarian/prescriptions' },
     { name: 'Vaccinations', icon: <Syringe size={20} />, path: '/veterinarian/vaccinations' },
     { name: 'Settings', icon: <Settings size={20} />, path: '/veterinarian/settings' },

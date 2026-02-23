@@ -116,9 +116,9 @@ const helpArticles: HelpArticle[] = [
   },
   {
     id: "11",
-    question: "How do I manage triage for incoming patients?",
+    question: "How do I capture vitals for incoming patients?",
     answer:
-      "Navigate to Triage from the sidebar. You'll see a list of patients awaiting triage. Click on a patient to record vitals, assess urgency, and assign a priority level.",
+      "Navigate to Capture from the sidebar. You'll see a list of patients in the waiting room. Click on a patient to record vitals, assess urgency, and assign a priority level.",
     category: "Appointments",
   },
   {

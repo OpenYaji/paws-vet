@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { supabase } from '@/lib/auth-client';
 import useSWR, { mutate } from 'swr';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,10 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from "@/components/ui/label";
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  Stethoscope, Thermometer, Weight, Activity, Heart, 
-  FileText, ClipboardCheck, AlertCircle 
+import {
+  Stethoscope, FileText, ClipboardCheck
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -25,6 +23,7 @@ const fetchQueue = async () => {
       id,
       scheduled_start,
       appointment_status,
+      reason_for_visit,
       pets (
         id,
         name,
@@ -37,8 +36,7 @@ const fetchQueue = async () => {
     `)
     .gte('scheduled_start', `${today}T00:00:00`)
     .lt('scheduled_start', `${today}T23:59:59`)
-    // We look for 'checked-in' (passed triage) or 'confirmed' (skipped triage)
-    .in('appointment_status', ['checked-in', 'confirmed', 'in-consultation']) 
+    .in('appointment_status', ['checked-in', 'confirmed', 'in-consultation'])
     .order('scheduled_start', { ascending: true });
 
   if (error) throw error;
@@ -48,7 +46,6 @@ const fetchQueue = async () => {
 export default function ConsultationPage() {
   const { data: queue = [], isLoading } = useSWR('consultation-queue', fetchQueue);
   const [selectedAppt, setSelectedAppt] = useState<any | null>(null);
-  const [triageData, setTriageData] = useState<any | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   // Form State for Medical Record
@@ -61,34 +58,17 @@ export default function ConsultationPage() {
     next_appointment: ''
   });
 
-  // 2. When a patient is selected, fetch their Triage Data
-  useEffect(() => {
-    if (!selectedAppt) return;
-
-    const loadTriage = async () => {
-      const { data } = await supabase
-        .from('triage_records')
-        .select('*')
-        .eq('appointment_id', selectedAppt.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
-      
-      setTriageData(data || null);
-      
-      // Auto-fill complaint if available
-      if (data?.chief_complaint) {
-        setRecord(prev => ({ ...prev, chief_complaint: data.chief_complaint }));
-      }
-    };
-    
-    loadTriage();
-    // Reset form
+  const handleSelectPatient = (appt: any) => {
+    setSelectedAppt(appt);
     setRecord({
-       chief_complaint: '', examination_findings: '', diagnosis: '', 
-       treatment_plan: '', follow_up_instructions: '', next_appointment: ''
+      chief_complaint: appt.reason_for_visit || '',
+      examination_findings: '',
+      diagnosis: '',
+      treatment_plan: '',
+      follow_up_instructions: '',
+      next_appointment: ''
     });
-  }, [selectedAppt]);
+  };
 
   // 3. Save Medical Record
   const handleSubmit = async (e: React.FormEvent) => {
@@ -107,8 +87,8 @@ export default function ConsultationPage() {
       if (!vetProfile) throw new Error("Vet profile not found");
 
       // B. Create Medical Record
-      const recordNumber = `MR-${Date.now().toString().slice(-6)}`; // Simple ID Gen
-      
+      const recordNumber = `MR-${Date.now().toString().slice(-6)}`;
+
       const { error } = await supabase
         .from('medical_records')
         .insert([{
@@ -153,13 +133,13 @@ export default function ConsultationPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 h-full overflow-hidden">
-        
+
         {/* --- LEFT: PATIENT QUEUE --- */}
         <div className="lg:col-span-3 flex flex-col gap-3 overflow-y-auto pr-2 border-r">
           <h3 className="font-semibold text-gray-700 flex items-center gap-2">
             <ClipboardCheck size={18} /> Ready for Exam ({queue.length})
           </h3>
-          
+
           {isLoading ? (
             <div className="text-sm text-gray-400">Loading queue...</div>
           ) : queue.length === 0 ? (
@@ -168,12 +148,12 @@ export default function ConsultationPage() {
             </div>
           ) : (
             queue.map((appt: any) => (
-              <div 
+              <div
                 key={appt.id}
-                onClick={() => setSelectedAppt(appt)}
+                onClick={() => handleSelectPatient(appt)}
                 className={`p-3 rounded-lg border cursor-pointer transition-all ${
-                  selectedAppt?.id === appt.id 
-                    ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500 shadow-sm' 
+                  selectedAppt?.id === appt.id
+                    ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500 shadow-sm'
                     : 'bg-white border-gray-200 hover:border-blue-200'
                 }`}
               >
@@ -186,11 +166,6 @@ export default function ConsultationPage() {
                 <div className="text-xs text-gray-500 mt-1">
                   {appt.pets.species} ({appt.pets.gender})
                 </div>
-                {appt.appointment_status === 'checked-in' && (
-                   <span className="text-[10px] text-green-600 font-medium flex items-center gap-1 mt-1">
-                     <CheckCircle2 size={10} /> Triaged
-                   </span>
-                )}
               </div>
             ))
           )}
@@ -200,73 +175,33 @@ export default function ConsultationPage() {
         <div className="lg:col-span-9 flex flex-col h-full overflow-y-auto pb-10">
           {selectedAppt ? (
             <div className="space-y-6">
-              
-              {/* 1. Header & Triage Summary */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Patient Card */}
-                <Card className="bg-blue-900 text-white border-none">
-                  <CardContent className="p-4">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h2 className="text-2xl font-bold">{selectedAppt.pets.name}</h2>
-                        <p className="opacity-80 text-sm">
-                          {selectedAppt.pets.breed} • {selectedAppt.pets.gender}
-                        </p>
-                      </div>
-                      <Stethoscope size={32} className="opacity-20" />
-                    </div>
-                    <div className="mt-4 pt-4 border-t border-blue-700/50 flex gap-6 text-sm">
-                      <div>
-                        <span className="block opacity-60 text-xs">Owner</span>
-                        {selectedAppt.pets.client_profiles?.first_name} {selectedAppt.pets.client_profiles?.last_name}
-                      </div>
-                      <div>
-                         <span className="block opacity-60 text-xs">Date</span>
-                         {format(new Date(), 'MMM dd, yyyy')}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
 
-                {/* Triage/Vitals Card */}
-                <Card className={`${triageData ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-dashed'}`}>
-                   <CardHeader className="pb-2">
-                     <CardTitle className="text-sm font-medium flex items-center gap-2 text-gray-600">
-                       <Activity size={16} /> Triage Vitals
-                       {!triageData && <span className="text-xs font-normal text-red-400">(Not recorded)</span>}
-                     </CardTitle>
-                   </CardHeader>
-                   <CardContent>
-                     {triageData ? (
-                       <div className="grid grid-cols-3 gap-4 text-center">
-                         <div>
-                            <div className="flex items-center justify-center gap-1 text-gray-500 text-xs mb-1"><Weight size={12}/> Wt</div>
-                            <span className="font-bold text-lg">{triageData.weight}kg</span>
-                         </div>
-                         <div>
-                            <div className="flex items-center justify-center gap-1 text-gray-500 text-xs mb-1"><Thermometer size={12}/> Temp</div>
-                            <span className={`font-bold text-lg ${triageData.temperature > 39 ? 'text-red-600' : ''}`}>
-                                {triageData.temperature}°C
-                            </span>
-                         </div>
-                         <div>
-                            <div className="flex items-center justify-center gap-1 text-gray-500 text-xs mb-1"><Heart size={12}/> HR</div>
-                            <span className="font-bold text-lg">{triageData.heart_rate}</span>
-                         </div>
-                         <div className="col-span-3 text-left mt-2 text-xs bg-white p-2 rounded border">
-                           <span className="font-semibold">Notes:</span> {triageData.notes || 'No triage notes.'}
-                         </div>
-                       </div>
-                     ) : (
-                       <div className="text-sm text-gray-400 text-center py-2">
-                         Nurse has not entered vitals yet.
-                       </div>
-                     )}
-                   </CardContent>
-                </Card>
-              </div>
+              {/* Patient Card */}
+              <Card className="bg-blue-900 text-white border-none">
+                <CardContent className="p-4">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h2 className="text-2xl font-bold">{selectedAppt.pets.name}</h2>
+                      <p className="opacity-80 text-sm">
+                        {selectedAppt.pets.breed} • {selectedAppt.pets.gender}
+                      </p>
+                    </div>
+                    <Stethoscope size={32} className="opacity-20" />
+                  </div>
+                  <div className="mt-4 pt-4 border-t border-blue-700/50 flex gap-6 text-sm">
+                    <div>
+                      <span className="block opacity-60 text-xs">Owner</span>
+                      {selectedAppt.pets.client_profiles?.first_name} {selectedAppt.pets.client_profiles?.last_name}
+                    </div>
+                    <div>
+                       <span className="block opacity-60 text-xs">Date</span>
+                       {format(new Date(), 'MMM dd, yyyy')}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
-              {/* 2. The Medical Record Form */}
+              {/* The Medical Record Form */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -275,11 +210,11 @@ export default function ConsultationPage() {
                 </CardHeader>
                 <CardContent>
                   <form onSubmit={handleSubmit} className="space-y-6">
-                    
+
                     <div className="space-y-2">
                       <Label className="text-blue-800 font-semibold">Chief Complaint / History (Subjective)</Label>
-                      <Textarea 
-                        placeholder="Why is the patient here? History of illness..." 
+                      <Textarea
+                        placeholder="Why is the patient here? History of illness..."
                         className="min-h-[80px]"
                         value={record.chief_complaint}
                         onChange={e => setRecord({...record, chief_complaint: e.target.value})}
@@ -288,8 +223,8 @@ export default function ConsultationPage() {
 
                     <div className="space-y-2">
                       <Label className="text-blue-800 font-semibold">Examination Findings (Objective)</Label>
-                      <Textarea 
-                        placeholder="EENT, Heart/Lungs, Abdomen palpation, Musculoskeletal..." 
+                      <Textarea
+                        placeholder="EENT, Heart/Lungs, Abdomen palpation, Musculoskeletal..."
                         className="min-h-[100px]"
                         value={record.examination_findings}
                         onChange={e => setRecord({...record, examination_findings: e.target.value})}
@@ -298,8 +233,8 @@ export default function ConsultationPage() {
 
                     <div className="space-y-2">
                       <Label className="text-blue-800 font-semibold">Diagnosis (Assessment)</Label>
-                      <Input 
-                        placeholder="Primary diagnosis..." 
+                      <Input
+                        placeholder="Primary diagnosis..."
                         className="font-medium"
                         value={record.diagnosis}
                         onChange={e => setRecord({...record, diagnosis: e.target.value})}
@@ -308,8 +243,8 @@ export default function ConsultationPage() {
 
                     <div className="space-y-2">
                       <Label className="text-blue-800 font-semibold">Treatment Plan (Plan)</Label>
-                      <Textarea 
-                        placeholder="Medications given, procedures performed, tests ordered..." 
+                      <Textarea
+                        placeholder="Medications given, procedures performed, tests ordered..."
                         className="min-h-[80px]"
                         value={record.treatment_plan}
                         onChange={e => setRecord({...record, treatment_plan: e.target.value})}
@@ -319,16 +254,16 @@ export default function ConsultationPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>Follow-up Instructions</Label>
-                        <Input 
-                          placeholder="e.g. Monitor appetite" 
+                        <Input
+                          placeholder="e.g. Monitor appetite"
                           value={record.follow_up_instructions}
                           onChange={e => setRecord({...record, follow_up_instructions: e.target.value})}
                         />
                       </div>
                       <div className="space-y-2">
                         <Label>Next Appointment Recommended</Label>
-                        <Input 
-                          type="date" 
+                        <Input
+                          type="date"
                           value={record.next_appointment}
                           onChange={e => setRecord({...record, next_appointment: e.target.value})}
                         />
@@ -359,19 +294,4 @@ export default function ConsultationPage() {
       </div>
     </div>
   );
-}
-
-// Helper icon for missing CheckedIn
-function CheckCircle2({ size }: { size: number }) {
-  return (
-    <svg 
-      xmlns="http://www.w3.org/2000/svg" 
-      width={size} height={size} 
-      viewBox="0 0 24 24" fill="none" 
-      stroke="currentColor" strokeWidth="3" 
-      strokeLinecap="round" strokeLinejoin="round"
-    >
-      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
-    </svg>
-  )
 }
