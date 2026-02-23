@@ -17,7 +17,9 @@ import {
   Menu,
   IdCard,
   Logs,
+  ChartLine,
   X,
+  ChartColumn,
 } from "lucide-react";
 
 interface AdminSidebarProps {
@@ -66,6 +68,8 @@ const menuItems: MenuItem[] = [
     { name: 'Inventory', icon: <Package size={20} />, path: '/admin/inventory' },
     { name: 'Billing & Invoice', icon: <Receipt size={20} />, path: '/admin/billing' },
     { name: 'Users', icon: <Users size={20} />, path: '/admin/users-management' },
+    { name: 'Sales Report', icon: <ChartLine size={20} />, path: '/admin/sales-report' },
+
     { name: 'Employees', icon: <IdCard size={20} />, path: '/admin/employees' },
     { name: 'Logs', icon: <Logs size={20} />, path: '/admin/logs' },
 

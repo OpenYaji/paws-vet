@@ -53,6 +53,7 @@ export default function AdminHeader({ setMobileOpen, user }: AdminHeaderProps) {
     { name: 'Pets', path: '/admin/pets', keywords: ['pets', 'animals', 'patients'] },
     { name: 'Products', path: '/admin/products', keywords: ['products', 'inventory', 'items'] },
     { name: 'Billing & Invoice', path: '/admin/billing', keywords: ['billing', 'invoice', 'payment'] },
+    { name: 'Point Of Sale', path: '/admin/billing/pos', keywords: ['POS', 'Point', 'Sale'] },
     { name: 'Settings', path: '/admin/settings', keywords: ['settings', 'preferences', 'configuration'] },
     { name: 'Help & Support', path: '/admin/help', keywords: ['help', 'support', 'assistance'] },
   ];
