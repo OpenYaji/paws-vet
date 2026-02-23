@@ -43,6 +43,33 @@ export async function PATCH(req: NextRequest) {
         );
       }
 
+      // ── FIFO: deduct from oldest batch first ──────────────────────────
+      const { data: batches } = await supabaseAdmin
+        .from('product_batches')
+        .select('id, quantity')
+        .eq('product_id', productId)
+        .order('created_at', { ascending: true });
+
+      if (batches && batches.length > 0) {
+        let remaining = quantity;
+        for (const batch of batches) {
+          if (remaining <= 0) break;
+          if (batch.quantity <= remaining) {
+            // Entire batch consumed — remove it
+            remaining -= batch.quantity;
+            await supabaseAdmin.from('product_batches').delete().eq('id', batch.id);
+          } else {
+            // Partial deduction from this batch
+            await supabaseAdmin
+              .from('product_batches')
+              .update({ quantity: batch.quantity - remaining })
+              .eq('id', batch.id);
+            remaining = 0;
+          }
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────
+
       const { error: updateError } = await supabaseAdmin
         .from('products')
         .update({ stock_quantity: newStock })

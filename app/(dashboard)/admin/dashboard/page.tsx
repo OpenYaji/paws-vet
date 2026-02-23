@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { AlertCircle, Users, PawPrint, Calendar, Stethoscope, Package, Receipt, TrendingUp, BarChart3, ShoppingCart, FileText, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { StackedAreaChart, BarChart, MultiLineChart } from '@/components/dashboard/charts';
 import { DonutChart } from '@/components/dashboard/donut-chart';
+import { AgenticInsights } from '@/components/dashboard/AgenticInsights';
 
 interface DashboardStats {
   totalClients: number;
@@ -268,6 +269,7 @@ export default function AdminDashboardPage() {
           </p>
         </div>
       </div>
+      <AgenticInsights stats={stats} />
 
       {/* ═══════════ ROW 1: 4 Metric Cards ═══════════ */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

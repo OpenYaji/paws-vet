@@ -159,7 +159,7 @@ export default function BillingDashboard() {
       </div>
 
       {/* Alert for low stock */}
-      {lowStockProducts.length > 0 && (
+      {/* {lowStockProducts.length > 0 && (
         <Card className="border-destructive/50 bg-destructive/10 shadow-none">
           <CardContent className="py-3 px-4">
             <div className="flex items-center gap-2">
@@ -183,7 +183,7 @@ export default function BillingDashboard() {
             </div>
           </CardContent>
         </Card>
-      )}
+      )} */}
 
       {/* Main Action Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
