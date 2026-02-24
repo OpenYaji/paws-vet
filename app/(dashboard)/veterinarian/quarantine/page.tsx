@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/auth-client';
 import useSWR, { mutate } from 'swr';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,6 +16,12 @@ import {
   ShieldAlert, Search, Clock, AlertTriangle, CheckCircle2, Plus
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { Fetcher } from '@/lib/fetcher';
+import { Pet } from '@/types/pets';
+
+type PetsResponse = {
+  pets: Pet[];
+}
 
 interface QuarantineRecord {
   id: string;
@@ -39,59 +45,48 @@ interface QuarantineRecord {
   };
 }
 
-// Fetch quarantined pets
-const fetchQuarantine = async () => {
-  const { data, error } = await supabase
-    .from('quarantine_records')
-    .select(`
-      id,
-      pet_id,
-      reason,
-      start_date,
-      expected_end_date,
-      status,
-      notes,
-      created_at,
-      pets (
-        id,
-        name,
-        species,
-        breed,
-        gender,
-        client_profiles (first_name, last_name)
-      )
-    `)
-    .in('status', ['active', 'extended'])
-    .order('created_at', { ascending: false });
-
-  if (error) throw error;
-  return data || [];
-};
-
-// Fetch all pets for adding new quarantine
-const fetchPets = async () => {
-  const { data, error } = await supabase
-    .from('pets')
-    .select(`
-      id,
-      name,
-      species,
-      breed,
-      client_profiles (first_name, last_name)
-    `)
-    .order('name', { ascending: true });
-
-  if (error) throw error;
-  return data || [];
-};
-
 export default function QuarantinePage() {
-  const { data: quarantineRecords = [], isLoading } = useSWR('quarantine-list', fetchQuarantine);
-  const { data: allPets = [] } = useSWR('all-pets', fetchPets);
+  // Fetch quarantined pets
+  const { data: quarantineRecords = [], error, isLoading } = useSWR<QuarantineRecord[]>(
+    '/api/quarantine',
+    Fetcher
+  );
+
+  // Fetch all pets for adding new quarantine
+  useEffect(() => {
+    const fetchPets = async () => {
+      const { data, error: petsError } = await supabase
+        .from('pets')
+        .select(`
+          id,
+          name,
+          species,
+          breed,
+          gender,
+          client_profiles(
+            id,
+            first_name,
+            last_name
+            )
+          `)
+        .eq('is_active', true)
+        .order('name', { ascending: true });
+
+      if (petsError) {
+        console.error('Error fetching all pets:', petsError);
+      } else {
+        setAllPets(data || []);
+      }
+    };
+
+    fetchPets();
+  }, []);
+
   const [selectedRecord, setSelectedRecord] = useState<any | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [allPets, setAllPets] = useState<any[]>([]);
 
   const safeRecords = Array.isArray(quarantineRecords) ? quarantineRecords : [];
 
@@ -115,20 +110,18 @@ export default function QuarantinePage() {
     setIsSaving(true);
 
     try {
-      const { error } = await supabase
-        .from('quarantine_records')
-        .insert([{
-          pet_id: form.pet_id,
-          reason: form.reason,
-          start_date: form.start_date,
-          expected_end_date: form.expected_end_date || null,
-          status: 'active',
-          notes: form.notes || null,
-        }]);
+      const response = await fetch('/api/quarantine', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
 
-      if (error) throw error;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to add quarantine record');
+      }
 
-      mutate('quarantine-list');
+      mutate('/api/quarantine');
       setShowAddForm(false);
       setForm({
         pet_id: '', reason: '', start_date: new Date().toISOString().split('T')[0],
@@ -150,7 +143,7 @@ export default function QuarantinePage() {
 
       if (error) throw error;
 
-      mutate('quarantine-list');
+      mutate('/api/quarantine');
       setSelectedRecord(null);
     } catch (error: any) {
       alert('Error releasing from quarantine: ' + error.message);

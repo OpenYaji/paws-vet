@@ -1,42 +1,21 @@
-import { createClient } from "@supabase/supabase-js";
+import { createCookieClient } from "@/lib/supabase-server";
+import { supabaseAdmin } from "@/lib/supabase-admin-server";
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/auth-helpers-nextjs";
 
-// 1. Initialize Supabase with SERVICE ROLE KEY (Bypasses RLS policies)
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-  process.env.SUPABASE_SERVICE_ROLE_KEY || "",
-);
+export const dynamic = "force-dynamic";
+
+const admin = supabaseAdmin(); // Initialize admin client at module level for reuse in both GET and POST
 
 // --- GET: Fetch "Waiting Room" (Patients Ready for Triage) ---
 export async function GET(request: NextRequest) {
   try {
-    const cookieStore = await cookies();
-
-    const authClient = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return cookieStore.getAll();
-          },
-          setAll(cookiesToSet) {
-            try {
-              cookiesToSet.forEach(({ name, value, options }) =>
-                cookieStore.set(name, value, options),
-              );
-            } catch {}
-          },
-        },
-      },
-    );
-
+    const supabase = await createCookieClient();
     const {
       data: { user },
       error: authError,
-    } = await authClient.auth.getUser();
+    } = await supabase.auth.getUser();
 
     if (authError || !user || user.user_metadata.role !== "veterinarian") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -70,7 +49,7 @@ export async function GET(request: NextRequest) {
       serverTime: now.toISOString(),
     });
 
-    const { data, error } = await supabase
+    const { data, error } = await admin
       .from("appointments")
       .select(
         `
@@ -214,7 +193,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 1. Insert triage record
-    const { data: triageData, error: triageError } = await supabase
+    const { data: triageData, error: triageError } = await admin
       .from("triage_records")
       .insert({
         appointment_id,
@@ -236,7 +215,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Update pet weight
-    const { error: petError } = await supabase
+    const { error: petError } = await admin
       .from("pets")
       .update({ weight: parseFloat(weight) })
       .eq("id", pet_id);

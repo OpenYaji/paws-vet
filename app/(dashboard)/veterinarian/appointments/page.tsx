@@ -2,13 +2,15 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
-import { Calendar, Stethoscope, Camera } from 'lucide-react';
+import { Calendar, Stethoscope, Camera, ClipboardList } from 'lucide-react';
 import AppointmentsContent from '@/components/veterinarian/appointments/appointments-content';
+import TriageContent from '@/components/veterinarian/appointments/triage-content';
 import ConsultationContent from '@/components/veterinarian/appointments/consultation-content';
 import NeuterContent from '@/components/veterinarian/appointments/neuter-content';
 
 const tabConfig = [
   { value: 'calendar', label: 'Appointment Calendar', icon: Calendar },
+  { value: 'triage', label: 'Triage', icon: ClipboardList },
   { value: 'consultation', label: 'Consultation', icon: Stethoscope },
   { value: 'neuter', label: 'Neuter', icon: Camera },
 ] as const;
@@ -60,7 +62,7 @@ export default function AppointmentsPage() {
     <div className="max-w-7xl mx-auto space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-foreground">My Appointments</h1>
-        <p className="text-muted-foreground">View schedules, consultations, and neuter appointments</p>
+        <p className="text-muted-foreground">View schedules, triage, consultations, and neuter appointments</p>
       </div>
 
       <Tabs value={activeTab} onValueChange={(v) => handleTabChange(v as TabValue)} className="space-y-6">
@@ -121,6 +123,7 @@ export default function AppointmentsPage() {
                 }}
               >
                 {tab.value === 'calendar' && <AppointmentsContent />}
+                {tab.value === 'triage' && <TriageContent />}
                 {tab.value === 'consultation' && <ConsultationContent />}
                 {tab.value === 'neuter' && <NeuterContent />}
               </div>

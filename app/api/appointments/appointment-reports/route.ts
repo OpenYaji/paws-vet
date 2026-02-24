@@ -1,11 +1,19 @@
-import { createClient } from "@/utils/supabase/server";
+import { createCookieClient } from "@/lib/supabase-server";
 import { NextRequest, NextResponse } from "next/server";
+import { supabaseAdmin } from "@/lib/supabase-admin-server";
 
 export const dynamic = "force-dynamic";
 
+// Test this API with Postman: /api/appointments/appointment-reports?date=2024-06-01 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
+    const supabase = await createCookieClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user || user.user_metadata.role !== "veterinarian") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const dateParam = searchParams.get("date");
 
@@ -23,10 +31,18 @@ export async function GET(request: NextRequest) {
     endOfWeek.setDate(startOfWeek.getDate() + 6); // Set to Saturday
     endOfWeek.setHours(23, 59, 59, 999);
 
-    console.log(`Generating report for week: ${startOfWeek.toISOString()} to ${endOfWeek.toISOString()}`);
+    // Use start of next week for better filtering (lt instead of lte)
+    const startOfNextWeek = new Date(endOfWeek);
+    startOfNextWeek.setDate(endOfWeek.getDate() + 1);
+    startOfNextWeek.setHours(0, 0, 0, 0);
 
+    console.log(`Generating report for week: ${startOfWeek.toISOString()} to ${endOfWeek.toISOString()}`);
+    console.log(`Query range: ${startOfWeek.toISOString()} to ${startOfNextWeek.toISOString()}`);
+
+    const admin = supabaseAdmin(); // Use admin client to bypass RLS for reporting
+    
     // Fetch appointments with necessary fields and relations
-    const { data: appointments, error } = await supabase
+    const { data: appointments, error } = await admin
       .from("appointments")
       .select(`
         id,
@@ -39,14 +55,26 @@ export async function GET(request: NextRequest) {
         )
       `)
       .gte("scheduled_start", startOfWeek.toISOString())
-      .lte("scheduled_start", endOfWeek.toISOString());
+      .lt("scheduled_start", startOfNextWeek.toISOString());
 
     if (error) {
       console.error("Error fetching appointments for report:", error);
-      return NextResponse.json({ 
-        error: "Failed to fetch appointment data", 
-        details: error.message 
+      return NextResponse.json({
+        error: "Failed to fetch appointment data",
+        details: error.message
       }, { status: 500 });
+    }
+
+    console.log(`Found ${appointments?.length || 0} appointments in date range`);
+    
+    // Debug: Log all appointments found
+    if (appointments && appointments.length > 0) {
+      console.log('Appointments found:', appointments.map(a => ({
+        id: a.id,
+        scheduled_start: a.scheduled_start,
+        status: a.appointment_status,
+        type: a.appointment_type
+      })));
     }
 
     // Initialize counters
@@ -68,10 +96,12 @@ export async function GET(request: NextRequest) {
         "Saturday": 0
       } as Record<string, number>,
       by_veterinarian: {} as Record<string, number>,
+      appointments: [] as any[], // Include raw appointments for debugging
     };
 
     if (appointments) {
       report.total_appointments = appointments.length;
+      report.appointments = appointments; // Store for debugging
 
       appointments.forEach((apt: any) => {
         // Count by Status
@@ -97,6 +127,13 @@ export async function GET(request: NextRequest) {
         report.by_veterinarian[vetName] = (report.by_veterinarian[vetName] || 0) + 1;
       });
     }
+
+    console.log('Report generated:', {
+      total: report.total_appointments,
+      by_status: report.by_status,
+      by_type: report.by_type,
+      by_day: report.by_day
+    });
 
     return NextResponse.json(report);
 
