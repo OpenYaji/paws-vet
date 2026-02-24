@@ -77,10 +77,16 @@ export default function ClientServicesPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center space-y-4">
-          <div className="w-12 h-12 mx-auto animate-pulse text-primary text-5xl">🩺</div>
-          <p className="text-muted-foreground">Loading services...</p>
+          <div className="relative w-16 h-16 mx-auto">
+            <div className="absolute inset-0 bg-gradient-to-r from-primary to-primary/50 rounded-full animate-pulse"></div>
+            <div className="absolute inset-1 bg-card rounded-full flex items-center justify-center">
+              <div className="text-5xl animate-bounce">🩺</div>
+            </div>
+          </div>
+          <p className="text-lg font-medium text-foreground">Loading services...</p>
+          <p className="text-sm text-muted-foreground">Please wait a moment</p>
         </div>
       </div>
     );
@@ -90,41 +96,50 @@ export default function ClientServicesPage() {
     <div className="min-h-screen flex flex-col bg-background">
       <main className="flex-grow">
         {/* Hero */}
-        <section className="py-12 md:py-16 border-b border-border bg-secondary/20">
-          <div className="container mx-auto px-4">
-            <h1 className="text-4xl md:text-5xl font-bold mb-4">Our Services</h1>
-            <p className="text-lg text-muted-foreground max-w-2xl">
-              Comprehensive veterinary services designed to meet every need of your beloved pets.
-            </p>
+        <section className="py-12 md:py-20 border-b border-border bg-gradient-to-br from-primary/10 via-transparent to-primary/5">
+          <div className="container mx-auto px-4 max-w-6xl">
+            <div className="space-y-4">
+              <h1 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">Our Services</h1>
+              <p className="text-xl text-muted-foreground max-w-2xl leading-relaxed">
+                Comprehensive veterinary services designed to keep your beloved pets healthy and happy.
+              </p>
+            </div>
           </div>
         </section>
 
         {/* Services Grid */}
-        <section className="py-16">
-          <div className="container mx-auto px-4">
-            <div className="grid md:grid-cols-2 gap-8 mb-16">
-              {Object.entries(groupedServices).map(([category, categoryServices]) => {
+        <section className="py-16 md:py-24">
+          <div className="container mx-auto px-4 max-w-6xl">
+            <div className="grid md:grid-cols-2 gap-6 mb-16">
+              {Object.entries(groupedServices).map(([category, categoryServices], idx) => {
                 const icon = serviceIconMap[category] || '🩺';
                 const mainService = categoryServices[0];
                 
                 return (
                   <div
                     key={category}
-                    className="bg-card rounded-lg p-8 border border-border hover:shadow-lg transition-shadow"
+                    className="group bg-card rounded-2xl p-8 border border-border hover:shadow-2xl hover:border-primary/50 transition-all duration-300 hover:scale-105 cursor-pointer relative overflow-hidden animate-in fade-in slide-in-from-bottom-4"
+                    style={{ animationDelay: `${idx * 100}ms` }}
                   >
-                    <p className="text-5xl mb-4">{icon}</p>
-                    <h3 className="text-2xl font-bold mb-2">{category}</h3>
-                    <p className="text-muted-foreground mb-6">
-                      {mainService.description || `Professional ${category.toLowerCase()} services for your pets`}
-                    </p>
+                    <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                    <div className="relative z-10">
+                      <p className="text-6xl mb-4 group-hover:scale-110 transition-transform duration-300 inline-block">{icon}</p>
+                      <h3 className="text-2xl font-bold mb-2 text-foreground group-hover:text-primary transition-colors">{category}</h3>
+                      <p className="text-muted-foreground mb-6 leading-relaxed">
+                        {mainService.description || `Professional ${category.toLowerCase()} services for your pets`}
+                      </p>
 
-                    <div className="space-y-2">
-                      {categoryServices.map((service) => (
-                        <div key={service.id} className="flex items-start gap-3">
-                          <span className="text-primary font-bold flex-shrink-0">✓</span>
-                          <span className="text-sm">{service.service_name}</span>
-                        </div>
-                      ))}
+                      <div className="space-y-3 bg-secondary/30 rounded-lg p-4">
+                        {categoryServices.map((service) => (
+                          <div key={service.id} className="flex items-start gap-3 group/item">
+                            <span className="text-primary font-bold flex-shrink-0 text-lg group-hover/item:scale-125 transition-transform">✓</span>
+                            <div className="flex-1">
+                              <p className="font-medium">{service.service_name}</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">${service.base_price.toFixed(2)} • {service.duration_minutes} min</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 );
@@ -134,11 +149,14 @@ export default function ClientServicesPage() {
         </section>
 
         {/* Why Choose Our Services */}
-        <section className="py-16 bg-secondary/20">
-          <div className="container mx-auto px-4">
-            <h2 className="text-3xl font-bold text-center mb-12">Why Choose PAWS Services</h2>
+        <section className="py-16 md:py-24 bg-gradient-to-br from-secondary/30 via-transparent to-secondary/20">
+          <div className="container mx-auto px-4 max-w-6xl">
+            <div className="text-center mb-16 space-y-3">
+              <h2 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">Why Choose PAWS Services</h2>
+              <p className="text-lg text-muted-foreground">Excellence in veterinary care</p>
+            </div>
 
-            <div className="grid md:grid-cols-3 gap-8">
+            <div className="grid md:grid-cols-3 gap-6">
               {[
                 {
                   icon: '👨‍⚕️',
@@ -171,10 +189,16 @@ export default function ClientServicesPage() {
                   desc: 'We treat your pet like our own family',
                 },
               ].map((reason, idx) => (
-                <div key={idx} className="bg-card rounded-lg p-6 border border-border text-center">
-                  <p className="text-4xl mb-3">{reason.icon}</p>
-                  <h3 className="font-semibold text-lg mb-2">{reason.title}</h3>
-                  <p className="text-muted-foreground text-sm">{reason.desc}</p>
+                <div 
+                  key={idx} 
+                  className="group bg-card rounded-2xl p-8 border border-border hover:shadow-xl hover:border-primary/50 transition-all duration-300 hover:scale-105 text-center relative overflow-hidden"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                  <div className="relative z-10">
+                    <p className="text-5xl mb-4 group-hover:scale-125 transition-transform duration-300 inline-block">{reason.icon}</p>
+                    <h3 className="font-semibold text-lg mb-2 group-hover:text-primary transition-colors">{reason.title}</h3>
+                    <p className="text-muted-foreground text-sm leading-relaxed">{reason.desc}</p>
+                  </div>
                 </div>
               ))}
             </div>
@@ -182,45 +206,56 @@ export default function ClientServicesPage() {
         </section>
 
         {/* Pricing Info */}
-        <section className="py-16">
-          <div className="container mx-auto px-4">
-            <div className="max-w-3xl mx-auto bg-card rounded-lg p-8 border border-border">
-              <h2 className="text-2xl font-bold mb-6">Service Pricing</h2>
-              <p className="text-muted-foreground mb-6">
-                Our pricing is transparent and competitive. We offer package discounts and wellness plans to help you save on routine care. Contact us for a personalized quote based on your pet's specific needs.
-              </p>
+        <section className="py-16 md:py-24">
+          <div className="container mx-auto px-4 max-w-4xl">
+            <div className="max-w-3xl mx-auto bg-gradient-to-br from-card to-card/50 rounded-2xl p-8 border border-border relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
+              <div className="relative z-10 space-y-6">
+                <div>
+                  <h2 className="text-3xl font-bold mb-2 flex items-center gap-2">💰 Service Pricing</h2>
+                  <p className="text-muted-foreground leading-relaxed">
+                    Our pricing is transparent and competitive. We offer package discounts and wellness plans to help you save on routine care. Contact us for a personalized quote based on your pet's specific needs.
+                  </p>
+                </div>
 
-              <div className="grid md:grid-cols-2 gap-4 mb-6">
-                {services.slice(0, 4).map((service) => (
-                  <div key={service.id} className="bg-secondary/30 rounded-lg p-4">
-                    <h4 className="font-semibold mb-2">{service.service_name}</h4>
-                    <p className="text-2xl font-bold text-primary">
-                      ${service.base_price.toFixed(2)}
-                      {service.requires_specialist && '+'}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {service.duration_minutes} minutes
-                    </p>
-                  </div>
-                ))}
+                <div className="grid md:grid-cols-2 gap-4">
+                  {services.slice(0, 4).map((service) => (
+                    <div key={service.id} className="bg-background/50 hover:bg-background/80 rounded-xl p-4 border border-border/50 hover:border-primary/30 transition-all duration-200 group/price">
+                      <h4 className="font-semibold mb-2 group-hover/price:text-primary transition-colors">{service.service_name}</h4>
+                      <p className="text-3xl font-bold text-primary">
+                        ${service.base_price.toFixed(2)}
+                        {service.requires_specialist && <span className="text-sm ml-1">+</span>}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
+                        ⏱️ {service.duration_minutes} minutes
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                <Button asChild className="w-full bg-primary hover:bg-primary/90 h-12 text-base font-semibold transition-all duration-200 hover:shadow-lg">
+                  <Link href="/client/appointments">📅 Book Your Service</Link>
+                </Button>
               </div>
-
-              <Button asChild className="w-full bg-primary hover:bg-primary/90">
-                <Link href="/client/appointments">Book Your Service</Link>
-              </Button>
             </div>
           </div>
         </section>
 
         {/* CTA */}
-        <section className="py-16 bg-primary text-primary-foreground">
-          <div className="container mx-auto px-4 text-center space-y-6">
-            <h2 className="text-3xl font-bold">Ready to Schedule Your Pet's Appointment?</h2>
-            <p className="text-lg opacity-95 max-w-2xl mx-auto">
-              Contact us today to book a consultation or schedule any of our services.
-            </p>
-            <Button asChild size="lg" variant="secondary">
-              <Link href="/client/appointments">Book Now</Link>
+        <section className="py-16 md:py-24 bg-gradient-to-r from-primary to-primary/80 text-primary-foreground relative overflow-hidden">
+          <div className="absolute inset-0 opacity-10">
+            <div className="absolute top-0 left-0 w-64 h-64 bg-primary-foreground rounded-full blur-3xl"></div>
+            <div className="absolute bottom-0 right-0 w-80 h-80 bg-primary-foreground rounded-full blur-3xl"></div>
+          </div>
+          <div className="container mx-auto px-4 max-w-4xl text-center space-y-8 relative z-10">
+            <div className="space-y-4">
+              <h2 className="text-4xl md:text-5xl font-bold">Ready to Schedule Your Pet's Appointment?</h2>
+              <p className="text-lg opacity-95 max-w-2xl mx-auto leading-relaxed">
+                Contact us today to book a consultation or schedule any of our services.
+              </p>
+            </div>
+            <Button asChild size="lg" variant="secondary" className="font-semibold hover:shadow-xl transition-all">
+              <Link href="/client/appointments">Book Now →</Link>
             </Button>
           </div>
         </section>

@@ -1,193 +1,184 @@
 'use client';
 
-import { ShoppingBag, ExternalLink, Star, Package, Truck, BadgeCheck } from 'lucide-react';
+import { ShoppingBag, ExternalLink, Star, Package, Truck, BadgeCheck, Zap } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import Link from 'next/link';
 
 export default function ClientProductsPage() {
   return (
-    <div className="page">
-      <div className="page-header">
-        <h1 style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <ShoppingBag size={28} />
-          Products
-        </h1>
-        <p>Shop premium pet products from our official Shopee store</p>
-      </div>
-
-      {/* Main Shopee CTA */}
-      <div className="card" style={{ padding: 60, textAlign: 'center', background: 'linear-gradient(135deg, #fff5f5 0%, #ffffff 100%)' }}>
-        <div style={{ maxWidth: 560, margin: '0 auto' }}>
-
-          <div style={{
-            width: 100,
-            height: 100,
-            margin: '0 auto 24px',
-            background: 'linear-gradient(135deg, #ee4d2d 0%, #ff6b3d 100%)',
-            borderRadius: '50%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 8px 20px rgba(238,77,45,0.3)',
-            animation: 'pulse 2s ease-in-out infinite',
-          }}>
-            <ShoppingBag size={50} color="white" strokeWidth={2.5} />
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <div className="border-b border-border bg-gradient-to-br from-primary/10 via-transparent to-primary/5 py-12 md:py-16">
+        <div className="max-w-6xl mx-auto px-4 space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-primary/20 rounded-full flex items-center justify-center">
+              <ShoppingBag size={28} className="text-primary" />
+            </div>
+            <h1 className="text-4xl md:text-5xl font-bold">Pet Products</h1>
           </div>
-
-          <h2 style={{
-            fontSize: 28,
-            fontWeight: 800,
-            marginBottom: 16,
-            background: 'linear-gradient(135deg, #ee4d2d 0%, #ff6b3d 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            letterSpacing: '-0.5px',
-          }}>
-            Visit Our Shopee Store
-          </h2>
-
-          <p style={{ color: '#64748b', fontSize: 16, marginBottom: 32, lineHeight: 1.6 }}>
-            Browse our complete collection of vet-approved pet food, accessories,
-            healthcare items, and more. Delivered straight to your door!
-          </p>
-
-          <a
-            href="https://ph.shp.ee/5dyuZHF"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              padding: '16px 40px',
-              fontSize: 18,
-              fontWeight: 700,
-              background: 'linear-gradient(135deg, #ee4d2d 0%, #ff6b3d 100%)',
-              color: 'white',
-              gap: 12,
-              boxShadow: '0 4px 14px rgba(238,77,45,0.4)',
-              transition: 'all 0.3s ease',
-              border: 'none',
-              borderRadius: 8,
-              textDecoration: 'none',
-            }}
-            onMouseEnter={(e: React.MouseEvent<HTMLAnchorElement>) => {
-              e.currentTarget.style.transform = 'translateY(-2px)';
-              e.currentTarget.style.boxShadow = '0 6px 20px rgba(238,77,45,0.5)';
-            }}
-            onMouseLeave={(e: React.MouseEvent<HTMLAnchorElement>) => {
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = '0 4px 14px rgba(238,77,45,0.4)';
-            }}
-          >
-            <ShoppingBag size={24} />
-            Shop Now on Shopee
-            <ExternalLink size={20} />
-          </a>
-
-          <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-            <ExternalLink size={12} />
-            Opens in a new window · Secure Shopee checkout
-          </p>
+          <p className="text-lg text-muted-foreground max-w-2xl">Shop premium pet products from our official Shopee store</p>
         </div>
       </div>
 
-      {/* Features Grid */}
-      <div style={{ marginTop: 40 }}>
-        <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 24, textAlign: 'center' }}>
-          Why Shop With Us?
-        </h3>
-
-        <div className="grid-3" style={{ gap: 24 }}>
-          <div className="card feature-card" style={{ padding: 32, textAlign: 'center', transition: 'transform 0.3s ease, box-shadow 0.3s ease' }}>
-            <div style={{
-              width: 64, height: 64, margin: '0 auto 16px',
-              background: 'linear-gradient(135deg, #10b981 0%, #14b8a6 100%)',
-              borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <BadgeCheck size={32} color="white" strokeWidth={2.5} />
+      <div className="max-w-6xl mx-auto px-4 py-16 md:py-24 space-y-16 md:space-y-24">
+        {/* Main Shopee CTA */}
+        <div className="relative">
+          <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-primary/10 rounded-3xl blur-2xl"></div>
+          <div className="relative bg-gradient-to-br from-card to-card/50 border-2 border-primary/20 rounded-3xl p-12 md:p-20 text-center space-y-8">
+            {/* Icon */}
+            <div className="flex justify-center">
+              <div className="relative w-32 h-32">
+                <div className="absolute inset-0 bg-gradient-to-br from-primary to-primary/50 rounded-full animate-pulse blur-xl opacity-70"></div>
+                <div className="relative z-10 w-32 h-32 bg-white dark:bg-slate-900 rounded-full flex items-center justify-center border-4 border-primary/30">
+                  <ShoppingBag size={64} className="text-primary" strokeWidth={1.5} />
+                </div>
+              </div>
             </div>
-            <h4 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8, color: '#0f172a' }}>Vet-Approved Products</h4>
-            <p style={{ fontSize: 14, color: '#64748b', lineHeight: 1.6, margin: 0 }}>
-              Every product is carefully selected and approved by our veterinarians for safety and quality
-            </p>
+
+            {/* Content */}
+            <div className="space-y-4 max-w-2xl mx-auto">
+              <h2 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+                Visit Our Shopee Store
+              </h2>
+              <p className="text-lg text-muted-foreground leading-relaxed">
+                Browse our complete collection of vet-approved pet food, accessories, healthcare items, and more. Delivered straight to your door with Shopee's trusted service!
+              </p>
+            </div>
+
+            {/* CTA Button */}
+            <div className="flex flex-col items-center gap-4 pt-4">
+              <Button
+                asChild
+                size="lg"
+                className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-bold group h-14 px-8 shadow-lg hover:shadow-xl transition-all duration-300"
+              >
+                <a
+                  href="https://ph.shp.ee/5dyuZHF"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-3"
+                >
+                  <ShoppingBag size={24} className="group-hover:scale-110 transition-transform" />
+                  <span>Shop Now on Shopee</span>
+                  <ExternalLink size={20} className="group-hover:translate-x-1 transition-transform" />
+                </a>
+              </Button>
+              <p className="text-sm text-muted-foreground flex items-center gap-2">
+                <Zap size={16} className="text-yellow-500" />
+                Opens in a new window · Secure Shopee checkout
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Features Grid */}
+        <div className="space-y-8">
+          <div className="text-center space-y-3">
+            <h3 className="text-3xl md:text-4xl font-bold">Why Shop With Us?</h3>
+            <p className="text-muted-foreground text-lg">Trusted by pet owners nationwide</p>
           </div>
 
-          <div className="card feature-card" style={{ padding: 32, textAlign: 'center', transition: 'transform 0.3s ease, box-shadow 0.3s ease' }}>
-            <div style={{
-              width: 64, height: 64, margin: '0 auto 16px',
-              background: 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)',
-              borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <Truck size={32} color="white" strokeWidth={2.5} />
-            </div>
-            <h4 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8, color: '#0f172a' }}>Fast & Reliable Delivery</h4>
-            <p style={{ fontSize: 14, color: '#64748b', lineHeight: 1.6, margin: 0 }}>
-              Quick shipping through Shopee with tracking available on every order
-            </p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[
+              {
+                icon: BadgeCheck,
+                color: 'from-emerald-500 to-teal-500',
+                title: 'Vet-Approved Products',
+                desc: 'Every product is carefully selected and approved by our veterinarians for safety and quality'
+              },
+              {
+                icon: Truck,
+                color: 'from-blue-500 to-indigo-500',
+                title: 'Fast & Reliable Delivery',
+                desc: 'Quick shipping through Shopee with tracking available on every order'
+              },
+              {
+                icon: Star,
+                color: 'from-amber-500 to-orange-500',
+                title: 'Official PAWS Store',
+                desc: 'Authentic products backed by our clinic\'s guarantee and customer support'
+              },
+            ].map((feature, idx) => {
+              const Icon = feature.icon;
+              return (
+                <div
+                  key={idx}
+                  className="group relative bg-card border-2 border-border rounded-2xl p-8 hover:border-primary/50 hover:shadow-xl transition-all duration-300 hover:scale-105 overflow-hidden"
+                >
+                  <div className={`absolute inset-0 bg-gradient-to-br ${feature.color} opacity-0 group-hover:opacity-5 transition-opacity duration-300`}></div>
+                  <div className="relative z-10 space-y-4">
+                    <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${feature.color} flex items-center justify-center group-hover:scale-110 transition-transform duration-300`}>
+                      <Icon size={32} className="text-white" strokeWidth={2} />
+                    </div>
+                    <h4 className="text-xl font-bold group-hover:text-primary transition-colors">{feature.title}</h4>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{feature.desc}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Categories Preview */}
+        <div className="space-y-8">
+          <div className="text-center space-y-3">
+            <h3 className="text-3xl md:text-4xl font-bold">Popular Categories</h3>
+            <p className="text-muted-foreground text-lg">Find everything your pet needs</p>
           </div>
 
-          <div className="card feature-card" style={{ padding: 32, textAlign: 'center', transition: 'transform 0.3s ease, box-shadow 0.3s ease' }}>
-            <div style={{
-              width: 64, height: 64, margin: '0 auto 16px',
-              background: 'linear-gradient(135deg, #f59e0b 0%, #f97316 100%)',
-              borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <Star size={32} color="white" strokeWidth={2.5} />
-            </div>
-            <h4 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8, color: '#0f172a' }}>Official PawsVet Store</h4>
-            <p style={{ fontSize: 14, color: '#64748b', lineHeight: 1.6, margin: 0 }}>
-              Authentic products backed by our clinic's guarantee and customer support
-            </p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[
+              { emoji: '🍖', name: 'Pet Food', desc: 'Premium nutrition' },
+              { emoji: '🏥', name: 'Healthcare', desc: 'Vitamins & supplements' },
+              { emoji: '🎾', name: 'Toys & Play', desc: 'Fun for all ages' },
+              { emoji: '🛁', name: 'Grooming', desc: 'Bath & care' },
+            ].map((cat, i) => (
+              <button
+                key={i}
+                className="group bg-card border-2 border-border rounded-xl p-6 md:p-8 text-center hover:border-primary/50 hover:shadow-lg transition-all duration-300 hover:scale-105"
+              >
+                <div className="text-5xl md:text-6xl mb-3 group-hover:scale-125 transition-transform duration-300 inline-block">{cat.emoji}</div>
+                <div className="font-bold text-base md:text-lg group-hover:text-primary transition-colors mb-1">{cat.name}</div>
+                <div className="text-xs md:text-sm text-muted-foreground">{cat.desc}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Trust Badges */}
+        <div className="bg-gradient-to-r from-primary/5 via-transparent to-primary/5 border-2 border-primary/20 rounded-2xl p-8 md:p-12">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-12">
+            {[
+              { Icon: Package, text: 'Secure Packaging' },
+              { Icon: BadgeCheck, text: '100% Authentic' },
+              { Icon: Truck, text: 'Free Shipping ₱500+' },
+            ].map((badge, i) => (
+              <div key={i} className="flex items-center justify-center md:justify-start gap-4">
+                <div className="w-12 h-12 bg-primary/20 rounded-full flex items-center justify-center flex-shrink-0">
+                  <badge.Icon size={24} className="text-primary" />
+                </div>
+                <span className="font-semibold text-sm md:text-base text-foreground">{badge.text}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Secondary CTA */}
+        <div className="text-center space-y-6 py-8 md:py-12">
+          <div className="space-y-2">
+            <h2 className="text-3xl md:text-4xl font-bold">Can't Find What You Need?</h2>
+            <p className="text-lg text-muted-foreground">Check out our services or book a consultation with our vets</p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Button asChild variant="outline" size="lg" className="border-2 h-12">
+              <Link href="/client/services">View Services</Link>
+            </Button>
+            <Button asChild size="lg" className="bg-primary hover:bg-primary/90 h-12">
+              <Link href="/client/appointments">Book Now</Link>
+            </Button>
           </div>
         </div>
       </div>
-
-      {/* Categories Preview */}
-      <div style={{ marginTop: 40 }}>
-        <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 24, textAlign: 'center' }}>
-          Popular Categories
-        </h3>
-        <div className="grid-4" style={{ gap: 16 }}>
-          {[
-            { icon: '🍖', name: 'Pet Food', desc: 'Premium nutrition' },
-            { icon: '🏥', name: 'Healthcare', desc: 'Vitamins & supplements' },
-            { icon: '🎾', name: 'Toys & Play', desc: 'Fun for all ages' },
-            { icon: '🛁', name: 'Grooming', desc: 'Bath & care' },
-          ].map((cat, i) => (
-            <div key={i} className="card" style={{ padding: 20, textAlign: 'center' }}>
-              <div style={{ fontSize: 40, marginBottom: 8 }}>{cat.icon}</div>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>{cat.name}</div>
-              <div style={{ fontSize: 12, color: '#64748b' }}>{cat.desc}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Trust Badges */}
-      <div className="card" style={{ marginTop: 40, padding: 32, background: '#f8fafc', textAlign: 'center' }}>
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 40, flexWrap: 'wrap' }}>
-          {[
-            { icon: <Package size={24} />, text: 'Secure Packaging' },
-            { icon: <BadgeCheck size={24} />, text: '100% Authentic' },
-            { icon: <Truck size={24} />, text: 'Free Shipping on Orders ₱500+' },
-          ].map((badge, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#64748b' }}>
-              {badge.icon}
-              <span style={{ fontSize: 14, fontWeight: 600 }}>{badge.text}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.05); }
-        }
-        .feature-card:hover {
-          transform: translateY(-4px);
-          box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-        }
-      `}</style>
     </div>
   );
 }

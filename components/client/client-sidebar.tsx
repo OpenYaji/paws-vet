@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { supabase } from '@/lib/auth-client';
+import { ThemeToggle } from './theme-toggle';
 import {
   LayoutDashboard, Calendar, PawPrint, Wallet, HandPlatter,
   Settings, ShoppingBasket, X, LogOut,
@@ -317,12 +318,14 @@ export default function ClientSidebar({ collapsed, setCollapsed, mobileOpen, set
       <Link
         href={item.path}
         onClick={() => isMobileLink && setMobileOpen(false)}
-        className={`flex items-center gap-4 p-3 rounded-xl transition-colors ${
-          isActive ? "bg-primary text-primary-foreground font-bold" : "hover:bg-accent"
+        className={`flex items-center gap-4 px-3 py-2.5 rounded-lg transition-all duration-200 ${
+          isActive
+            ? "bg-primary text-primary-foreground font-semibold shadow-md"
+            : "text-foreground hover:bg-accent/60 dark:hover:bg-accent/40"
         } ${isCollapsed ? 'justify-center' : ''}`}
       >
         {item.icon}
-        {!isCollapsed && <span className="whitespace-nowrap">{item.name}</span>}
+        {!isCollapsed && <span className="whitespace-nowrap text-sm">{item.name}</span>}
       </Link>
     </li>
   );
@@ -331,13 +334,13 @@ export default function ClientSidebar({ collapsed, setCollapsed, mobileOpen, set
     const isCollapsed = isMobileView ? false : collapsed;
 
     return (
-      <aside className={`h-screen flex flex-col bg-card border-r transition-all duration-300 overflow-hidden ${isCollapsed ? 'w-20' : 'w-72'}`}>
+      <aside className={`h-screen flex flex-col bg-card border-r border-border transition-all duration-300 overflow-hidden ${isCollapsed ? 'w-20' : 'w-72'}`}>
         <div className="flex flex-col h-full p-4 overflow-hidden">
 
           {/* ── PROFILE HEADER ── */}
-          <header className={`flex items-center mb-8 gap-3 ${isCollapsed ? 'justify-center' : ''}`}>
+          <header className={`flex items-center mb-8 gap-2 ${isCollapsed ? 'justify-center' : ''}`}>
             {/* Avatar */}
-            <div className="flex-shrink-0 relative w-10 h-10 overflow-hidden rounded-full border-2 border-primary bg-accent">
+            <div className="flex-shrink-0 relative w-10 h-10 overflow-hidden rounded-full border-2 border-primary bg-accent shadow-sm">
               <Image
                 src={profile?.avatar_url || "/images/image.png"}
                 alt="Profile"
@@ -356,12 +359,17 @@ export default function ClientSidebar({ collapsed, setCollapsed, mobileOpen, set
               </div>
             )}
 
-            {/* 🔔 Bell — only when sidebar is expanded and not in mobile view */}
-            {!isCollapsed && !isMobileView && <NotificationBell />}
+            {/* 🔔 Bell & 🌙 Theme Toggle — only when sidebar is expanded and not in mobile view */}
+            {!isCollapsed && !isMobileView && (
+              <div className="flex items-center gap-1">
+                <NotificationBell />
+                <ThemeToggle />
+              </div>
+            )}
 
             {/* Mobile close button */}
             {isMobileView && (
-              <button onClick={() => setMobileOpen(false)} className="ml-auto p-2 hover:bg-accent rounded-lg">
+              <button onClick={() => setMobileOpen(false)} className="ml-auto p-2 hover:bg-accent rounded-lg transition-colors duration-200">
                 <X size={20} />
               </button>
             )}
@@ -369,7 +377,7 @@ export default function ClientSidebar({ collapsed, setCollapsed, mobileOpen, set
 
           {/* Nav Items */}
           <nav className="flex-1 flex flex-col justify-between min-h-0 overflow-hidden">
-            <div className="flex flex-col space-y-2">
+            <div className="flex flex-col space-y-1">
               {menuItems.map((item) => (
                 <NavLink
                   key={item.name}
@@ -384,10 +392,10 @@ export default function ClientSidebar({ collapsed, setCollapsed, mobileOpen, set
             {/* Logout pinned at bottom */}
             <button
               onClick={() => setLogoutModalOpen(true)}
-              className={`flex items-center gap-4 p-3 rounded-xl hover:bg-destructive/10 text-destructive ${isCollapsed ? 'justify-center' : ''}`}
+              className={`flex items-center gap-4 px-3 py-2.5 rounded-lg hover:bg-destructive/10 text-destructive transition-all duration-200 ${isCollapsed ? 'justify-center' : ''}`}
             >
               <LogOut size={20} />
-              {!isCollapsed && <span>Logout</span>}
+              {!isCollapsed && <span className="text-sm font-medium">Logout</span>}
             </button>
           </nav>
         </div>

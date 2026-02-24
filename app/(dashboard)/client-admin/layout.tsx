@@ -3,6 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Suspense } from 'react';
+import ClientThemeProvider from '@/components/client/theme-provider';
 import {
   Users,
   PawPrint,
@@ -121,27 +122,28 @@ export default function ClientAdminLayout({
   children: React.ReactNode;
 }) {
   return (
-    <>
-      <style>{`
-        :root {
-          --navy: #0f172a;
-          --navy-800: #1e293b;
-          --navy-700: #334155;
-          --teal: #0d9488;
-          --teal-light: #14b8a6;
-          --teal-pale: #f0fdfa;
-          --slate: #64748b;
-          --slate-light: #94a3b8;
-          --white: #ffffff;
-          --off-white: #f8fafc;
-          --border: #e2e8f0;
-          --red: #ef4444;
-          --red-pale: #fef2f2;
-          --yellow: #f59e0b;
-          --yellow-pale: #fffbeb;
-          --green: #10b981;
-          --green-pale: #f0fdf4;
-          --blue: #3b82f6;
+    <ClientThemeProvider>
+      <>
+        <style>{`
+          :root {
+            --navy: #0f172a;
+            --navy-800: #1e293b;
+            --navy-700: #334155;
+            --teal: #0d9488;
+            --teal-light: #14b8a6;
+            --teal-pale: #f0fdfa;
+            --slate: #64748b;
+            --slate-light: #94a3b8;
+            --white: #ffffff;
+            --off-white: #f8fafc;
+            --border: #e2e8f0;
+            --red: #ef4444;
+            --red-pale: #fef2f2;
+            --yellow: #f59e0b;
+            --yellow-pale: #fffbeb;
+            --green: #10b981;
+            --green-pale: #f0fdf4;
+            --blue: #3b82f6;
           --blue-pale: #eff6ff;
           --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
           --shadow: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04);
@@ -600,6 +602,7 @@ export default function ClientAdminLayout({
           {children}
         </main>
       </div>
-    </>
+      </>
+    </ClientThemeProvider>
   );
 }

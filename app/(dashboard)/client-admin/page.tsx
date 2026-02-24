@@ -369,27 +369,26 @@ function ClientAdminPageInner() {
     appointments.length;
 
   return (
-    <div className="page">
+    <div className="min-h-screen bg-background transition-colors duration-300">
       {/* Toast */}
       {toast && (
-        <div style={{
-          position: 'fixed', bottom: 24, right: 24, zIndex: 9999,
-          background: toast.type === 'success' ? '#059669' : '#dc2626',
-          color: 'white', padding: '12px 20px',
-          borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-lg)',
-          fontSize: 14, fontWeight: 600, maxWidth: 320,
-          animation: 'fadeUp 0.2s ease',
-        }}>
+        <div className={`fixed bottom-6 right-6 z-50 px-6 py-3 rounded-lg text-white font-semibold text-sm animate-in fade-in slide-in-from-bottom-4 duration-200 shadow-lg ${
+          toast.type === 'success' 
+            ? 'bg-gradient-to-r from-emerald-500 to-teal-500' 
+            : 'bg-gradient-to-r from-red-500 to-rose-500'
+        }`}>
           {toast.msg}
         </div>
       )}
 
-      <div className="animate-in">
+      <div className="animate-in fade-in duration-300">
         {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
-          <div className="page-header" style={{ margin: 0 }}>
-            <h1>{tabLabel[activeTab]}</h1>
-            <p>{tabDesc[activeTab]}</p>
+        <div className="flex justify-between items-start mb-8 p-6 md:p-8 bg-gradient-to-br from-primary/10 via-transparent to-primary/5 rounded-xl border border-border/50">
+          <div>
+            <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent mb-2">
+              {tabLabel[activeTab]}
+            </h1>
+            <p className="text-muted-foreground text-sm md:text-base">{tabDesc[activeTab]}</p>
           </div>
           <Link
             href={
@@ -397,7 +396,7 @@ function ClientAdminPageInner() {
               activeTab === 'pets' ? '/client-admin/pets/new' :
               '/client-admin/appointments/new'
             }
-            className="btn btn-primary"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-all duration-200 hover:shadow-lg hover:scale-105 font-semibold text-sm whitespace-nowrap flex-shrink-0"
           >
             <Plus size={16} />
             New {activeTab === 'clients' ? 'Client' : activeTab === 'pets' ? 'Pet' : 'Appointment'}
@@ -405,17 +404,16 @@ function ClientAdminPageInner() {
         </div>
 
         {/* Filters */}
-        <div className="card" style={{ marginBottom: 20 }}>
-          <div style={{ padding: '16px 20px', display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div className="mb-6 p-6 rounded-xl border border-border bg-card shadow-sm transition-all duration-200">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:flex-wrap">
             {/* Search */}
-            <div style={{ position: 'relative', flex: '1 1 280px' }}>
+            <div className="relative flex-1 min-w-[200px] md:min-w-[280px]">
               <Search
                 size={16}
-                style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--slate-light)' }}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
               />
               <input
-                className="form-input"
-                style={{ paddingLeft: 36 }}
+                className="w-full pl-9 pr-4 py-2.5 rounded-lg border border-border bg-background hover:border-primary/50 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all duration-200 text-sm"
                 placeholder={
                   activeTab === 'clients' ? 'Search by name, email, phone…' :
                   activeTab === 'pets' ? 'Search by pet name, species, owner…' :
@@ -429,8 +427,7 @@ function ClientAdminPageInner() {
             {/* Status filter */}
             {(activeTab === 'clients' || activeTab === 'appointments') && (
               <select
-                className="form-input"
-                style={{ width: 'auto', minWidth: 160 }}
+                className="px-4 py-2.5 rounded-lg border border-border bg-background hover:border-primary/50 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all duration-200 text-sm font-medium cursor-pointer"
                 value={statusFilter}
                 onChange={e => setStatusFilter(e.target.value)}
               >
@@ -456,83 +453,102 @@ function ClientAdminPageInner() {
             {/* Archive toggle */}
             {activeTab === 'clients' && (
               <button
-                className={`btn ${showArchived ? 'btn-primary' : 'btn-outline'} btn-sm`}
                 onClick={() => setShowArchived(s => !s)}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold text-sm transition-all duration-200 ${
+                  showArchived
+                    ? 'bg-primary text-primary-foreground shadow-md hover:shadow-lg'
+                    : 'bg-background border border-border text-muted-foreground hover:border-primary/50'
+                }`}
               >
-                <Archive size={14} />
+                <Archive size={16} />
                 {showArchived ? 'Hide Archived' : 'Show Archived'}
               </button>
             )}
 
-            <button className="btn btn-outline btn-sm" onClick={loadTab}>
-              <RefreshCw size={14} /> Refresh
+            <button 
+              onClick={loadTab}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-border bg-background text-muted-foreground hover:border-primary/50 hover:bg-primary/5 transition-all duration-200 font-semibold text-sm"
+            >
+              <RefreshCw size={16} /> 
+              Refresh
             </button>
 
-            <span style={{ fontSize: 13, color: 'var(--slate)', marginLeft: 'auto' }}>
-              {activeCount} of {totalCount} {activeTab}
-            </span>
+            <div className="flex-1 md:flex-none text-right">
+              <span className="text-xs md:text-sm text-muted-foreground font-medium">
+                {activeCount} of {totalCount} {activeTab}
+              </span>
+            </div>
           </div>
         </div>
 
         {/* Table */}
-        <div className="card">
+        <div className="rounded-xl border border-border bg-card overflow-hidden shadow-sm">
           {loading ? (
-            <div className="loading-state">
-              <div className="spinner" />
-              <span>Loading {activeTab}…</span>
+            <div className="flex flex-col items-center justify-center py-16 gap-4 bg-gradient-to-br from-primary/5 to-transparent">
+              <div className="relative w-16 h-16">
+                <div className="absolute inset-0 border-4 border-primary/20 rounded-full animate-pulse"></div>
+                <div className="absolute inset-1 border-t-4 border-primary rounded-full animate-spin"></div>
+              </div>
+              <span className="text-muted-foreground font-medium">Loading {activeTab}…</span>
             </div>
           ) : (
-            <div className="table-wrap">
+            <div className="overflow-x-auto">
 
               {/* CLIENTS TABLE */}
               {activeTab === 'clients' && (
                 filteredClients.length === 0 ? (
-                  <div className="empty-state">
-                    <div className="empty-state-icon"><Users size={24} /></div>
-                    <h3>No clients found</h3>
-                    <p>Try adjusting your search or filters</p>
+                  <div className="flex flex-col items-center justify-center py-16 px-6 gap-4 text-center">
+                    <div className="flex items-center justify-center w-16 h-16 rounded-full bg-primary/10">
+                      <Users size={28} className="text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-lg text-foreground mb-1">No clients found</h3>
+                      <p className="text-muted-foreground text-sm">Try adjusting your search or filters</p>
+                    </div>
                   </div>
                 ) : (
-                  <table>
-                    <thead>
+                  <table className="w-full">
+                    <thead className="bg-muted/50 border-b border-border">
                       <tr>
-                        <th>Client</th>
-                        <th>Contact</th>
-                        <th>Location</th>
-                        <th>Status</th>
-                        <th>Pets</th>
-                        <th>Apts</th>
-                        <th>Last Login</th>
-                        <th></th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Client</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Contact</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Location</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
+                        <th className="px-6 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pets</th>
+                        <th className="px-6 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wide">Apts</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Last Login</th>
+                        <th className="px-6 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">Actions</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-border">
                       {filteredClients.map(c => (
-                        <tr key={c.id}>
-                          <td>
-                            <div style={{ fontWeight: 600, color: 'var(--navy)' }}>
-                              {c.first_name} {c.last_name}
-                            </div>
-                            <div style={{ fontSize: 11, color: 'var(--slate-light)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
-                              {c.id.slice(0, 8)}…
-                            </div>
+                        <tr key={c.id} className="hover:bg-primary/5 transition-colors duration-150">
+                          <td className="px-6 py-4">
+                            <div className="font-semibold text-foreground">{c.first_name} {c.last_name}</div>
+                            <div className="text-xs text-muted-foreground font-mono mt-1">{c.id.slice(0, 8)}…</div>
                           </td>
-                          <td>
-                            <div style={{ fontSize: 14 }}>{c.email}</div>
-                            <div style={{ fontSize: 12, color: 'var(--slate)' }}>{c.phone}</div>
+                          <td className="px-6 py-4">
+                            <div className="text-sm text-foreground">{c.email}</div>
+                            <div className="text-xs text-muted-foreground">{c.phone}</div>
                           </td>
-                          <td style={{ color: 'var(--slate)' }}>{c.city}, {c.state}</td>
-                          <td><span className={statusBadge(c.account_status)}>{c.account_status}</span></td>
-                          <td style={{ textAlign: 'center', fontWeight: 600 }}>{c.pet_count ?? '—'}</td>
-                          <td style={{ textAlign: 'center', fontWeight: 600 }}>{c.appointment_count ?? '—'}</td>
-                          <td style={{ color: 'var(--slate)', fontSize: 13 }}>{formatDate(c.last_login_at)}</td>
-                          <td>
+                          <td className="px-6 py-4 text-sm text-muted-foreground">{c.city}, {c.state}</td>
+                          <td className="px-6 py-4"><span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
+                            c.account_status === 'active' 
+                              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
+                              : c.account_status === 'inactive'
+                              ? 'bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300'
+                              : 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300'
+                          }`}>{c.account_status}</span></td>
+                          <td className="px-6 py-4 text-center font-semibold text-foreground">{c.pet_count ?? '—'}</td>
+                          <td className="px-6 py-4 text-center font-semibold text-foreground">{c.appointment_count ?? '—'}</td>
+                          <td className="px-6 py-4 text-sm text-muted-foreground">{formatDate(c.last_login_at)}</td>
+                          <td className="px-6 py-4 text-right">
                             <Dropdown items={[
                               { label: '👁  View Profile', href: `/client-admin/clients/${c.id}` },
                               { label: '✏️  Edit Profile', href: `/client-admin/clients/${c.id}/edit` },
                               ...(!showArchived ? [{ label: '🗄  Archive', danger: true, onClick: () => handleArchiveClient(c.user_id, `${c.first_name} ${c.last_name}`) }] : []),
                             ]}>
-                              <MoreVertical size={16} />
+                              <MoreVertical size={16} className="text-muted-foreground hover:text-foreground transition-colors" />
                             </Dropdown>
                           </td>
                         </tr>
@@ -545,52 +561,60 @@ function ClientAdminPageInner() {
               {/* PETS TABLE */}
               {activeTab === 'pets' && (
                 filteredPets.length === 0 ? (
-                  <div className="empty-state">
-                    <div className="empty-state-icon"><PawPrint size={24} /></div>
-                    <h3>No pets found</h3>
-                    <p>Try adjusting your search</p>
+                  <div className="flex flex-col items-center justify-center py-16 px-6 gap-4 text-center">
+                    <div className="flex items-center justify-center w-16 h-16 rounded-full bg-primary/10">
+                      <PawPrint size={28} className="text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-lg text-foreground mb-1">No pets found</h3>
+                      <p className="text-muted-foreground text-sm">Try adjusting your search</p>
+                    </div>
                   </div>
                 ) : (
-                  <table>
-                    <thead>
+                  <table className="w-full">
+                    <thead className="bg-muted/50 border-b border-border">
                       <tr>
-                        <th>Pet</th>
-                        <th>Species</th>
-                        <th>Breed</th>
-                        <th>Age</th>
-                        <th>Owner</th>
-                        <th>Phone</th>
-                        <th>Status</th>
-                        <th></th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pet</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Species</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Breed</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Age</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Owner</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Phone</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
+                        <th className="px-6 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">Actions</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-border">
                       {filteredPets.map(p => (
-                        <tr key={p.id}>
-                          <td>
-                            <div style={{ fontWeight: 600, color: 'var(--navy)' }}>{p.name}</div>
-                            {p.weight && <div style={{ fontSize: 12, color: 'var(--slate)' }}>{p.weight} kg</div>}
+                        <tr key={p.id} className="hover:bg-primary/5 transition-colors duration-150">
+                          <td className="px-6 py-4">
+                            <div className="font-semibold text-foreground">{p.name}</div>
+                            {p.weight && <div className="text-xs text-muted-foreground mt-1">{p.weight} kg</div>}
                           </td>
-                          <td>{p.species}</td>
-                          <td style={{ color: 'var(--slate)' }}>{p.breed}</td>
-                          <td style={{ color: 'var(--slate)' }}>{calcAge(p.date_of_birth)}</td>
-                          <td>
-                            <Link href={`/client-admin/clients/${p.owner_id}`} className="link-blue">
+                          <td className="px-6 py-4 text-sm text-foreground">{p.species}</td>
+                          <td className="px-6 py-4 text-sm text-muted-foreground">{p.breed}</td>
+                          <td className="px-6 py-4 text-sm text-muted-foreground">{calcAge(p.date_of_birth)}</td>
+                          <td className="px-6 py-4">
+                            <Link href={`/client-admin/clients/${p.owner_id}`} className="text-sm text-primary hover:underline font-medium transition-colors">
                               {p.owner_name}
                             </Link>
                           </td>
-                          <td style={{ color: 'var(--slate)' }}>{p.owner_phone || '—'}</td>
-                          <td>
-                            <span className={p.is_active ? 'badge badge-green' : 'badge badge-gray'}>
+                          <td className="px-6 py-4 text-sm text-muted-foreground">{p.owner_phone || '—'}</td>
+                          <td className="px-6 py-4">
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
+                              p.is_active
+                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
+                                : 'bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300'
+                            }`}>
                               {p.is_active ? 'Active' : 'Inactive'}
                             </span>
                           </td>
-                          <td>
+                          <td className="px-6 py-4 text-right">
                             <Dropdown items={[
                               { label: '👁  View Pet', href: `/client-admin/pets/${p.id}` },
                               { label: '👤  View Owner', href: `/client-admin/clients/${p.owner_id}` },
                             ]}>
-                              <MoreVertical size={16} />
+                              <MoreVertical size={16} className="text-muted-foreground hover:text-foreground transition-colors" />
                             </Dropdown>
                           </td>
                         </tr>
@@ -603,55 +627,64 @@ function ClientAdminPageInner() {
               {/* APPOINTMENTS TABLE */}
               {activeTab === 'appointments' && (
                 filteredAppointments.length === 0 ? (
-                  <div className="empty-state">
-                    <div className="empty-state-icon"><Calendar size={24} /></div>
-                    <h3>No appointments found</h3>
-                    <p>Try adjusting your search or filters</p>
+                  <div className="flex flex-col items-center justify-center py-16 px-6 gap-4 text-center">
+                    <div className="flex items-center justify-center w-16 h-16 rounded-full bg-primary/10">
+                      <Calendar size={28} className="text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-lg text-foreground mb-1">No appointments found</h3>
+                      <p className="text-muted-foreground text-sm">Try adjusting your search or filters</p>
+                    </div>
                   </div>
                 ) : (
-                  <table>
-                    <thead>
+                  <table className="w-full">
+                    <thead className="bg-muted/50 border-b border-border">
                       <tr>
-                        <th>Date & Time</th>
-                        <th>Client</th>
-                        <th>Pet</th>
-                        <th>Reason</th>
-                        <th>Status</th>
-                        <th></th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Date & Time</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Client</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pet</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Reason</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
+                        <th className="px-6 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">Actions</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-border">
                       {filteredAppointments.map(a => (
-                        <tr key={a.id}>
-                          <td>
-                            <div style={{ fontWeight: 600, fontSize: 14 }}>{formatDate(a.appointment_date)}</div>
-                            <div style={{ fontSize: 12, color: 'var(--slate)' }}>{a.appointment_time}</div>
+                        <tr key={a.id} className="hover:bg-primary/5 transition-colors duration-150">
+                          <td className="px-6 py-4">
+                            <div className="font-semibold text-foreground">{formatDate(a.appointment_date)}</div>
+                            <div className="text-xs text-muted-foreground mt-1">{a.appointment_time}</div>
                           </td>
-                          <td>
-                            <Link href={`/client-admin/clients/${a.client_id}`} className="link-blue">
+                          <td className="px-6 py-4">
+                            <Link href={`/client-admin/clients/${a.client_id}`} className="text-sm text-primary hover:underline font-medium transition-colors">
                               {a.client_name}
                             </Link>
                           </td>
-                          <td>
-                            <Link href={`/client-admin/pets/${a.pet_id}`} className="link-blue">
+                          <td className="px-6 py-4">
+                            <Link href={`/client-admin/pets/${a.pet_id}`} className="text-sm text-primary hover:underline font-medium transition-colors">
                               {a.pet_name}
                             </Link>
                           </td>
-                          <td style={{ maxWidth: 200 }}>
-                            <div style={{
-                              overflow: 'hidden', textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap', color: 'var(--navy-700)', fontSize: 14,
-                            }}>
-                              {a.reason}
-                            </div>
+                          <td className="px-6 py-4 text-sm text-foreground max-w-xs truncate" title={a.reason}>
+                            {a.reason}
                           </td>
-                          <td><span className={statusBadge(a.status)}>{a.status}</span></td>
-                          <td>
+                          <td className="px-6 py-4">
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
+                              a.status === 'confirmed' || a.status === 'completed'
+                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
+                                : a.status === 'pending'
+                                ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-300'
+                                : a.status === 'no_show'
+                                ? 'bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300'
+                                : 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300'
+                            }`}>{a.status}</span>
+                          </td>
+                          <td className="px-6 py-4 text-right">
                             <Dropdown items={[
                               { label: '👁  View Details', href: `/client-admin/appointments/${a.id}` },
                               { label: '👤  View Client', href: `/client-admin/clients/${a.client_id}` },
                             ]}>
-                              <MoreVertical size={16} />
+                              <MoreVertical size={16} className="text-muted-foreground hover:text-foreground transition-colors" />
                             </Dropdown>
                           </td>
                         </tr>
