@@ -16,7 +16,8 @@ import {
   X,
   PillBottle,
   Syringe,
-  ShieldAlert
+  ShieldAlert,
+  Flag
 } from "lucide-react";
 
 interface AdminSidebarProps {
@@ -60,6 +61,7 @@ export default function VetSidebar({ collapsed, setCollapsed, mobileOpen, setMob
 
 const menuItems: MenuItem[] = [
     { name: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/veterinarian/dashboard' },
+    { name: 'Notice Board', icon: <Flag size={20} />, path: '/veterinarian/noticeboard' },
     { name: 'Pet Master File', icon: <Files size={20} />, path: '/veterinarian/pets' },
     { name: 'My Appointments', icon: <Calendar size={20} />, path: '/veterinarian/appointments' },
     { name: 'Quarantine', icon: <ShieldAlert size={20} />, path: '/veterinarian/quarantine' },
