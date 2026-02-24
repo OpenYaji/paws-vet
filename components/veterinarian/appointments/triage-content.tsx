@@ -87,6 +87,7 @@ export default function TriageContent() {
       });
 
       await mutate('/api/triage');
+      await mutate('/api/appointments');
       setSelectedAppt(null);
       setVitals({
         weight: '', temperature: '', heart_rate: '', respiratory_rate: '',
