@@ -1,13 +1,14 @@
 // lib/notification-utils.tsx
 // Utility functions and icon mappings for notifications
-import { 
-  Calendar, 
-  CreditCard, 
-  FlaskConical, 
-  Info, 
-  CheckCircle, 
-  XCircle, 
-  Loader2 
+import {
+  Calendar,
+  CreditCard,
+  FlaskConical,
+  Info,
+  CheckCircle,
+  XCircle,
+  Loader2,
+  PackageX,
 } from 'lucide-react';
 import { ReactNode } from 'react';
 import { Notification, NotificationType, NotificationStatus } from '@/types/notifications';
@@ -21,6 +22,7 @@ export function getNotificationIcon(type: NotificationType, size: number = 16): 
     test_results: <FlaskConical size={size} className="text-purple-500" />,
     payment_due: <CreditCard size={size} className="text-orange-500" />,
     general: <Info size={size} className="text-gray-500" />,
+    low_stock: <PackageX size={size} className="text-red-500" />,
   };
 
   return icons[type] || icons.general;
@@ -67,6 +69,7 @@ export function getNotificationTypeLabel(type: NotificationType): string {
     test_results: 'Test Results',
     payment_due: 'Payment Due',
     general: 'General',
+    low_stock: 'Low Stock Alert',
   };
 
   return labels[type] || 'Notification';
@@ -93,6 +96,7 @@ export function getNotificationColor(type: NotificationType): string {
     test_results: 'bg-purple-50 border-purple-200',
     payment_due: 'bg-orange-50 border-orange-200',
     general: 'bg-gray-50 border-gray-200',
+    low_stock: 'bg-red-50 border-red-200',
   };
 
   return colors[type] || colors.general;
@@ -101,12 +105,13 @@ export function getNotificationColor(type: NotificationType): string {
 // Sort notifications by priority
 export function sortNotificationsByPriority(notifications: Notification[]): Notification[] {
   const priorityOrder: Record<NotificationType, number> = {
-    appointment_cancelled: 1,
-    payment_due: 2,
-    test_results: 3,
-    appointment_reminder: 4,
-    appointment_confirmed: 5,
-    general: 6,
+    low_stock: 1,
+    appointment_cancelled: 2,
+    payment_due: 3,
+    test_results: 4,
+    appointment_reminder: 5,
+    appointment_confirmed: 6,
+    general: 7,
   };
 
   return [...notifications].sort((a, b) => {
