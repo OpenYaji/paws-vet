@@ -31,9 +31,9 @@ const adminSupabase = createClient(
 );
 
 export default async function PetPage(
-  { params }: { params: { petID: string } }) {
+  { params }: { params: { petId: string } }) {
     const resolvedParams = await params;
-    const petId = resolvedParams.petID;
+    const petId = resolvedParams.petId;
 
     const cookieStore = await cookies();
 

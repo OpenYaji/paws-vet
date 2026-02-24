@@ -4,12 +4,17 @@ import React from "react"
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/auth-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import Image from 'next/image';
 import { ArrowLeft } from 'lucide-react';
+import { createBrowserClient } from '@supabase/auth-helpers-nextjs';
+
+export const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');

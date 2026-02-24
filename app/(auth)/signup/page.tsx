@@ -187,9 +187,9 @@ export default function SignupPage() {
         return;
       }
       // Validate ZIP code format
-      const zipRegex = /^\d{5}(-\d{4})?$/;
+      const zipRegex = /^\d{4}$/;
       if (!zipRegex.test(clientData.zipCode)) {
-        setError('ZIP code must be in format: 12345 or 12345-6789');
+        setError('ZIP code must be in format: 1234');
         return;
       }
     } else if (role === 'veterinarian') {
@@ -547,7 +547,7 @@ export default function SignupPage() {
                       </div>
                       <div className="space-y-2">
                         <label htmlFor="state" className="text-sm font-medium leading-none">
-                          State
+                          Country
                         </label>
                         <Input id="state" name="state" placeholder="NY" value={clientData.state} onChange={handleClientChange} required />
                       </div>

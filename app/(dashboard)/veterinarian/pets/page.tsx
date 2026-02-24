@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
+import { useState } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -11,13 +11,32 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, Eye, Edit, FileText } from 'lucide-react';
-import Link from 'next/link';
-import AddNewPet from '@/components/veterinarian/pets/add-new-pet';
-import useSWR, { mutate } from 'swr';
+import { Search, Eye, Edit, FileText, Trash2 } from "lucide-react";
+import Link from "next/link";
+import AddNewPet from "@/components/veterinarian/pets/add-new-pet";
+import useSWR, { mutate } from "swr";
+import { supabase } from "@/lib/auth-client";
 
-// 1. Define Fetcher (Keep this outside or import it)
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
+// Define Fetcher (Keep this outside or import it)
+const fetcher = async (url: string) => {
+  const {
+    data: { session },
+    error: authError,
+  } = await supabase.auth.getSession();
+
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${session?.access_token || ""}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || "Failed to fetch data");
+  }
+  return res.json();
+};
 
 interface Pet {
   id: string;
@@ -28,6 +47,7 @@ interface Pet {
   weight: string;
   color?: string; // Added optional field based on your UI usage
   microchip_number?: string;
+  photo_url?: string;
   owner_id: string;
   created_at: string;
   client_profiles?: {
@@ -39,62 +59,168 @@ interface Pet {
 }
 
 export default function PatientsPage() {
-  // 2. FIX: Use the URL as the key for SWR
-  // The 'data' will be undefined initially, so we default to [] to prevent crashes
-  const { data: pets = [], isLoading } = useSWR('/api/pets', fetcher, {
-    revalidateOnFocus: false,
-  });
+  // State for pagination
+  const [page, setPage] = useState(1);
+  const limit = 20;
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [speciesFilter, setSpeciesFilter] = useState('all');
-  const [sortBy, setSortBy] = useState('name');
+  // SWR for data fetching with pagination
+  const { data: apiResponse, isLoading } = useSWR(
+    `/api/pets?page=${page}&limit=${limit}`,
+    fetcher,
+    { revalidateOnFocus: false },
+  );
 
-  // 3. Logic safe to run now that pets defaults to []
+  // Extract the array and the total count from the new API response
+  const pets = apiResponse?.data || [];
+  const totalPets = apiResponse?.total || 0;
+
+  // Calculate total pages for the buttons
+  const totalPages = Math.ceil(totalPets / limit);
+
+  // State for search, filters, and sorting
+  const [searchTerm, setSearchTerm] = useState("");
+  const [speciesFilter, setSpeciesFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("name");
+  const [sortByColor, setSortByColor] = useState("default");
+
+  //Toast notifications for actions like adding, editing, or deleting pets can be implemented here using a library like react-toastify or your custom toast component.
+  const showToast = (
+    message: string,
+    type: "success" | "error" = "success",
+  ) => {
+    // Implement your toast logic here
+    console.log(`${type.toUpperCase()}: ${message}`);
+  };
+
+  // Delete pet function
+  const handleArchivePet = async (petId: string) => {
+    if (
+      !confirm(
+        "Are you sure you want to archive this pet? This action cannot be undone.",
+      )
+    ) {
+      return;
+    }
+
+    // Hide the pet from the UI
+    mutate(
+      "/api/pets",
+      (currentPets: any[] | undefined) => {
+        return currentPets ? currentPets.filter((pet) => pet.id !== petId) : [];
+      },
+      false,
+    );
+
+    try {
+      // Use PATCH call to archive the pet
+      const response = await fetch(`/api/pets/${petId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ is_archived: true }),
+      });
+
+      // Check if the response is successful
+      if (response.ok) {
+        showToast("Pet archived successfully");
+        mutate("/api/pets"); // Refresh the pet list after deletion
+      } else {
+        // Throw new error when 400 and 500
+        const errorData = await response.json();
+        console.error(
+          "Archive failed with status:",
+          response.status,
+          errorData,
+        ); // Debug logging
+        throw new Error(
+          errorData.error || errorData.message || "Failed to delete pet",
+        );
+      }
+    } catch (error) {
+      console.error("Error deleting pet:", error);
+      showToast("Failed to delete pet. Please try again.", "error");
+    }
+  };
+
+  // Update the Pet's Information
+  const handleUpdatePet = async (petId: string, updatedData: Partial<Pet>) => {
+    try {
+      // Use PATCH call to update the pet
+      const response = await fetch(`/api/pets/${petId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(updatedData),
+      });
+
+      if (response.ok) {
+        showToast("Pet updated successfully");
+        mutate("/api/pets"); // Refresh the pet list after update
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to update pet");
+      }
+    } catch (error: any) {
+      console.error("Error updating pet:", error);
+      showToast(`Failed to update pet: ${error.message}`, "error");
+    }
+  };
+
+  // Logic safe to run now that pets defaults to []
   const petsArray = Array.isArray(pets) ? pets : [];
   const filteredPets = petsArray
     .filter((pet: Pet) => {
       const petOwner = pet.client_profiles?.[0];
-      
+
       const ownerName = petOwner
         ? `${petOwner.first_name} ${petOwner.last_name}`
-        : 'Unknown';
+        : "Unknown";
 
       const matchesSearch =
         pet.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (pet.breed && pet.breed.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (pet.breed &&
+          pet.breed.toLowerCase().includes(searchTerm.toLowerCase())) ||
         ownerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (pet.microchip_number && pet.microchip_number.includes(searchTerm));
 
       const matchesSpecies =
-        speciesFilter === 'all' ||
+        speciesFilter === "all" ||
         pet.species.toLowerCase() === speciesFilter.toLowerCase();
 
       return matchesSearch && matchesSpecies;
     })
     .sort((a: Pet, b: Pet) => {
-      if (sortBy === 'name') return a.name.localeCompare(b.name);
-      if (sortBy === 'recent') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-      if (sortBy === 'oldest') return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      if (sortBy === "name") return a.name.localeCompare(b.name);
+      if (sortBy === "recent")
+        return (
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+      if (sortBy === "oldest")
+        return (
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        );
       return 0;
     });
 
   function getSpeciesEmoji(species: string): string {
     const emojiMap: Record<string, string> = {
-      dog: '🐕',
-      cat: '🐱',
-      bird: '🐦',
-      rabbit: '🐰',
-      hamster: '🐹',
-      fish: '🐠',
-      reptile: '🦎',
-      other: '🐾',
+      dog: "🐕",
+      cat: "🐱",
+      bird: "🐦",
+      rabbit: "🐰",
+      hamster: "🐹",
+      fish: "🐠",
+      reptile: "🦎",
+      other: "🐾",
     };
-    return emojiMap[species.toLowerCase()] || '🐾';
+    return emojiMap[species.toLowerCase()] || "🐾";
   }
 
   // Refreshes the list manually (e.g. via the Refresh button or after adding a pet)
   const refreshData = () => {
-    mutate('/api/pets'); // FIX: Must match the key used in useSWR
+    mutate("/api/pets");
   };
 
   if (isLoading) {
@@ -120,14 +246,14 @@ export default function PatientsPage() {
           <span>Pet Records</span>
         </div>
         <div className="flex justify-between items-center">
-             <div>
-                <h1 className="text-3xl font-bold">Pet Records</h1>
-                <p className="text-muted-foreground">
-                Comprehensive database of all registered pets
-                </p>
-             </div>
-             {/* Pass the refresh function to your AddNewPet component */}
-             <AddNewPet onPetAdded={refreshData} />
+          <div>
+            <h1 className="text-3xl font-bold">Pet Records</h1>
+            <p className="text-muted-foreground">
+              Comprehensive database of all registered pets
+            </p>
+          </div>
+          {/* Pass the refresh function to your AddNewPet component */}
+          <AddNewPet onPetAdded={refreshData} />
         </div>
       </div>
 
@@ -182,7 +308,11 @@ export default function PatientsPage() {
             </div>
 
             <div className="flex items-end">
-              <Button onClick={refreshData} variant="outline" className="w-full">
+              <Button
+                onClick={refreshData}
+                variant="outline"
+                className="w-full"
+              >
                 Refresh
               </Button>
             </div>
@@ -199,8 +329,8 @@ export default function PatientsPage() {
             </div>
             <p className="text-sm text-muted-foreground mt-1">
               {filteredPets.length === pets.length
-                ? 'Total Pets'
-                : 'Filtered Results'}
+                ? "Total Pets"
+                : "Filtered Results"}
             </p>
           </CardContent>
         </Card>
@@ -249,8 +379,16 @@ export default function PatientsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-[auto_1fr_auto] gap-6 items-center">
                   {/* Avatar */}
                   <div className="flex justify-center md:justify-start">
-                    <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center text-4xl">
-                      {getSpeciesEmoji(pet.species)}
+                    <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center text-4xl overflow-hidden border border-gray-200">
+                      {pet.photo_url ? (
+                        <img
+                          src={pet.photo_url}
+                          alt={pet.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        getSpeciesEmoji(pet.species)
+                      )}
                     </div>
                   </div>
 
@@ -275,7 +413,7 @@ export default function PatientsPage() {
                           Color
                         </p>
                         <p className="text-sm font-medium mt-1">
-                          {pet.color || 'N/A'}
+                          {pet.color || "N/A"}
                         </p>
                       </div>
                       <div>
@@ -283,7 +421,7 @@ export default function PatientsPage() {
                           Weight
                         </p>
                         <p className="text-sm font-medium mt-1">
-                          {pet.weight || 'N/A'}
+                          {pet.weight || "N/A"}
                         </p>
                       </div>
                       <div>
@@ -293,7 +431,7 @@ export default function PatientsPage() {
                         <p className="text-sm font-medium mt-1">
                           {pet.client_profiles?.[0]
                             ? `${pet.client_profiles[0].first_name} ${pet.client_profiles[0].last_name}`
-                            : 'Unknown'}
+                            : "Unknown"}
                         </p>
                       </div>
                     </div>
@@ -310,37 +448,79 @@ export default function PatientsPage() {
 
                   {/* Actions */}
                   <div className="flex gap-2 justify-center md:justify-end">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      title="View Details"
-                      onClick={() => console.log('View details:', pet.id)}
-                    >
-                      <Link href={`/veterinarian/pets/${pet.id}`}>
+                    <Link href={`/veterinarian/pets/${pet.id}`}>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        title="View Details"
+                      >
                         <Eye className="h-4 w-4" />
-                      </Link>
-                    </Button>
+                      </Button>
+                    </Link>
+
                     <Button
                       variant="outline"
                       size="icon"
                       title="Edit Record"
-                      onClick={() => console.log('Edit record:', pet.id)}
+                      onClick={() =>
+                        handleUpdatePet(pet.id, {
+                          name: pet.name + " (Edited)",
+                        })
+                      }
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
+
                     <Button
                       variant="outline"
                       size="icon"
                       title="Medical History"
-                      onClick={() => console.log('View history:', pet.id)}
+                      onClick={() => console.log("View history:", pet.id)}
                     >
                       <FileText className="h-4 w-4" />
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      title="Archive Pet"
+                      onClick={() => handleArchivePet(pet.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
               </CardContent>
             </Card>
           ))
+        )}
+
+        {/* Pagination Controls */}
+        {totalPets > limit && (
+          <div className="flex items-center justify-between pt-4 border-t mt-6">
+            <p className="text-sm text-muted-foreground">
+              Showing {pets.length} of {totalPets} pets
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                disabled={page === 1}
+                onClick={() => setPage((old) => Math.max(old - 1, 1))}
+              >
+                Previous
+              </Button>
+              <div className="flex items-center px-4 text-sm font-medium">
+                Page {page} of {totalPages || 1}
+              </div>
+              <Button
+                variant="outline"
+                disabled={page >= totalPages}
+                onClick={() => setPage((old) => old + 1)}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
         )}
       </div>
 
