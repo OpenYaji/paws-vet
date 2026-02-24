@@ -1,6 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
-import { createClient as createSupabaseServerClient } from "@/utils/supabase/server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -61,7 +60,8 @@ export async function GET(request: NextRequest) {
         )
       `,
       )
-      .order("scheduled_start", { ascending: false });
+      .order("scheduled_start", { ascending: false })
+      .limit(10);
 
     // Apply filters
     if (status && status !== "all") {
@@ -289,18 +289,25 @@ async function getDefaultVeterinarian(supabase: any): Promise<string> {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const supabase = await createSupabaseServerClient();
-
-    // Get the current user
+    // Accept bearer token for authentication
+    const authHeader = request.headers.get("authorization");
+    
+    if(!authHeader) return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401 }
+    );
+    
+    const token = authHeader.replace("Bearer ", "");
     const {
       data: { user },
       error: authError,
-    } = await supabase.auth.getUser();
+    } = await getSupabaseClient().auth.getUser(token);
 
-    if (authError || !user) {
+    if(authError || !user) {
+      console.error("Authentication error:", authError);
       return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 },
+        { error: "Unauthorized access" },
+        { status: 401 }
       );
     }
 
@@ -314,6 +321,8 @@ export async function PATCH(request: NextRequest) {
         { status: 400 },
       );
     }
+
+    const supabase = getSupabaseClient();
 
     // First, fetch the current appointment to log it
     const { data: current } = await supabase
