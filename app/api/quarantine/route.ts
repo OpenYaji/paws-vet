@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
     // Use admin client to bypass RLS (Row Level Security) for quarantine data access
     // This allows fetching all quarantine records regardless of user permissions
     const admin = supabaseAdmin();
-    
+
     // Fetch quarantine records with nested pet information using admin privileges
     // Uses foreign key relationship to join pet details
     const { data: quarantineRecords, error } = await admin
@@ -171,19 +171,19 @@ export async function POST(request: NextRequest) {
     // Use admin client to bypass RLS for quarantine record creation
     // This ensures the record is created regardless of user's RLS permissions
     const admin = supabaseAdmin();
-    
+
     // Insert new quarantine record into database using admin privileges
     // Status is automatically set to 'active' for new quarantine records
     const { data, error } = await admin
       .from("quarantine_pets")
       .insert({
-            pet_id,
-            reason,
-            notes: notes || null,
-            start_date,
-            expected_end_date,
-            status: "active",
-        })
+        pet_id,
+        reason,
+        notes: notes || null,
+        start_date,
+        expected_end_date,
+        status: "active",
+      })
       .select() // Return the inserted record
       .single(); // Expect exactly one record to be returned
 
@@ -197,9 +197,10 @@ export async function POST(request: NextRequest) {
         code: error.code,
       });
       return NextResponse.json(
-        { 
+        {
           error: "Failed to create quarantine record",
-          debug: process.env.NODE_ENV === "development" ? error.message : undefined
+          debug:
+            process.env.NODE_ENV === "development" ? error.message : undefined,
         },
         { status: 500 },
       );
@@ -218,36 +219,40 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  try{
+  try {
     const supabaseCookie = await createCookieClient();
-    
-    const { data : userData, error: authError } = await supabaseCookie.auth.getUser();
 
-    if(authError || !userData.user){
+    const { data: userData, error: authError } =
+      await supabaseCookie.auth.getUser();
+
+    if (authError || !userData.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    
+
     const body = await request.json();
     const { id, status, end_date } = body;
 
-    if(!body.id || !body.status ){
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    if (!body.id || !body.status) {
+      return NextResponse.json(
+        { error: "Missing required fields" },
+        { status: 400 },
+      );
     }
 
     // Use admin client to bypass RLS for updating quarantine records
     const admin = supabaseAdmin();
-    
+
     const { data, error } = await admin
-      .from('quarantine_pets')
+      .from("quarantine_pets")
       .update({
         status: status,
         end_date: end_date || null,
       })
-      .eq('id', id)
+      .eq("id", id)
       .select()
       .single();
 
-    if(error){
+    if (error) {
       console.error("Error updating quarantine record:", error);
       return NextResponse.json(
         { error: "Failed to update quarantine record", details: error.message },
@@ -256,7 +261,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     return NextResponse.json(data, { status: 200 });
-  } catch(error){
+  } catch (error) {
     console.error("Error updating quarantine record:", error);
     return NextResponse.json(
       { error: "Failed to update quarantine record" },
