@@ -10,7 +10,9 @@ interface SuccessData {
   paymentNumber: string;
   total: number;
   paymentMethod: string;
-  items: any[]; 
+  items: any[];
+  cashTendered?: number;
+  change?: number;
 }
 
 interface PaymentSuccessModalProps {
@@ -113,6 +115,18 @@ export function PaymentSuccessModal({
               <span>METHOD:</span>
               <span className="uppercase">{data.paymentMethod}</span>
             </div>
+            {data.cashTendered != null && (
+              <div className="flex justify-between opacity-80 text-[10px]">
+                <span>TENDERED:</span>
+                <span>₱{data.cashTendered.toFixed(2)}</span>
+              </div>
+            )}
+            {data.change != null && (
+              <div className="flex justify-between font-bold text-[10px]">
+                <span>CHANGE:</span>
+                <span>₱{data.change.toFixed(2)}</span>
+              </div>
+            )}
           </div>
 
           <div className="border-t border-dashed border-slate-300 my-4" />

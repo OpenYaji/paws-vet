@@ -235,6 +235,8 @@ export function AgenticInsights({ stats }: { stats: DashboardStats }) {
     setError(null);
   };
 
+  const [tipPos, setTipPos]     = useState<{ x: number; y: number } | null>(null);
+
   const highCount  = insight?.critical_alerts.filter(a => a.severity === 'high').length ?? 0;
   const savedLabel = insight?._savedAt
     ? new Date(insight._savedAt).toLocaleString('en-PH', {
@@ -247,9 +249,19 @@ export function AgenticInsights({ stats }: { stats: DashboardStats }) {
     <div className="rounded-2xl border border-border bg-card shadow-sm mb-6 overflow-hidden">
 
       {/* ════ HEADER ════ */}
+      {tipPos && (
+        <span
+          className="pointer-events-none fixed whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-xs font-bold text-white z-50 -translate-x-1/2"
+          style={{ left: tipPos.x, top: tipPos.y - 36 }}
+        >
+          {collapsed ? 'Expand' : 'Collapse'}
+        </span>
+      )}
       <div
         className={`flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 bg-muted/40 cursor-pointer select-none ${!collapsed ? 'border-b border-border' : ''}`}
         onClick={toggleCollapsed}
+        onMouseMove={e => setTipPos({ x: e.clientX, y: e.clientY })}
+        onMouseLeave={() => setTipPos(null)}
       >
         <div className="flex items-center gap-3">
           {/* logo */}
@@ -388,15 +400,15 @@ export function AgenticInsights({ stats }: { stats: DashboardStats }) {
           </div>
 
           {/* Deep Insight */}
-          <div className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-100 dark:border-amber-800/40 dark:bg-amber-950/20 px-4 py-3.5">
-            <div className="shrink-0 w-7 h-7 rounded-lg bg-amber-200 dark:bg-amber-900/50 flex items-center justify-center">
-              <Lightbulb className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
+          <div className="flex items-start gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3.5">
+            <div className="shrink-0 w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+              <Lightbulb className="w-3.5 h-3.5 text-primary" />
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-amber-800 dark:text-amber-500 mb-1">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-primary mb-1">
                 Deep Insight
               </p>
-              <p className="text-xs text-amber-950 dark:text-foreground/75 leading-relaxed font-medium">{insight.deep_insight}</p>
+              <p className="text-xs text-foreground/75 leading-relaxed font-medium">{insight.deep_insight}</p>
             </div>
           </div>
 

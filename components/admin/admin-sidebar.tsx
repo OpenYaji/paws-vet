@@ -6,6 +6,12 @@ import { usePathname, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { supabase } from '@/lib/auth-client';
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  TooltipProvider,
+} from "@/components/ui/tooltip";
+import {
   LayoutDashboard,
   Users,
   Calendar,
@@ -19,7 +25,6 @@ import {
   Logs,
   ChartLine,
   X,
-  ChartColumn,
 } from "lucide-react";
 
 interface AdminSidebarProps {
@@ -61,21 +66,19 @@ export default function AdminSidebar({ collapsed, setCollapsed, mobileOpen, setM
     return pathname?.startsWith(item.path);
   };
 
-const menuItems: MenuItem[] = [
+  const menuItems: MenuItem[] = [
     { name: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/admin/dashboard' },
     { name: 'Appointments', icon: <Calendar size={20} />, path: '/admin/appointments' },
     { name: 'Pets', icon: <PawPrint size={20} />, path: '/admin/pets' },
     { name: 'Inventory', icon: <Package size={20} />, path: '/admin/inventory' },
     { name: 'Billing & Invoice', icon: <Receipt size={20} />, path: '/admin/billing' },
-    { name: 'Users', icon: <Users size={20} />, path: '/admin/users-management' },
     { name: 'Sales Report', icon: <ChartLine size={20} />, path: '/admin/sales-report' },
-
     { name: 'Employees', icon: <IdCard size={20} />, path: '/admin/employees' },
+    { name: 'Users', icon: <Users size={20} />, path: '/admin/users-management' },
     { name: 'Logs', icon: <Logs size={20} />, path: '/admin/logs' },
-
     { name: 'Settings', icon: <Settings size={20} />, path: '/admin/settings' },
     { name: 'Help Support', icon: <LifeBuoy size={20} />, path: '/admin/help' },
-];
+  ];
 
   interface NavLinkProps {
     item: MenuItem;
@@ -84,8 +87,8 @@ const menuItems: MenuItem[] = [
     isMobileLink?: boolean;
   }
 
-  const NavLink = ({ item, isActive, isCollapsed = false, isMobileLink = false }: NavLinkProps) => (
-    <li className="relative group">
+  const NavLink = ({ item, isActive, isCollapsed = false, isMobileLink = false }: NavLinkProps) => {
+    const linkContent = (
       <Link
         href={item.path}
         onClick={(e) => {
@@ -101,34 +104,33 @@ const menuItems: MenuItem[] = [
         } ${isCollapsed ? 'justify-center' : ''}`}
       >
         {item.icon}
-        {!isCollapsed && (
-          <span className="whitespace-nowrap">{item.name}</span>
-        )}
+        {!isCollapsed && <span className="whitespace-nowrap">{item.name}</span>}
       </Link>
+    );
 
-      {isCollapsed && (
-        <span className="
-          absolute left-full top-1/2 -translate-y-1/2 ml-4
-          bg-popover text-popover-foreground text-xs font-bold 
-          rounded-md p-2 border
-          opacity-0 scale-0 group-hover:opacity-100 group-hover:scale-100 
-          transition-all duration-200 ease-in-out
-          whitespace-nowrap
-          z-10
-        ">
-          {item.name}
-        </span>
-      )}
-    </li>
-  );
+    if (isCollapsed) {
+      return (
+        <li>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              {linkContent}
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={10}>
+              {item.name}
+            </TooltipContent>
+          </Tooltip>
+        </li>
+      );
+    }
+
+    return <li>{linkContent}</li>;
+  };
 
   interface SidebarContentProps {
     isMobileView?: boolean;
   }
 
   const SidebarContent = ({ isMobileView = false }: SidebarContentProps) => {
-    const currentCollapsed = isMobileView ? false : collapsed;
-
     if (isMobileView) {
       return (
         <aside className="h-screen bg-card border-r text-card-foreground flex flex-col w-64 p-4">
@@ -159,59 +161,48 @@ const menuItems: MenuItem[] = [
 
     return (
       <aside className={`h-screen bg-transparent flex flex-col flex-shrink-0 transition-all duration-300 sticky top-0 ${collapsed ? 'w-28' : 'w-72'}`}>
-        {collapsed ? (
-          <div className="flex flex-col h-full items-center p-3 gap-3">
-            <div className="flex flex-col items-center space-y-4 bg-card border p-3 rounded-3xl shadow-lg flex-1 w-full overflow-y-auto">
-              <button onClick={() => setCollapsed(false)} className="p-2 hover:bg-accent rounded-full flex-shrink-0">
+        <div className="flex flex-col h-full p-3">
+          <div className="bg-card border rounded-3xl p-4 flex-1 flex flex-col shadow-lg overflow-y-auto overflow-x-hidden">
+            <header className={`flex flex-col items-center text-center mb-8 relative flex-shrink-0 ${collapsed ? 'px-0' : ''}`}>
+              <button 
+                onClick={() => setCollapsed(!collapsed)} 
+                className={`p-2 hover:bg-accent rounded-lg ${collapsed ? 'mb-4' : 'absolute top-0 right-0'}`}
+              >
                 <Menu size={20} />
               </button>
-              <Image src="/images/image.png" alt="Logo" width={40} height={40} className="rounded-full flex-shrink-0" />
-              <div className="w-8 h-[1px] bg-border flex-shrink-0"></div>
-              <nav className="flex-1 flex flex-col w-full">
-                <ul className="space-y-2 flex-1">
-                  {menuItems.slice(0, -2).map((item) => (
-                    <NavLink key={item.name} item={item} isActive={getIsActive(item)} isCollapsed={true} />
-                  ))}
-                </ul>
-                <ul className="space-y-2 mt-auto">
-                  {menuItems.slice(-2).map((item) => (
-                    <NavLink key={item.name} item={item} isActive={getIsActive(item)} isCollapsed={true} />
-                  ))}
-                </ul>
-              </nav>
-            </div>
-          </div>
-        ) : (
-          <div className="flex flex-col h-full p-3">
-            <div className="bg-card border rounded-3xl p-4 flex-1 flex flex-col shadow-lg overflow-y-auto">
-              <header className="flex flex-col items-center text-center mb-8 relative flex-shrink-0">
-                <button onClick={() => setCollapsed(true)} className="p-2 hover:bg-accent rounded-lg absolute top-0 right-0">
-                  <Menu size={20} />
-                </button>
-                <Image src="/images/image.png" alt="Logo" width={64} height={64} className="rounded-full mb-2" />
+              <Image 
+                src="/images/image.png" 
+                alt="Logo" 
+                width={collapsed ? 40 : 64} 
+                height={collapsed ? 40 : 64} 
+                className="rounded-full mb-2 transition-all" 
+              />
+              {!collapsed && (
                 <h2 className="font-bold text-sm leading-tight">PAWS VETERINARY<br />CLINIC</h2>
-              </header>
-              <nav className="flex-1 flex flex-col">
-                <ul className="space-y-2 flex-1">
-                  {menuItems.slice(0, -2).map((item) => (
-                    <NavLink key={item.name} item={item} isActive={getIsActive(item)} />
-                  ))}
-                </ul>
-                <ul className="space-y-2 mt-auto">
-                  {menuItems.slice(-2).map((item) => (
-                    <NavLink key={item.name} item={item} isActive={getIsActive(item)} />
-                  ))}
-                </ul>
-              </nav>
-            </div>
+              )}
+            </header>
+            
+            <nav className="flex-1 flex flex-col">
+              <ul className="space-y-2 flex-1">
+                {menuItems.slice(0, -2).map((item) => (
+                  <NavLink key={item.name} item={item} isActive={getIsActive(item)} isCollapsed={collapsed} />
+                ))}
+              </ul>
+              <div className="my-4 border-t border-border" />
+              <ul className="space-y-2 mt-auto">
+                {menuItems.slice(-2).map((item) => (
+                  <NavLink key={item.name} item={item} isActive={getIsActive(item)} isCollapsed={collapsed} />
+                ))}
+              </ul>
+            </nav>
           </div>
-        )}
+        </div>
       </aside>
     );
   };
 
   return (
-    <>
+    <TooltipProvider delayDuration={100}>
       <div className="hidden md:block">
         <SidebarContent />
       </div>
@@ -231,22 +222,16 @@ const menuItems: MenuItem[] = [
             <h3 className="text-lg font-bold mb-2">Confirm Logout</h3>
             <p className="text-muted-foreground mb-4">Are you sure you want to logout?</p>
             <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => setLogoutModalOpen(false)}
-                className="px-4 py-2 rounded-md border hover:bg-accent"
-              >
+              <button onClick={() => setLogoutModalOpen(false)} className="px-4 py-2 rounded-md border hover:bg-accent">
                 Cancel
               </button>
-              <button
-                onClick={handleConfirmLogout}
-                className="px-4 py-2 rounded-md bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              >
+              <button onClick={handleConfirmLogout} className="px-4 py-2 rounded-md bg-destructive text-destructive-foreground hover:bg-destructive/90">
                 Logout
               </button>
             </div>
           </div>
         </div>
       )}
-    </>
+    </TooltipProvider>
   );
 }

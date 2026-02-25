@@ -280,6 +280,7 @@ export default function POSPage() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successData, setSuccessData] = useState<{
     invoiceNumber: string; paymentNumber: string; total: number; paymentMethod: string;
+    cashTendered?: number; change?: number;
   } | null>(null);
 
   const [cart, setCart]                   = useState<CartItem[]>([]);
@@ -429,6 +430,8 @@ export default function POSPage() {
       setSuccessData({
         invoiceNumber: invResult.invoiceNumber, paymentNumber: payResult.paymentNumber,
         total, paymentMethod: method === 'online' ? 'GCASH' : method.toUpperCase(),
+        cashTendered: cashTendered ?? undefined,
+        change: cashTendered != null ? cashTendered - total : undefined,
       });
       setShowSuccessModal(true);
       setCart([]); setSelectedClient(''); setIsWalkIn(false); setWalkInName('');

@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { supabase } from '@/lib/auth-client';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -19,7 +18,7 @@ import {
 } from '@/components/ui/select';
 import {
   Plus, Search, Trash2, AlertCircle, Package, Edit,
-  LayoutGrid, List, ArrowUpRight, Loader2, CloudUpload,
+  LayoutGrid, List, Loader2, CloudUpload,
   Eye, X, Boxes, Tag, CalendarClock, ShieldAlert,
   CheckCircle2, Clock, AlertTriangle,
 } from 'lucide-react';
@@ -283,11 +282,8 @@ export default function InventoryPage() {
   async function loadProducts() {
     try {
       setIsLoading(true);
-      const [{ data: prods, error }, { data: batchRows }] = await Promise.all([
-        supabase.from('products').select('*').order('product_name'),
-        supabase.from('product_batches').select('*').order('created_at'),
-      ]);
-      if (error) throw error;
+      const res = await fetch('/api/admin/inventory');
+      const { products: prods, batches: batchRows } = await res.json();
       setProducts(prods || []);
       const map: Record<string, any[]> = {};
       for (const b of (batchRows || [])) {
@@ -352,7 +348,11 @@ export default function InventoryPage() {
       };
 
       if (editingProduct) {
-        await supabase.from('products').update(payload).eq('id', editingProduct.id);
+        await fetch('/api/admin/inventory', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: editingProduct.id, ...payload }),
+        });
         setShowDialog(false);
         loadProducts();
         showToast(`"${form.product_name}" updated successfully`);
@@ -366,7 +366,11 @@ export default function InventoryPage() {
           `Add "${productName}" to inventory with ${stockQty} unit${stockQty !== 1 ? 's' : ''} in stock?`,
           'default',
           async () => {
-            await supabase.from('products').insert({ ...payload, is_active: true });
+            await fetch('/api/admin/inventory', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            });
             loadProducts();
             showToast(`"${productName}" added to inventory`);
           },
@@ -380,16 +384,22 @@ export default function InventoryPage() {
     const batches = productBatches[editingProduct.id] ?? [];
     const autoBatchNum = generateNextBatchNumber(batches);
     try {
-      await supabase.from('product_batches').insert({
-        product_id:         editingProduct.id,
-        batch_number:       autoBatchNum,
-        quantity:           addStockData.qty,
-        manufacturing_date: addStockData.manufacturing_date || null,
-        expiration_date:    addStockData.expiration_date    || null,
+      const res = await fetch('/api/admin/inventory', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productId: editingProduct.id,
+          batch: {
+            product_id:         editingProduct.id,
+            batch_number:       autoBatchNum,
+            quantity:           addStockData.qty,
+            manufacturing_date: addStockData.manufacturing_date || null,
+            expiration_date:    addStockData.expiration_date    || null,
+          },
+          newQty: editingProduct.stock_quantity + addStockData.qty,
+        }),
       });
-      await supabase.from('products').update({
-        stock_quantity: editingProduct.stock_quantity + addStockData.qty,
-      }).eq('id', editingProduct.id);
+      if (!res.ok) throw new Error((await res.json()).error);
       setShowDialog(false);
       loadProducts();
       showToast(`Batch ${autoBatchNum} added · +${addStockData.qty} units`);
@@ -403,9 +413,13 @@ export default function InventoryPage() {
       `This will remove ${batch.quantity} unit${batch.quantity !== 1 ? 's' : ''} from stock. The expiry alert for this batch will disappear. This cannot be undone.`,
       'warning',
       async () => {
-        await supabase.from('product_batches').delete().eq('id', batch.id);
         const newQty = Math.max(0, (editingProduct?.stock_quantity ?? 0) - batch.quantity);
-        await supabase.from('products').update({ stock_quantity: newQty }).eq('id', editingProduct.id);
+        const res = await fetch('/api/admin/inventory', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ batchId: batch.id, productId: editingProduct.id, newQty }),
+        });
+        if (!res.ok) throw new Error((await res.json()).error);
         setEditingProduct((p: any) => p ? { ...p, stock_quantity: newQty } : p);
         setForm(f => ({ ...f, stock_quantity: newQty }));
         loadProducts();
@@ -427,8 +441,12 @@ export default function InventoryPage() {
         const res = await fetch(`/api/products?id=${id}`, { method: 'DELETE' });
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
-          console.error('Delete failed:', body.error);
-          showToast('Failed to delete product', 'info');
+          if (res.status === 409) {
+            showToast(`"${name}" has sales history and cannot be deleted.`, 'info');
+          } else {
+            console.error('Delete failed:', body.error);
+            showToast('Failed to delete product', 'info');
+          }
           return;
         }
         loadProducts();
@@ -520,7 +538,7 @@ export default function InventoryPage() {
       {/* KPI row */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 px-6 pb-4 shrink-0">
         <KpiCard label="Total Items"    value={stats.total}        icon={Package}       color="bg-primary text-primary-foreground" />
-        <KpiCard label="Low Stock"      value={stats.lowStock}     icon={AlertCircle}   color="bg-amber-500 text-white" />
+        <KpiCard label="Low Stock"      value={stats.lowStock}     icon={AlertCircle}   color="bg-red-500 text-white" />
         <KpiCard label="Out of Stock"   value={stats.oos}          icon={Boxes}         color="bg-red-600 text-white" />
         <KpiCard label="Expiring Soon"  value={stats.expiringSoon} icon={CalendarClock} color="bg-orange-500 text-white" />
         <KpiCard label="Expired"        value={stats.expired}      icon={ShieldAlert}   color="bg-rose-600 text-white" />

@@ -6,7 +6,7 @@ import { supabase } from '@/lib/auth-client';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
-import type { Notification } from '@/types/notifications'; 
+import type { Notification } from '@/types/notifications';
 import { getNotificationIcon, timeAgo } from '@/lib/notification-utils';
 
 interface NotificationBellProps {
@@ -18,51 +18,93 @@ export function NotificationBell({ userId, className = '' }: NotificationBellPro
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notifLoading, setNotifLoading] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-  const [notifFetched, setNotifFetched] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
-  const prevNotificationCountRef = useRef(0);
+  // Track products already notified this session so we don't spam on repeated updates
+  const notifiedLowStockRef = useRef<Set<string>>(new Set());
+  // Store the first-seen timestamp per product so re-fetches don't reset to "Just now"
+  const stockAlertTimestamps = useRef<Map<string, string>>(new Map());
 
-  // Fetch initial notifications from the database
+  // Fetch notification_logs + current low-stock products
   const fetchNotifications = useCallback(async () => {
     if (!userId) return;
-    
     setNotifLoading(true);
 
     try {
-      const response = await fetch("/api/notifications");
+      // Run both in parallel
+      const [notifRes, { data: prods }] = await Promise.all([
+        fetch('/api/notifications'),
+        supabase
+          .from('products')
+          .select('id, product_name, stock_quantity, low_stock_threshold')
+          .eq('is_active', true),
+      ]);
 
-      const data: Notification[] = await response.json();
-      const error = response.ok
-        ? null
-        : new Error("Failed to fetch notifications");
+      const dbNotifs: Notification[] = notifRes.ok ? await notifRes.json() : [];
 
-      if (!error && data) {
-        setNotifications(data);
-        
-        if (data.length > prevNotificationCountRef.current) {
-          setHasUnread(true);
+      // Generate synthetic low-stock notifications for products already in alert state
+      const stockAlerts: Notification[] = [];
+      for (const p of (prods || [])) {
+        const isOos = p.stock_quantity === 0;
+        const isLow = p.stock_quantity > 0 && p.stock_quantity <= p.low_stock_threshold;
+        if (isOos || isLow) {
+          // Preserve the original first-seen timestamp — don't reset to "Just now" on re-fetch
+          if (!stockAlertTimestamps.current.has(p.id)) {
+            stockAlertTimestamps.current.set(p.id, new Date().toISOString());
+          }
+          const ts = stockAlertTimestamps.current.get(p.id)!;
+          // Pre-populate ref so the WebSocket won't duplicate the same product
+          notifiedLowStockRef.current.add(p.id);
+          stockAlerts.push({
+            id: `low-stock-${p.id}-init`,
+            recipient_id: userId,
+            notification_type: 'low_stock',
+            subject: isOos ? 'Out of Stock' : 'Low Stock Alert',
+            content: isOos
+              ? `${p.product_name} is now out of stock.`
+              : `${p.product_name} is running low — ${p.stock_quantity} unit${p.stock_quantity !== 1 ? 's' : ''} left.`,
+            sent_at: ts,
+            delivery_status: 'delivered',
+            delivery_attempted_at: null,
+            delivered_at: ts,
+            error_message: null,
+            related_entity_type: 'product',
+            related_entity_id: p.id,
+            created_at: ts,
+          });
+        } else {
+          // Stock is fine — clear stored timestamp so next alert gets a fresh one
+          stockAlertTimestamps.current.delete(p.id);
         }
-        prevNotificationCountRef.current = data.length;
       }
+
+      // Low-stock alerts first, then DB notifications
+      const combined = [...stockAlerts, ...dbNotifs].slice(0, 20);
+      setNotifications(combined);
+      if (combined.length > 0) setHasUnread(true);
     } catch (err) {
       console.error('Failed to fetch notifications:', err);
     } finally {
       setNotifLoading(false);
-      setNotifFetched(true);
     }
   }, [userId]);
 
-  // Fetch when popover opens
+  // Fetch on mount so the unread dot appears immediately
   useEffect(() => {
-    if (!notifOpen || notifFetched || !userId) return;
+    if (!userId) return;
     fetchNotifications();
-  }, [notifOpen, notifFetched, userId, fetchNotifications]);
+  }, [userId, fetchNotifications]);
 
-  // Listen for REAL-TIME updates from your SQL Trigger
+  // Re-fetch when popover opens (refresh to latest state)
+  useEffect(() => {
+    if (!notifOpen || !userId) return;
+    fetchNotifications();
+  }, [notifOpen, userId, fetchNotifications]);
+
+  // Listen for new rows in notification_logs via WebSocket
   useEffect(() => {
     if (!userId) return;
 
-    const subscription = supabase
+    const logsSub = supabase
       .channel('notification-logs-changes')
       .on(
         'postgres_changes',
@@ -73,46 +115,104 @@ export function NotificationBell({ userId, className = '' }: NotificationBellPro
           filter: `recipient_id=eq.${userId}`,
         },
         (payload) => {
-          console.log('Live Database Notification Received!', payload);
-          
-          const newNotification = payload.new as Notification;
-          setNotifications(prev => [newNotification, ...prev].slice(0, 20));
+          const newNotif = payload.new as Notification;
+          setNotifications(prev => [newNotif, ...prev].slice(0, 20));
           setHasUnread(true);
-          
-          // Browser notification if tab is not visible
-          if (document.visibilityState !== 'visible') {
-            if (Notification.permission === 'granted') {
-              new Notification(newNotification.subject || 'New Notification', {
-                body: newNotification.content,
-                icon: '/favicon.ico'
-              });
-            }
+
+          if (document.visibilityState !== 'visible' && Notification.permission === 'granted') {
+            new Notification(newNotif.subject || 'New Notification', {
+              body: newNotif.content,
+              icon: '/favicon.ico',
+            });
           }
         }
       )
       .subscribe();
 
-    // Request browser notification permission
     if (Notification.permission === 'default') {
       Notification.requestPermission();
     }
 
-    return () => {
-      subscription.unsubscribe();
-    };
+    return () => { logsSub.unsubscribe(); };
+  }, [userId]);
+
+  // Listen for low-stock / out-of-stock product changes via WebSocket
+  useEffect(() => {
+    if (!userId) return;
+
+    const productSub = supabase
+      .channel('notification-bell-low-stock')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'products' },
+        (payload) => {
+          const p = payload.new as {
+            id: string; product_name: string;
+            stock_quantity: number; low_stock_threshold: number; is_active: boolean;
+          };
+          if (!p.is_active) return;
+
+          const isOos      = p.stock_quantity === 0;
+          const isLowStock = p.stock_quantity > 0 && p.stock_quantity <= p.low_stock_threshold;
+
+          if (isOos || isLowStock) {
+            if (!notifiedLowStockRef.current.has(p.id)) {
+              notifiedLowStockRef.current.add(p.id);
+              // Record first-seen timestamp for this alert
+              if (!stockAlertTimestamps.current.has(p.id)) {
+                stockAlertTimestamps.current.set(p.id, new Date().toISOString());
+              }
+              const ts = stockAlertTimestamps.current.get(p.id)!;
+
+              const subject = isOos ? 'Out of Stock' : 'Low Stock Alert';
+              const content = isOos
+                ? `${p.product_name} is now out of stock.`
+                : `${p.product_name} is running low — ${p.stock_quantity} unit${p.stock_quantity !== 1 ? 's' : ''} left.`;
+
+              const synthetic: Notification = {
+                id: `low-stock-${p.id}-${Date.now()}`,
+                recipient_id: userId,
+                notification_type: 'low_stock',
+                subject,
+                content,
+                sent_at: ts,
+                delivery_status: 'delivered',
+                delivery_attempted_at: null,
+                delivered_at: ts,
+                error_message: null,
+                related_entity_type: 'product',
+                related_entity_id: p.id,
+                created_at: ts,
+              };
+
+              setNotifications(prev => [synthetic, ...prev].slice(0, 20));
+              setHasUnread(true);
+
+              if (document.visibilityState !== 'visible' && Notification.permission === 'granted') {
+                new Notification(subject, { body: content, icon: '/favicon.ico' });
+              }
+            }
+          } else {
+            // Stock replenished — clear so next drop gets a fresh timestamp and re-notifies
+            notifiedLowStockRef.current.delete(p.id);
+            stockAlertTimestamps.current.delete(p.id);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => { productSub.unsubscribe(); };
   }, [userId]);
 
   // Mark as read when opened
   useEffect(() => {
-    if (notifOpen) {
-      setHasUnread(false);
-    }
+    if (notifOpen) setHasUnread(false);
   }, [notifOpen]);
 
   return (
     <Popover open={notifOpen} onOpenChange={setNotifOpen}>
       <PopoverTrigger asChild>
-        <button 
+        <button
           className={`relative p-2 rounded-full hover:bg-accent text-muted-foreground transition ${className}`}
           aria-label="Notifications"
         >
@@ -166,7 +266,7 @@ export function NotificationBell({ userId, className = '' }: NotificationBellPro
                     <p className="text-xs text-muted-foreground mt-1">{timeAgo(notif.sent_at)}</p>
                   </div>
                   {index === 0 && hasUnread && (
-                    <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">New</span>
+                    <span className="text-xs text-blue-600 dark:text-blue-400 font-medium shrink-0">New</span>
                   )}
                 </div>
               ))}
@@ -175,13 +275,11 @@ export function NotificationBell({ userId, className = '' }: NotificationBellPro
         </ScrollArea>
         {notifications.length > 0 && (
           <div className="p-2 border-t">
-            <Button 
-              variant="ghost" 
-              size="sm" 
+            <Button
+              variant="ghost"
+              size="sm"
               className="w-full text-xs"
-              onClick={() => {
-                setNotifOpen(false);
-              }}
+              onClick={() => setNotifOpen(false)}
             >
               View All Notifications
             </Button>
