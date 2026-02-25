@@ -1,93 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/auth-client';
+import useSWR from 'swr';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
+import { Fetcher } from '@/lib/fetcher';
 
 export default function VeterinarianDashboardPage() {
-  const [stats, setStats] = useState({
-    todayAppointments: 0,
-    totalPatients: 0,
-    pendingAppointments: 0,
-  });
-  const [isLoading, setIsLoading] = useState(true);
-  const [userId, setUserId] = useState<string>('');
-  const [{firstName, lastName}, setName] = useState<{firstName: string, lastName: string}>({firstName: '', lastName: ''});
-
-  useEffect(() => {
-    async function getUserFullName(){
-      try{
-        const { data: { user }} = await supabase.auth.getUser();
-        if(!user) return;
-
-        const { data, error } = await supabase.from('veterinarian_profiles')
-          .select('first_name, last_name')
-          .eq('id', user.id)
-          .single();
-
-          if(data){
-            setName({
-              firstName: data.first_name || 'Doc',
-              lastName: data.last_name || '' 
-            });
-          }
-        }
-        catch(error){
-          console.error('Error fetching user profile:', error);
-        }
-
-        getUserFullName();
-    }
-  }, []);
-
-  useEffect(() => {
-    async function loadStats() {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        setUserId(user.id);
-        setName({
-          firstName: user.user_metadata.first_name || '',
-          lastName: user.user_metadata.last_name || ''
-        });
-
-        // Get today's appointments
-        const today = new Date().toISOString().split('T')[0];
-        const { count: todayCount } = await supabase
-          .from('appointments')
-          .select('*', { count: 'exact', head: true })
-          .eq('veterinarian_id', user.id)
-          .eq('appointment_date', today);
-
-        // Get total patients (pets)
-        const { count: patientsCount } = await supabase
-          .from('pets')
-          .select('*', { count: 'exact', head: true });
-
-        // Get pending appointments
-        const { count: pendingCount } = await supabase
-          .from('appointments')
-          .select('*', { count: 'exact', head: true })
-          .eq('veterinarian_id', user.id)
-          .eq('status', 'scheduled');
-
-        setStats({
-          todayAppointments: todayCount || 0,
-          totalPatients: patientsCount || 0,
-          pendingAppointments: pendingCount || 0,
-        });
-      } catch (error) {
-        console.error('Error loading stats:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
-    loadStats();
-  }, []);
+  const { data, error, isLoading } = useSWR('/api/vet-dashboard', Fetcher);
 
   if (isLoading) {
     return (
@@ -100,11 +20,19 @@ export default function VeterinarianDashboardPage() {
     );
   }
 
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px] text-red-500">
+        Failed to load dashboard data.
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8 max-w-6xl mx-auto">
       {/* Welcome Section */}
       <div className="space-y-2">
-        <h1 className="text-3xl font-bold">Hello, Dr. {firstName} {lastName}</h1>
+        <h1 className="text-3xl font-bold">Hello, Dr. {data?.firstName} {data?.lastName}</h1>
         <p className="text-muted-foreground">Manage your appointments and patients</p>
       </div>
 
@@ -115,7 +43,7 @@ export default function VeterinarianDashboardPage() {
             <CardTitle className="text-sm font-medium">Today's Appointments</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-primary">{stats.todayAppointments}</div>
+            <div className="text-3xl font-bold text-primary">{data?.todayAppointments}</div>
             <p className="text-xs text-muted-foreground mt-1">Scheduled today</p>
           </CardContent>
         </Card>
@@ -125,7 +53,7 @@ export default function VeterinarianDashboardPage() {
             <CardTitle className="text-sm font-medium">Total Patients</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{stats.totalPatients}</div>
+            <div className="text-3xl font-bold">{data?.totalPatients}</div>
             <p className="text-xs text-muted-foreground mt-1">All pets</p>
           </CardContent>
         </Card>
@@ -135,7 +63,7 @@ export default function VeterinarianDashboardPage() {
             <CardTitle className="text-sm font-medium">Pending Appointments</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{stats.pendingAppointments}</div>
+            <div className="text-3xl font-bold">{data?.pendingAppointments}</div>
             <p className="text-xs text-muted-foreground mt-1">To be completed</p>
           </CardContent>
         </Card>
@@ -146,7 +74,7 @@ export default function VeterinarianDashboardPage() {
         <h2 className="text-2xl font-bold">Quick Actions</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           <Button asChild className="h-auto flex-col py-6" size="lg">
-            <Link href="/veterinarian/dashboard/appointments">
+            <Link href="/veterinarian/appointments">
               <span className="text-2xl mb-2">📅</span>
               <span>View Appointments</span>
             </Link>
@@ -173,9 +101,11 @@ export default function VeterinarianDashboardPage() {
         </CardHeader>
         <CardContent className="space-y-2">
           <p className="text-sm text-muted-foreground">
-            You have {stats.todayAppointments} appointments scheduled for today.
+            You have {data?.todayAppointments} appointments scheduled for today.
           </p>
-          <Button variant="outline" size="sm">View Full Schedule</Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/veterinarian/appointments">View Full Schedule</Link>
+          </Button>
         </CardContent>
       </Card>
     </div>
