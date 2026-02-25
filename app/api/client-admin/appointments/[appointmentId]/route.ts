@@ -1,5 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import {
+  sendClientNotification,
+  getAppointmentNotificationPayload,
+} from '@/lib/notify';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -10,7 +14,6 @@ const supabaseAdmin = createClient(
 // GET /api/client-admin/appointments/[appointmentId]
 export async function GET(
   request: Request,
-  // BUG FIX: Next.js 15 requires params to be awaited as a Promise
   { params }: { params: Promise<{ appointmentId: string }> }
 ) {
   try {
@@ -51,7 +54,6 @@ export async function GET(
 // PATCH /api/client-admin/appointments/[appointmentId]
 export async function PATCH(
   request: Request,
-  // BUG FIX: Next.js 15 requires params to be awaited as a Promise
   { params }: { params: Promise<{ appointmentId: string }> }
 ) {
   try {
@@ -62,13 +64,12 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { appointment_status, cancellation_reason } = body;
+    const { appointment_status, cancellation_reason, cancelled_by } = body;
 
     if (!appointment_status) {
       return NextResponse.json({ error: 'appointment_status is required' }, { status: 400 });
     }
 
-    // Validate status value
     const validStatuses = ['pending', 'confirmed', 'completed', 'cancelled', 'no_show'];
     if (!validStatuses.includes(appointment_status)) {
       return NextResponse.json(
@@ -77,13 +78,33 @@ export async function PATCH(
       );
     }
 
-    // BUG FIX: cancelled status REQUIRES cancellation_reason due to how the DB
-    // and API route treat it — enforced here rather than silently defaulting.
-    if (appointment_status === 'cancelled' && !cancellation_reason?.trim()) {
+    const trimmedReason = cancellation_reason?.trim() ?? '';
+    if (appointment_status === 'cancelled' && !trimmedReason) {
       return NextResponse.json(
-        { error: 'cancellation_reason is required when cancelling an appointment' },
+        { error: 'A cancellation reason is required when cancelling an appointment.' },
         { status: 400 }
       );
+    }
+
+    const { data: existing, error: fetchError } = await supabaseAdmin
+      .from('appointments')
+      .select(`
+        id,
+        appointment_number,
+        appointment_status,
+        scheduled_start,
+        booked_by,
+        pets!appointments_pet_id_fkey (
+          client_profiles!pets_owner_id_fkey (
+            user_id
+          )
+        )
+      `)
+      .eq('id', appointmentId)
+      .single();
+
+    if (fetchError || !existing) {
+      return NextResponse.json({ error: 'Appointment not found' }, { status: 404 });
     }
 
     const updateData: Record<string, unknown> = {
@@ -92,17 +113,21 @@ export async function PATCH(
     };
 
     if (appointment_status === 'cancelled') {
-      updateData.cancellation_reason = cancellation_reason.trim();
+      updateData.cancellation_reason = trimmedReason;
       updateData.cancelled_at = new Date().toISOString();
+      // FIX: cancelled_by is required by the DB constraint — use who's cancelling
+      // prefer the admin user passed from frontend, fall back to whoever booked it
+      updateData.cancelled_by = cancelled_by || existing.booked_by;
+    } else {
+      // Clear cancellation fields when switching away from cancelled
+      updateData.cancellation_reason = null;
+      updateData.cancelled_at = null;
+      updateData.cancelled_by = null;
     }
 
-    // BUG FIX: actual_end should only be set when moving to completed, not cleared
     if (appointment_status === 'completed') {
       updateData.actual_end = new Date().toISOString();
     }
-
-    // BUG FIX: removed the incorrect logic that set actual_start = null on 'confirmed'
-    // which could clobber actual check-in times already recorded.
 
     const { data, error } = await supabaseAdmin
       .from('appointments')
@@ -113,7 +138,34 @@ export async function PATCH(
 
     if (error) {
       console.error('PATCH /appointments/[id] DB error:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json(
+        { error: error.message, details: error.details || '' },
+        { status: 500 }
+      );
+    }
+
+    // Send notification if status changed
+    if (appointment_status !== existing.appointment_status) {
+      const clientUserId =
+        existing.booked_by ||
+        (existing.pets as any)?.client_profiles?.user_id;
+
+      if (clientUserId) {
+        const { type, subject, content } = getAppointmentNotificationPayload(
+          appointment_status,
+          existing.appointment_number,
+          existing.scheduled_start,
+        );
+
+        await sendClientNotification({
+          recipient_id: clientUserId,
+          notification_type: type,
+          subject,
+          content,
+          related_entity_type: 'appointments',
+          related_entity_id: appointmentId,
+        });
+      }
     }
 
     return NextResponse.json(data);
