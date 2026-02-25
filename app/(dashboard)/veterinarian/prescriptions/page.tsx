@@ -6,8 +6,10 @@ import useSWR, { mutate } from 'swr';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Search, Pill, FileText } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Search, Pill, FileText, Printer } from 'lucide-react';
 import IssuePrescription from '@/components/veterinarian/prescriptions/issue-prescriptions';
+import PrintPrescription from '@/components/veterinarian/prescriptions/print-prescription';
 import Link from 'next/link';
 
 // Fetcher for SWR
@@ -17,6 +19,9 @@ const fetcher = (url: string) => fetch(url).then(res => res.json());
 export default function PrescriptionsPage() {
   const { data: prescriptions = [], isLoading } = useSWR('/api/prescriptions', fetcher);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // State to track which prescription is selected for printing
+  const [selectedRx, setSelectedRx] = useState<any>(null);
   
   // Filter Logic
   const filteredList = Array.isArray(prescriptions) ? prescriptions.filter((rx: any) => {
@@ -101,6 +106,17 @@ export default function PrescriptionsPage() {
                        Dispensed: {new Date(rx.dispensed_date).toLocaleDateString()}
                      </span>
                    )}
+
+                   {/* Print Button */}
+                  <Button 
+                    variant="outline" 
+                    size="icon" 
+                    className="shrink-0"
+                    onClick={() => setSelectedRx(rx)}
+                    title="Print Prescription"
+                  >
+                    <Printer size={18} />
+                  </Button>
                 </div>
 
               </CardContent>
@@ -108,6 +124,13 @@ export default function PrescriptionsPage() {
           ))}
         </div>
       )}
+
+      {/* Attach the Print Dialog here */}
+      <PrintPrescription
+        rx={selectedRx} 
+        open={!!selectedRx} 
+        onOpenChange={(open) => !open && setSelectedRx(null)} 
+      />
     </div>
   );
 }
