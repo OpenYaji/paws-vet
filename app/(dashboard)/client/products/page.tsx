@@ -1,396 +1,184 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { ShoppingBag, ExternalLink, Star, Package, Truck, BadgeCheck, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { supabase } from '@/lib/auth-client';
-import { Search, ShoppingBag, Package, Filter } from 'lucide-react';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Textarea } from '@/components/ui/textarea';
-import { toast } from 'sonner';
-
-interface Product {
-  id: string;
-  product_name: string;
-  category: string;
-  sku: string;
-  price: number;
-  stock_quantity: number;
-  description: string;
-  image_url: string | null;
-  is_active: boolean;
-}
+import Link from 'next/link';
 
 export default function ClientProductsPage() {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [categories, setCategories] = useState<string[]>([]);
-  
-  // Inquiry Modal State
-  const [inquiryModalOpen, setInquiryModalOpen] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [inquiryMessage, setInquiryMessage] = useState('');
-  const [submittingInquiry, setSubmittingInquiry] = useState(false);
-
-  useEffect(() => {
-    fetchProducts();
-  }, []);
-
-  useEffect(() => {
-    filterProducts();
-  }, [products, searchQuery, selectedCategory]);
-
-  const fetchProducts = async () => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('products')
-        .select('*')
-        .eq('is_active', true)
-        .order('product_name', { ascending: true });
-
-      if (error) {
-        console.error('Error fetching products:', error);
-        toast.error('Failed to load products');
-        return;
-      }
-
-      setProducts(data || []);
-      
-      // Extract unique categories
-      const uniqueCategories = Array.from(
-        new Set(data?.map((p) => p.category) || [])
-      );
-      setCategories(uniqueCategories);
-    } catch (error) {
-      console.error('Unexpected error:', error);
-      toast.error('An unexpected error occurred');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const filterProducts = () => {
-    let filtered = products;
-
-    // Filter by category
-    if (selectedCategory !== 'all') {
-      filtered = filtered.filter((p) => p.category === selectedCategory);
-    }
-
-    // Filter by search query
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        (p) =>
-          p.product_name.toLowerCase().includes(query) ||
-          p.description?.toLowerCase().includes(query) ||
-          p.category.toLowerCase().includes(query)
-      );
-    }
-
-    setFilteredProducts(filtered);
-  };
-
-  const handleInquiry = (product: Product) => {
-    setSelectedProduct(product);
-    setInquiryMessage('');
-    setInquiryModalOpen(true);
-  };
-
-  const submitInquiry = async () => {
-    if (!selectedProduct || !inquiryMessage.trim()) {
-      toast.error('Please enter your inquiry message');
-      return;
-    }
-
-    try {
-      setSubmittingInquiry(true);
-      
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
-        toast.error('Please log in to submit an inquiry');
-        return;
-      }
-
-      // Get client profile
-      const { data: clientProfile } = await supabase
-        .from('client_profiles')
-        .select('id, first_name, last_name')
-        .eq('user_id', user.id)
-        .single();
-
-      if (!clientProfile) {
-        toast.error('Client profile not found');
-        return;
-      }
-
-      // Here you would typically save the inquiry to a database table
-      // For now, we'll just show a success message
-      // You can create a 'product_inquiries' table later if needed
-      
-      console.log('Product Inquiry:', {
-        client_id: clientProfile.id,
-        client_name: `${clientProfile.first_name} ${clientProfile.last_name}`,
-        product_id: selectedProduct.id,
-        product_name: selectedProduct.product_name,
-        message: inquiryMessage,
-        timestamp: new Date().toISOString(),
-      });
-
-      toast.success('Inquiry submitted successfully! We will contact you soon.');
-      setInquiryModalOpen(false);
-      setInquiryMessage('');
-      setSelectedProduct(null);
-    } catch (error) {
-      console.error('Error submitting inquiry:', error);
-      toast.error('Failed to submit inquiry');
-    } finally {
-      setSubmittingInquiry(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center space-y-4">
-          <Package className="w-12 h-12 mx-auto animate-pulse text-primary" />
-          <p className="text-muted-foreground">Loading products...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="container mx-auto px-4 py-8 max-w-7xl">
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2 flex items-center gap-3">
-          <ShoppingBag className="w-8 h-8 text-primary" />
-          Products Catalog
-        </h1>
-        <p className="text-muted-foreground">
-          Browse our selection of pet care products and supplies
-        </p>
-      </div>
-
-      {/* Search and Filter Bar */}
-      <div className="mb-8 flex flex-col md:flex-row gap-4">
-        {/* Search */}
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            type="text"
-            placeholder="Search products..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-
-        {/* Category Filter */}
-        <div className="flex items-center gap-2 min-w-[200px]">
-          <Filter className="w-4 h-4 text-muted-foreground" />
-          <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-            <SelectTrigger>
-              <SelectValue placeholder="All Categories" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              {categories.map((category) => (
-                <SelectItem key={category} value={category}>
-                  {category}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+      <div className="border-b border-border bg-gradient-to-br from-primary/10 via-transparent to-primary/5 py-12 md:py-16">
+        <div className="max-w-6xl mx-auto px-4 space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-primary/20 rounded-full flex items-center justify-center">
+              <ShoppingBag size={28} className="text-primary" />
+            </div>
+            <h1 className="text-4xl md:text-5xl font-bold">Pet Products</h1>
+          </div>
+          <p className="text-lg text-muted-foreground max-w-2xl">Shop premium pet products from our official Shopee store</p>
         </div>
       </div>
 
-      {/* Results Count */}
-      <div className="mb-4">
-        <p className="text-sm text-muted-foreground">
-          Showing {filteredProducts.length} of {products.length} products
-        </p>
-      </div>
-
-      {/* Products Grid */}
-      {filteredProducts.length === 0 ? (
-        <div className="text-center py-16">
-          <Package className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
-          <h3 className="text-xl font-semibold mb-2">No products found</h3>
-          <p className="text-muted-foreground">
-            Try adjusting your search or filter criteria
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredProducts.map((product) => (
-            <div
-              key={product.id}
-              className="bg-card border border-border rounded-lg overflow-hidden hover:shadow-lg transition-shadow"
-            >
-              {/* Product Image */}
-              <div className="aspect-square bg-secondary/20 relative">
-                {product.image_url ? (
-                  <img
-                    src={product.image_url}
-                    alt={product.product_name}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="flex items-center justify-center h-full">
-                    <Package className="w-16 h-16 text-muted-foreground" />
-                  </div>
-                )}
-                
-                {/* Stock Badge */}
-                {product.stock_quantity > 0 ? (
-                  <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full">
-                    In Stock ({product.stock_quantity})
-                  </div>
-                ) : (
-                  <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full">
-                    Out of Stock
-                  </div>
-                )}
+      <div className="max-w-6xl mx-auto px-4 py-16 md:py-24 space-y-16 md:space-y-24">
+        {/* Main Shopee CTA */}
+        <div className="relative">
+          <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-primary/10 rounded-3xl blur-2xl"></div>
+          <div className="relative bg-gradient-to-br from-card to-card/50 border-2 border-primary/20 rounded-3xl p-12 md:p-20 text-center space-y-8">
+            {/* Icon */}
+            <div className="flex justify-center">
+              <div className="relative w-32 h-32">
+                <div className="absolute inset-0 bg-gradient-to-br from-primary to-primary/50 rounded-full animate-pulse blur-xl opacity-70"></div>
+                <div className="relative z-10 w-32 h-32 bg-white dark:bg-slate-900 rounded-full flex items-center justify-center border-4 border-primary/30">
+                  <ShoppingBag size={64} className="text-primary" strokeWidth={1.5} />
+                </div>
               </div>
+            </div>
 
-              {/* Product Details */}
-              <div className="p-4">
-                {/* Category Badge */}
-                <div className="mb-2">
-                  <span className="inline-block bg-primary/10 text-primary text-xs px-2 py-1 rounded">
-                    {product.category}
-                  </span>
-                </div>
+            {/* Content */}
+            <div className="space-y-4 max-w-2xl mx-auto">
+              <h2 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+                Visit Our Shopee Store
+              </h2>
+              <p className="text-lg text-muted-foreground leading-relaxed">
+                Browse our complete collection of vet-approved pet food, accessories, healthcare items, and more. Delivered straight to your door with Shopee's trusted service!
+              </p>
+            </div>
 
-                {/* Product Name */}
-                <h3 className="text-lg font-semibold mb-2 line-clamp-2">
-                  {product.product_name}
-                </h3>
-
-                {/* Description */}
-                <p className="text-sm text-muted-foreground mb-4 line-clamp-3">
-                  {product.description || 'No description available'}
-                </p>
-
-                {/* Price */}
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <p className="text-2xl font-bold text-primary">
-                      ${product.price.toFixed(2)}
-                    </p>
-                    {product.sku && (
-                      <p className="text-xs text-muted-foreground">
-                        SKU: {product.sku}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Inquire Button */}
-                <Button
-                  onClick={() => handleInquiry(product)}
-                  className="w-full"
-                  disabled={product.stock_quantity === 0}
+            {/* CTA Button */}
+            <div className="flex flex-col items-center gap-4 pt-4">
+              <Button
+                asChild
+                size="lg"
+                className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-bold group h-14 px-8 shadow-lg hover:shadow-xl transition-all duration-300"
+              >
+                <a
+                  href="https://ph.shp.ee/5dyuZHF"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-3"
                 >
-                  {product.stock_quantity === 0 ? 'Out of Stock' : 'Inquire About This Product'}
-                </Button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Inquiry Modal */}
-      <Dialog open={inquiryModalOpen} onOpenChange={setInquiryModalOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>Product Inquiry</DialogTitle>
-            <DialogDescription>
-              Send us your questions about {selectedProduct?.product_name}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            {/* Product Info */}
-            <div className="bg-secondary/20 p-4 rounded-lg">
-              <div className="flex gap-4">
-                {selectedProduct?.image_url ? (
-                  <img
-                    src={selectedProduct.image_url}
-                    alt={selectedProduct.product_name}
-                    className="w-20 h-20 object-cover rounded"
-                  />
-                ) : (
-                  <div className="w-20 h-20 bg-secondary flex items-center justify-center rounded">
-                    <Package className="w-8 h-8 text-muted-foreground" />
-                  </div>
-                )}
-                <div>
-                  <h4 className="font-semibold">{selectedProduct?.product_name}</h4>
-                  <p className="text-sm text-muted-foreground">
-                    {selectedProduct?.category}
-                  </p>
-                  <p className="text-lg font-bold text-primary mt-1">
-                    ${selectedProduct?.price.toFixed(2)}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Message */}
-            <div>
-              <label className="text-sm font-medium mb-2 block">
-                Your Message
-              </label>
-              <Textarea
-                placeholder="I would like to know more about..."
-                value={inquiryMessage}
-                onChange={(e) => setInquiryMessage(e.target.value)}
-                rows={5}
-                className="resize-none"
-              />
+                  <ShoppingBag size={24} className="group-hover:scale-110 transition-transform" />
+                  <span>Shop Now on Shopee</span>
+                  <ExternalLink size={20} className="group-hover:translate-x-1 transition-transform" />
+                </a>
+              </Button>
+              <p className="text-sm text-muted-foreground flex items-center gap-2">
+                <Zap size={16} className="text-yellow-500" />
+                Opens in a new window · Secure Shopee checkout
+              </p>
             </div>
           </div>
+        </div>
 
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setInquiryModalOpen(false)}
-              disabled={submittingInquiry}
-            >
-              Cancel
+        {/* Features Grid */}
+        <div className="space-y-8">
+          <div className="text-center space-y-3">
+            <h3 className="text-3xl md:text-4xl font-bold">Why Shop With Us?</h3>
+            <p className="text-muted-foreground text-lg">Trusted by pet owners nationwide</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[
+              {
+                icon: BadgeCheck,
+                color: 'from-emerald-500 to-teal-500',
+                title: 'Vet-Approved Products',
+                desc: 'Every product is carefully selected and approved by our veterinarians for safety and quality'
+              },
+              {
+                icon: Truck,
+                color: 'from-blue-500 to-indigo-500',
+                title: 'Fast & Reliable Delivery',
+                desc: 'Quick shipping through Shopee with tracking available on every order'
+              },
+              {
+                icon: Star,
+                color: 'from-amber-500 to-orange-500',
+                title: 'Official PAWS Store',
+                desc: 'Authentic products backed by our clinic\'s guarantee and customer support'
+              },
+            ].map((feature, idx) => {
+              const Icon = feature.icon;
+              return (
+                <div
+                  key={idx}
+                  className="group relative bg-card border-2 border-border rounded-2xl p-8 hover:border-primary/50 hover:shadow-xl transition-all duration-300 hover:scale-105 overflow-hidden"
+                >
+                  <div className={`absolute inset-0 bg-gradient-to-br ${feature.color} opacity-0 group-hover:opacity-5 transition-opacity duration-300`}></div>
+                  <div className="relative z-10 space-y-4">
+                    <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${feature.color} flex items-center justify-center group-hover:scale-110 transition-transform duration-300`}>
+                      <Icon size={32} className="text-white" strokeWidth={2} />
+                    </div>
+                    <h4 className="text-xl font-bold group-hover:text-primary transition-colors">{feature.title}</h4>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{feature.desc}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Categories Preview */}
+        <div className="space-y-8">
+          <div className="text-center space-y-3">
+            <h3 className="text-3xl md:text-4xl font-bold">Popular Categories</h3>
+            <p className="text-muted-foreground text-lg">Find everything your pet needs</p>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[
+              { emoji: '🍖', name: 'Pet Food', desc: 'Premium nutrition' },
+              { emoji: '🏥', name: 'Healthcare', desc: 'Vitamins & supplements' },
+              { emoji: '🎾', name: 'Toys & Play', desc: 'Fun for all ages' },
+              { emoji: '🛁', name: 'Grooming', desc: 'Bath & care' },
+            ].map((cat, i) => (
+              <button
+                key={i}
+                className="group bg-card border-2 border-border rounded-xl p-6 md:p-8 text-center hover:border-primary/50 hover:shadow-lg transition-all duration-300 hover:scale-105"
+              >
+                <div className="text-5xl md:text-6xl mb-3 group-hover:scale-125 transition-transform duration-300 inline-block">{cat.emoji}</div>
+                <div className="font-bold text-base md:text-lg group-hover:text-primary transition-colors mb-1">{cat.name}</div>
+                <div className="text-xs md:text-sm text-muted-foreground">{cat.desc}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Trust Badges */}
+        <div className="bg-gradient-to-r from-primary/5 via-transparent to-primary/5 border-2 border-primary/20 rounded-2xl p-8 md:p-12">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-12">
+            {[
+              { Icon: Package, text: 'Secure Packaging' },
+              { Icon: BadgeCheck, text: '100% Authentic' },
+              { Icon: Truck, text: 'Free Shipping ₱500+' },
+            ].map((badge, i) => (
+              <div key={i} className="flex items-center justify-center md:justify-start gap-4">
+                <div className="w-12 h-12 bg-primary/20 rounded-full flex items-center justify-center flex-shrink-0">
+                  <badge.Icon size={24} className="text-primary" />
+                </div>
+                <span className="font-semibold text-sm md:text-base text-foreground">{badge.text}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Secondary CTA */}
+        <div className="text-center space-y-6 py-8 md:py-12">
+          <div className="space-y-2">
+            <h2 className="text-3xl md:text-4xl font-bold">Can't Find What You Need?</h2>
+            <p className="text-lg text-muted-foreground">Check out our services or book a consultation with our vets</p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Button asChild variant="outline" size="lg" className="border-2 h-12">
+              <Link href="/client/services">View Services</Link>
             </Button>
-            <Button
-              onClick={submitInquiry}
-              disabled={submittingInquiry || !inquiryMessage.trim()}
-            >
-              {submittingInquiry ? 'Sending...' : 'Send Inquiry'}
+            <Button asChild size="lg" className="bg-primary hover:bg-primary/90 h-12">
+              <Link href="/client/appointments">Book Now</Link>
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

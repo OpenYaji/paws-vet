@@ -47,11 +47,34 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Product ID required' }, { status: 400 });
     }
 
-    // Soft-delete: mark inactive so invoice_line_items FK constraint is not violated.
-    // Hard deletion is not possible when historical invoices reference this product.
+    // Check if this product has been used in any invoice — if so, hard-deletion
+    // is not possible (FK constraint on invoice_line_items.product_id → products.id).
+    const { data: lineItems, error: checkError } = await supabaseAdmin
+      .from('invoice_line_items')
+      .select('id')
+      .eq('product_id', id)
+      .limit(1);
+
+    if (checkError) throw checkError;
+
+    if (lineItems && lineItems.length > 0) {
+      return NextResponse.json(
+        { error: 'has_history', message: 'This product has sales history and cannot be deleted.' },
+        { status: 409 }
+      );
+    }
+
+    // No invoice history — safe to hard-delete.
+    // Delete product_batches first (FK: product_batches.product_id → products.id).
+    const { error: batchError } = await supabaseAdmin
+      .from('product_batches')
+      .delete()
+      .eq('product_id', id);
+    if (batchError) throw batchError;
+
     const { error } = await supabaseAdmin
       .from('products')
-      .update({ is_active: false })
+      .delete()
       .eq('id', id);
     if (error) throw error;
 

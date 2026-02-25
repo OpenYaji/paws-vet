@@ -126,44 +126,49 @@ export default function AppointmentDetailPage() {
   // the DB constraints require. The old code sent a bare Supabase update
   // that skipped these fields, causing DB errors for 'cancelled' status.
   const handleStatusUpdate = async () => {
-    if (!appointment || selectedStatus === appointment.appointment_status) return;
+  if (!appointment || selectedStatus === appointment.appointment_status) return;
 
-    if (selectedStatus === 'cancelled' && !cancellationReason.trim()) {
-      showToast('Please provide a cancellation reason', 'error');
+  const trimmedReason = cancellationReason.trim();
+  if (selectedStatus === 'cancelled' && !trimmedReason) {
+    showToast('Please provide a cancellation reason before cancelling.', 'error');
+    return;
+  }
+
+  if (['cancelled', 'no_show'].includes(selectedStatus)) {
+    if (!confirm(`Change status to "${selectedStatus}"?`)) return;
+  }
+
+  setUpdating(true);
+  try {
+    // Get the current admin user to pass as cancelled_by
+    const { data: { user } } = await supabase.auth.getUser();
+
+    const res = await fetch(`/api/client-admin/appointments/${appointmentId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        appointment_status: selectedStatus,
+        cancellation_reason: selectedStatus === 'cancelled' ? trimmedReason : '',
+        // FIX: Send the logged-in admin's user id as cancelled_by
+        cancelled_by: user?.id ?? null,
+      }),
+    });
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      showToast(body.error || 'Failed to update status', 'error');
       return;
     }
 
-    // Double-confirm destructive actions
-    if (['cancelled', 'no_show'].includes(selectedStatus)) {
-      if (!confirm(`Change status to "${selectedStatus}"?`)) return;
-    }
-
-    setUpdating(true);
-    try {
-      const res = await fetch(`/api/client-admin/appointments/${appointmentId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          appointment_status: selectedStatus,
-          cancellation_reason: selectedStatus === 'cancelled' ? cancellationReason : undefined,
-        }),
-      });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        showToast(body.error || 'Failed to update status', 'error');
-        return;
-      }
-
-      showToast('Appointment status updated');
-      setCancellationReason('');
-      await fetchAppointmentData();
-    } catch {
-      showToast('Failed to update appointment', 'error');
-    } finally {
-      setUpdating(false);
-    }
-  };
+    showToast('Appointment status updated');
+    setCancellationReason('');
+    await fetchAppointmentData();
+  } catch {
+    showToast('Failed to update appointment', 'error');
+  } finally {
+    setUpdating(false);
+  }
+};
 
   const handleCancel = async () => {
     setSelectedStatus('cancelled');
@@ -414,18 +419,27 @@ export default function AppointmentDetailPage() {
             {/* BUG FIX: Show cancellation reason input when status is 'cancelled'
                 because the DB has a NOT NULL-ish constraint via the API route */}
             {selectedStatus === 'cancelled' && (
-              <div className="form-group">
-                <label className="form-label">Cancellation Reason *</label>
-                <input
-                  className="form-input"
-                  placeholder="Required for cancellation…"
-                  value={cancellationReason}
-                  onChange={e => setCancellationReason(e.target.value)}
-                  disabled={updating}
-                  style={{ maxWidth: 400 }}
-                />
-              </div>
-            )}
+  <div className="form-group">
+    <label className="form-label">
+      Cancellation Reason <span style={{ color: 'var(--red)' }}>*</span>
+    </label>
+    {/* FIX: textarea instead of input — reasons are often longer sentences */}
+    <textarea
+      className="form-input"
+      placeholder="Required — describe why this appointment is being cancelled…"
+      value={cancellationReason}
+      onChange={e => setCancellationReason(e.target.value)}
+      disabled={updating}
+      rows={3}
+      style={{ maxWidth: 480, resize: 'vertical' }}
+    />
+    {cancellationReason.trim() === '' && (
+      <span className="form-hint" style={{ color: 'var(--red)', fontSize: 12 }}>
+        This field is required to cancel an appointment.
+      </span>
+    )}
+  </div>
+)}
 
             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
               {statusChanged && (

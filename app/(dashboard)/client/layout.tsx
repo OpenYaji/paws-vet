@@ -4,7 +4,50 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/auth-client';
 import ClientSidebar from '@/components/client/client-sidebar';
+import ClientThemeProvider from '@/components/client/theme-provider';
 import { Menu } from 'lucide-react';
+
+function ClientLayoutContent({ children, profile, collapsed, setCollapsed, mobileOpen, setMobileOpen }: any) {
+  return (
+    <div className="flex h-screen w-screen overflow-hidden bg-background transition-colors duration-200">
+      {/* Desktop Sidebar — completely fixed, never scrolls */}
+      <div className="hidden md:flex flex-shrink-0 h-screen overflow-hidden">
+        <ClientSidebar
+          profile={profile}
+          collapsed={collapsed}
+          setCollapsed={setCollapsed}
+          mobileOpen={mobileOpen}
+          setMobileOpen={setMobileOpen}
+        />
+      </div>
+
+      {/* Mobile Sidebar */}
+      <div className="md:hidden">
+        <ClientSidebar
+          profile={profile}
+          collapsed={collapsed}
+          setCollapsed={setCollapsed}
+          mobileOpen={mobileOpen}
+          setMobileOpen={setMobileOpen}
+        />
+      </div>
+
+      {/* Main content — ONLY this scrolls */}
+      <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-y-auto overflow-x-hidden">
+        {/* Mobile header */}
+        <header className="md:hidden border-b border-border bg-card px-4 py-3 flex items-center justify-between sticky top-0 z-20">
+          <button onClick={() => setMobileOpen(true)} className="p-2 hover:bg-accent rounded-lg transition-colors duration-200">
+            <Menu size={24} />
+          </button>
+          <span className="font-bold">PAWS Client</span>
+          <div className="w-10"></div>
+        </header>
+
+        <main className="p-6">{children}</main>
+      </div>
+    </div>
+  );
+}
 
 export default function ClientDashboardLayout({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
@@ -52,53 +95,28 @@ export default function ClientDashboardLayout({ children }: { children: React.Re
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background text-center">
-        <div>
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading Profile...</p>
+      <ClientThemeProvider>
+        <div className="min-h-screen flex items-center justify-center bg-background text-center">
+          <div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading Profile...</p>
+          </div>
         </div>
-      </div>
+      </ClientThemeProvider>
     );
   }
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-background">
-
-      {/* Desktop Sidebar — completely fixed, never scrolls */}
-      <div className="hidden md:flex flex-shrink-0 h-screen overflow-hidden">
-        <ClientSidebar
-          profile={profile}
-          collapsed={collapsed}
-          setCollapsed={setCollapsed}
-          mobileOpen={mobileOpen}
-          setMobileOpen={setMobileOpen}
-        />
-      </div>
-
-      {/* Mobile Sidebar */}
-      <div className="md:hidden">
-        <ClientSidebar
-          profile={profile}
-          collapsed={collapsed}
-          setCollapsed={setCollapsed}
-          mobileOpen={mobileOpen}
-          setMobileOpen={setMobileOpen}
-        />
-      </div>
-
-      {/* Main content — ONLY this scrolls */}
-      <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-y-auto overflow-x-hidden">
-        {/* Mobile header */}
-        <header className="md:hidden border-b border-border bg-card px-4 py-3 flex items-center justify-between sticky top-0 z-20">
-          <button onClick={() => setMobileOpen(true)} className="p-2 hover:bg-accent rounded-lg">
-            <Menu size={24} />
-          </button>
-          <span className="font-bold">PAWS Client</span>
-          <div className="w-10"></div>
-        </header>
-
-        <main className="p-6">{children}</main>
-      </div>
-    </div>
+    <ClientThemeProvider>
+      <ClientLayoutContent
+        profile={profile}
+        collapsed={collapsed}
+        setCollapsed={setCollapsed}
+        mobileOpen={mobileOpen}
+        setMobileOpen={setMobileOpen}
+      >
+        {children}
+      </ClientLayoutContent>
+    </ClientThemeProvider>
   );
 }
