@@ -6,8 +6,16 @@ import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { Fetcher } from '@/lib/fetcher';
 
+interface DashboardData {
+  firstName: string;
+  lastName: string;
+  todayAppointments: number;
+  totalPatients: number;
+  pendingAppointments: number;
+}
+
 export default function VeterinarianDashboardPage() {
-  const { data, error, isLoading } = useSWR('/api/vet-dashboard', Fetcher);
+  const { data, error, isLoading } = useSWR<DashboardData>('/api/vet-dashboard', Fetcher);
 
   if (isLoading) {
     return (
