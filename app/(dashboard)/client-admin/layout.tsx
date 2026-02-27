@@ -8,8 +8,6 @@ import {
   Users,
   PawPrint,
   Calendar,
-  Settings,
-  Activity,
 } from 'lucide-react';
 
 // REMOVED: LayoutDashboard icon — no dashboard tab
@@ -50,28 +48,35 @@ function ClientAdminNav() {
 
   return (
     <>
-      <div className="nav-bar">
-        <div className="nav-container">
-          <div className="nav-inner">
-            <div className="nav-left">
-              <Link href="/client-admin" className="brand-link">
-                <div className="brand-icon">
-                  <PawPrint size={20} />
+      {/* Desktop + main nav bar */}
+      <header className="bg-slate-900 border-b border-slate-700 sticky top-0 z-50">
+        <div className="max-w-[1400px] mx-auto px-6">
+          <div className="flex items-center justify-between h-[60px]">
+            <div className="flex items-center gap-8">
+              <Link href="/client-admin" className="flex items-center gap-2.5 no-underline">
+                <div className="w-[34px] h-[34px] bg-primary rounded-md flex items-center justify-center text-primary-foreground flex-shrink-0">
+                  <PawPrint size={18} />
                 </div>
-                <span className="brand-name">PawsVet <span className="brand-suffix">CMS</span></span>
+                <span className="text-white text-[17px] font-bold tracking-tight">
+                  PawsVet <span className="text-teal-400 font-medium text-sm ml-0.5">CMS</span>
+                </span>
               </Link>
 
               {isMainPage && (
-                <nav className="nav-tabs">
+                <nav className="hidden md:flex items-center gap-1">
                   {navItems.map((item) => {
                     const Icon = item.icon;
                     return (
                       <button
                         key={item.value}
                         onClick={() => handleTabClick(item.value)}
-                        className={`nav-tab ${item.active ? 'nav-tab--active' : ''}`}
+                        className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-sm font-medium transition-all duration-150 ${
+                          item.active
+                            ? 'bg-teal-900/50 text-teal-300'
+                            : 'text-slate-400 hover:bg-slate-700 hover:text-white'
+                        }`}
                       >
-                        <Icon size={16} />
+                        <Icon size={15} />
                         {item.name}
                       </button>
                     );
@@ -79,32 +84,27 @@ function ClientAdminNav() {
                 </nav>
               )}
             </div>
-
-            <div className="nav-right">
-              <div className="status-dot" title="System online">
-                <Activity size={14} />
-                <span>Live</span>
-              </div>
-              <button className="icon-btn" aria-label="Settings">
-                <Settings size={18} />
-              </button>
-            </div>
           </div>
         </div>
-      </div>
+      </header>
 
+      {/* Mobile bottom nav */}
       {isMainPage && (
-        <div className="mobile-nav">
-          <nav className="mobile-nav-inner">
+        <div className="bg-slate-800 border-b border-slate-700 md:hidden">
+          <nav className="max-w-[1400px] mx-auto px-4 py-2 flex gap-1 overflow-x-auto">
             {navItems.map((item) => {
               const Icon = item.icon;
               return (
                 <button
                   key={item.value}
                   onClick={() => handleTabClick(item.value)}
-                  className={`mobile-tab ${item.active ? 'mobile-tab--active' : ''}`}
+                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-[13px] font-medium whitespace-nowrap transition-all duration-150 ${
+                    item.active
+                      ? 'bg-teal-900/50 text-teal-300'
+                      : 'text-slate-400 hover:bg-slate-700 hover:text-white'
+                  }`}
                 >
-                  <Icon size={16} />
+                  <Icon size={15} />
                   <span>{item.name}</span>
                 </button>
               );
@@ -589,16 +589,16 @@ export default function ClientAdminLayout({
         }
       `}</style>
 
-      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <div className="min-h-screen flex flex-col">
         <Suspense fallback={
-          <div className="nav-bar" style={{ height: 60, display: 'flex', alignItems: 'center', paddingLeft: 24 }}>
-            <div className="brand-name" style={{ color: 'white' }}>PawsVet CMS</div>
+          <div className="bg-slate-900 h-[60px] flex items-center px-6">
+            <span className="text-white font-bold text-[17px]">PawsVet CMS</span>
           </div>
         }>
           <ClientAdminNav />
         </Suspense>
 
-        <main style={{ flex: 1 }}>
+        <main className="flex-1">
           {children}
         </main>
       </div>

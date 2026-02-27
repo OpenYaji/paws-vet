@@ -47,13 +47,13 @@ function Field({ label, id, required, error, hint, children }: {
   label: string; id: string; required?: boolean; error?: string; hint?: string; children: React.ReactNode;
 }) {
   return (
-    <div className="form-group">
-      <label className="form-label" htmlFor={id}>
-        {label}{required && <span style={{ color: 'var(--red)', marginLeft: 3 }}>*</span>}
+    <div className="flex flex-col gap-1.5">
+      <label className="text-sm font-semibold" htmlFor={id}>
+        {label}{required && <span className="text-destructive ml-0.5">*</span>}
       </label>
       {children}
-      {hint && !error && <span className="form-hint">{hint}</span>}
-      {error && <span className="form-error"><AlertTriangle size={11} style={{ display: 'inline', marginRight: 3 }} />{error}</span>}
+      {hint && !error && <span className="text-xs text-muted-foreground">{hint}</span>}
+      {error && <span className="text-xs text-destructive flex items-center gap-1"><AlertTriangle size={11} />{error}</span>}
     </div>
   );
 }
@@ -212,63 +212,75 @@ export default function PetDetailPage() {
   };
 
   if (loading) return (
-    <div className="page">
-      <div className="loading-state"><div className="spinner" /><span>Loading pet…</span></div>
+    <div className="max-w-[1400px] mx-auto px-6 py-8">
+      <div className="flex flex-col items-center justify-center py-20 gap-4 text-muted-foreground">
+        <div className="w-8 h-8 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+        <span>Loading pet…</span>
+      </div>
     </div>
   );
 
   if (!pet) return (
-    <div className="page">
-      <div className="alert alert-error" style={{ maxWidth: 400, margin: '60px auto' }}>
-        <AlertTriangle size={18} /> Pet not found
+    <div className="max-w-[1400px] mx-auto px-6 py-8">
+      <div className="bg-destructive/10 text-destructive border border-destructive/20 rounded-xl p-4 flex items-start gap-3 max-w-sm mx-auto mt-16">
+        <AlertTriangle size={18} className="flex-shrink-0 mt-0.5" /> Pet not found
       </div>
     </div>
   );
 
   return (
-    <div className="page">
+    <div className="max-w-[1400px] mx-auto px-6 py-8">
+      {/* Toast */}
       {toast && (
-        <div style={{
-          position: 'fixed', bottom: 24, right: 24, zIndex: 9999,
-          background: toast.type === 'success' ? '#059669' : '#dc2626',
-          color: 'white', padding: '12px 20px',
-          borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-lg)',
-          fontSize: 14, fontWeight: 600,
-        }}>{toast.msg}</div>
+        <div className={`fixed bottom-6 right-6 z-[9999] px-5 py-3 rounded-xl shadow-lg text-sm font-semibold text-white ${toast.type === 'success' ? 'bg-emerald-600' : 'bg-destructive'}`}>
+          {toast.msg}
+        </div>
       )}
 
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <button className="btn btn-outline btn-sm btn-icon" onClick={() => router.back()}>
+      <div className="flex justify-between items-start mb-7">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => router.back()}
+            className="p-2 rounded-lg border border-border bg-card hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-150"
+          >
             <ArrowLeft size={16} />
           </button>
           <div>
-            <h1 style={{ fontSize: 26, fontWeight: 750, margin: 0, letterSpacing: '-0.5px' }}>{pet.name}</h1>
+            <h1 className="text-2xl font-bold tracking-tight">{pet.name}</h1>
             {owner && (
-              <p style={{ margin: 0, marginTop: 4, fontSize: 14, color: 'var(--slate)' }}>
+              <p className="mt-1 text-sm text-muted-foreground">
                 Owner:{' '}
-                <Link href={`/client-admin/clients/${owner.id}`} className="link-blue">
+                <Link href={`/client-admin/clients/${owner.id}`} className="text-primary hover:underline font-medium">
                   {owner.first_name} {owner.last_name}
                 </Link>
               </p>
             )}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div className="flex gap-2.5">
           {!isEditing ? (
             <>
-              <button className="btn btn-primary btn-sm" onClick={() => setIsEditing(true)}>
+              <button
+                onClick={() => setIsEditing(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground transition-all duration-150"
+              >
                 Edit Pet
               </button>
               {!pet.deleted_at && (
-                <button className="btn btn-danger btn-sm" onClick={handleArchivePet}>
+                <button
+                  onClick={handleArchivePet}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold bg-destructive hover:bg-destructive/90 text-white transition-all duration-150"
+                >
                   <Archive size={14} /> Archive
                 </button>
               )}
             </>
           ) : (
-            <button className="btn btn-outline btn-sm" onClick={() => { setIsEditing(false); fetchPetData(); }}>
+            <button
+              onClick={() => { setIsEditing(false); fetchPetData(); }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold border border-border bg-card hover:bg-accent text-foreground transition-all duration-150"
+            >
               Cancel Editing
             </button>
           )}
@@ -277,19 +289,21 @@ export default function PetDetailPage() {
 
       {/* Archived warning */}
       {pet.deleted_at && (
-        <div className="alert alert-warning" style={{ marginBottom: 20 }}>
-          <AlertTriangle size={16} />
+        <div className="bg-yellow-50 text-yellow-800 border border-yellow-200 rounded-xl p-4 flex items-start gap-3 mb-5">
+          <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
           This pet is archived. Archived on {new Date(pet.deleted_at).toLocaleDateString()}.
         </div>
       )}
 
       {/* ── VIEW MODE ── */}
       {!isEditing && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <div className="card animate-in">
-            <div className="card-header"><h2 className="card-title">Basic Information</h2></div>
-            <div className="card-body">
-              <div className="grid-2" style={{ gap: 20 }}>
+        <div className="flex flex-col gap-5">
+          <div className="bg-card rounded-2xl border border-border shadow-sm">
+            <div className="px-6 py-4 border-b border-border">
+              <h2 className="text-[17px] font-bold">Basic Information</h2>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 {[
                   { label: 'Name', value: pet.name },
                   { label: 'Species', value: pet.species },
@@ -303,16 +317,18 @@ export default function PetDetailPage() {
                   {
                     label: 'Status',
                     value: (
-                      <span className={pet.is_active ? 'badge badge-green' : 'badge badge-gray'}>
+                      <span className={pet.is_active
+                        ? 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700'
+                        : 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-muted text-muted-foreground'}>
                         {pet.is_active ? 'Active' : 'Inactive'}
                       </span>
                     ),
                   },
                 ].map(({ label, value }) => (
-                  <div key={label} className="info-row">
-                    <span className="info-label">{label}</span>
+                  <div key={label} className="flex flex-col gap-0.5">
+                    <span className="text-xs text-muted-foreground font-medium">{label}</span>
                     {typeof value === 'string' ? (
-                      <span className="info-value">{value}</span>
+                      <span className="text-sm font-medium">{value}</span>
                     ) : value}
                   </div>
                 ))}
@@ -320,17 +336,19 @@ export default function PetDetailPage() {
             </div>
           </div>
 
-          <div className="card animate-in animate-in-delay-1">
-            <div className="card-header"><h2 className="card-title">Medical & Behavioral Notes</h2></div>
-            <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div className="bg-card rounded-2xl border border-border shadow-sm">
+            <div className="px-6 py-4 border-b border-border">
+              <h2 className="text-[17px] font-bold">Medical & Behavioral Notes</h2>
+            </div>
+            <div className="p-6 flex flex-col gap-4">
               {[
                 { label: 'Special Needs', value: pet.special_needs },
                 { label: 'Behavioral Notes', value: pet.behavioral_notes },
                 { label: 'Current Medical Status', value: pet.current_medical_status },
               ].map(({ label, value }) => (
-                <div key={label} className="info-row">
-                  <span className="info-label">{label}</span>
-                  <span className="info-value" style={{ color: value ? 'var(--navy)' : 'var(--slate-light)' }}>
+                <div key={label} className="flex flex-col gap-0.5">
+                  <span className="text-xs text-muted-foreground font-medium">{label}</span>
+                  <span className={`text-sm font-medium ${value ? '' : 'text-muted-foreground italic'}`}>
                     {value || 'None recorded'}
                   </span>
                 </div>
@@ -342,24 +360,26 @@ export default function PetDetailPage() {
 
       {/* ── EDIT MODE ── */}
       {isEditing && (
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-
-          <div className="card animate-in">
-            <div className="card-header"><h2 className="card-title">Basic Information</h2></div>
-            <div className="card-body">
-              <div className="grid-2" style={{ gap: 16 }}>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+          <div className="bg-card rounded-2xl border border-border shadow-sm">
+            <div className="px-6 py-4 border-b border-border">
+              <h2 className="text-[17px] font-bold">Basic Information</h2>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="Name" id="name" required error={errors.name}>
                   <input
-                    id="name" className={`form-input ${errors.name ? 'error' : ''}`}
+                    id="name"
+                    className={`w-full px-3 py-2 border rounded-lg text-sm bg-card text-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all ${errors.name ? 'border-destructive' : 'border-border'}`}
                     value={name}
                     onChange={e => { setName(e.target.value); if (errors.name) setErrors(ev => ({ ...ev, name: '' })); }}
                     required
                   />
                 </Field>
-
                 <Field label="Species" id="species" required error={errors.species}>
                   <select
-                    id="species" className={`form-input ${errors.species ? 'error' : ''}`}
+                    id="species"
+                    className={`w-full px-3 py-2 border rounded-lg text-sm bg-card text-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all ${errors.species ? 'border-destructive' : 'border-border'}`}
                     value={species}
                     onChange={e => { setSpecies(e.target.value); if (errors.species) setErrors(ev => ({ ...ev, species: '' })); }}
                   >
@@ -369,54 +389,41 @@ export default function PetDetailPage() {
                     ))}
                   </select>
                 </Field>
-
                 <Field label="Breed" id="breed">
-                  <input id="breed" className="form-input" value={breed} onChange={e => setBreed(e.target.value)} />
+                  <input id="breed" className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card text-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all" value={breed} onChange={e => setBreed(e.target.value)} />
                 </Field>
-
                 <Field label="Date of Birth" id="dob">
-                  <input id="dob" type="date" className="form-input" value={dateOfBirth} onChange={e => setDateOfBirth(e.target.value)} />
+                  <input id="dob" type="date" className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card text-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all" value={dateOfBirth} onChange={e => setDateOfBirth(e.target.value)} />
                 </Field>
-
                 <Field label="Gender" id="gender">
-                  <select id="gender" className="form-input" value={gender} onChange={e => setGender(e.target.value)}>
+                  <select id="gender" className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card text-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all" value={gender} onChange={e => setGender(e.target.value)}>
                     <option value="">Select gender</option>
                     <option value="male">Male</option>
                     <option value="female">Female</option>
                     <option value="unknown">Unknown</option>
                   </select>
                 </Field>
-
                 <Field label="Color/Markings" id="color">
-                  <input id="color" className="form-input" value={color} onChange={e => setColor(e.target.value)} />
+                  <input id="color" className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card text-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all" value={color} onChange={e => setColor(e.target.value)} />
                 </Field>
-
                 <Field label="Weight (kg)" id="weight" error={errors.weight} hint="Must be greater than 0">
                   <input
                     id="weight" type="number" step="0.1" min="0.1"
-                    className={`form-input ${errors.weight ? 'error' : ''}`}
+                    className={`w-full px-3 py-2 border rounded-lg text-sm bg-card text-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all ${errors.weight ? 'border-destructive' : 'border-border'}`}
                     value={weight}
                     onChange={e => { setWeight(e.target.value); if (errors.weight) setErrors(ev => ({ ...ev, weight: '' })); }}
                   />
                 </Field>
-
                 <Field label="Microchip Number" id="microchip">
-                  <input id="microchip" className="form-input" value={microchipNumber} onChange={e => setMicrochipNumber(e.target.value)} />
+                  <input id="microchip" className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card text-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all" value={microchipNumber} onChange={e => setMicrochipNumber(e.target.value)} />
                 </Field>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 8 }}>
-                  <label className="checkbox-label">
-                    <input
-                      type="checkbox" checked={isSpayedNeutered}
-                      onChange={e => setIsSpayedNeutered(e.target.checked)}
-                    />
+                <div className="flex flex-col gap-3 pt-2">
+                  <label className="flex items-center gap-2 cursor-pointer text-sm font-medium">
+                    <input type="checkbox" checked={isSpayedNeutered} onChange={e => setIsSpayedNeutered(e.target.checked)} className="w-4 h-4 accent-primary cursor-pointer" />
                     Spayed / Neutered
                   </label>
-                  <label className="checkbox-label">
-                    <input
-                      type="checkbox" checked={isActive}
-                      onChange={e => setIsActive(e.target.checked)}
-                    />
+                  <label className="flex items-center gap-2 cursor-pointer text-sm font-medium">
+                    <input type="checkbox" checked={isActive} onChange={e => setIsActive(e.target.checked)} className="w-4 h-4 accent-primary cursor-pointer" />
                     Active Patient
                   </label>
                 </div>
@@ -424,18 +431,21 @@ export default function PetDetailPage() {
             </div>
           </div>
 
-          <div className="card animate-in animate-in-delay-1">
-            <div className="card-header"><h2 className="card-title">Medical & Behavioral Notes</h2></div>
-            <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div className="bg-card rounded-2xl border border-border shadow-sm">
+            <div className="px-6 py-4 border-b border-border">
+              <h2 className="text-[17px] font-bold">Medical & Behavioral Notes</h2>
+            </div>
+            <div className="p-6 flex flex-col gap-4">
               {[
                 { label: 'Special Needs', id: 'specialNeeds', value: specialNeeds, set: setSpecialNeeds },
                 { label: 'Behavioral Notes', id: 'behavioralNotes', value: behavioralNotes, set: setBehavioralNotes },
                 { label: 'Current Medical Status', id: 'medStatus', value: currentMedicalStatus, set: setCurrentMedicalStatus },
               ].map(({ label, id, value, set }) => (
-                <div key={id} className="form-group">
-                  <label className="form-label" htmlFor={id}>{label}</label>
+                <div key={id} className="flex flex-col gap-1.5">
+                  <label className="text-sm font-semibold" htmlFor={id}>{label}</label>
                   <textarea
-                    id={id} className="form-input" rows={3}
+                    id={id} rows={3}
+                    className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-card text-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all resize-vertical"
                     value={value} onChange={e => set(e.target.value)}
                   />
                 </div>
@@ -443,15 +453,20 @@ export default function PetDetailPage() {
             </div>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+          <div className="flex justify-end gap-3">
             <button
-              type="button" className="btn btn-outline"
+              type="button"
               onClick={() => { setIsEditing(false); fetchPetData(); }}
               disabled={saving}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold border border-border bg-card hover:bg-accent text-foreground transition-all duration-150 disabled:opacity-55 disabled:cursor-not-allowed"
             >
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary" disabled={saving}>
+            <button
+              type="submit"
+              disabled={saving}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground transition-all duration-150 disabled:opacity-55 disabled:cursor-not-allowed active:scale-95"
+            >
               {saving ? (
                 <><Loader2 size={15} className="animate-spin" /> Saving…</>
               ) : (

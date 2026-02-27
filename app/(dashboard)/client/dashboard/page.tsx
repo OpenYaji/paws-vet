@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/auth-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+// Note: Card/CardHeader/CardContent kept for the Info Card below
 import Link from 'next/link';
 
 export default function ClientDashboardPage() {
@@ -110,7 +111,7 @@ export default function ClientDashboardPage() {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-4 border-primary border-t-transparent mx-auto mb-2"></div>
           <p className="text-muted-foreground">Loading dashboard...</p>
         </div>
       </div>
@@ -127,27 +128,19 @@ export default function ClientDashboardPage() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card className="group relative overflow-hidden hover:shadow-lg transition-all duration-300 hover:scale-105">
+        <div className="bg-card rounded-2xl border border-border border-l-4 border-l-primary shadow-sm p-6 group relative overflow-hidden hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
           <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-          <CardHeader className="pb-3 relative z-10">
-            <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">My Pets</CardTitle>
-          </CardHeader>
-          <CardContent className="relative z-10">
-            <div className="text-5xl font-bold text-primary mb-2">{stats.myPets}</div>
-            <p className="text-sm text-muted-foreground">Registered pets in your account</p>
-          </CardContent>
-        </Card>
+          <p className="text-xs font-bold tracking-widest uppercase text-muted-foreground mb-3 relative z-10">My Pets</p>
+          <div className="text-5xl font-bold text-primary mb-2 relative z-10">{stats.myPets}</div>
+          <p className="text-sm text-muted-foreground relative z-10">Registered pets in your account</p>
+        </div>
 
-        <Card className="group relative overflow-hidden hover:shadow-lg transition-all duration-300 hover:scale-105">
+        <div className="bg-card rounded-2xl border border-border border-l-4 border-l-primary shadow-sm p-6 group relative overflow-hidden hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
           <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-          <CardHeader className="pb-3 relative z-10">
-            <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Upcoming Appointments</CardTitle>
-          </CardHeader>
-          <CardContent className="relative z-10">
-            <div className="text-5xl font-bold text-primary mb-2">{stats.upcomingAppointments}</div>
-            <p className="text-sm text-muted-foreground">Scheduled visits</p>
-          </CardContent>
-        </Card>
+          <p className="text-xs font-bold tracking-widest uppercase text-muted-foreground mb-3 relative z-10">Upcoming Appointments</p>
+          <div className="text-5xl font-bold text-primary mb-2 relative z-10">{stats.upcomingAppointments}</div>
+          <p className="text-sm text-muted-foreground relative z-10">Scheduled visits</p>
+        </div>
       </div>
 
       {/* Quick Actions */}

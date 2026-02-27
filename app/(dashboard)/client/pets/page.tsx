@@ -88,9 +88,9 @@ function PetForm({
             </button>
           </div>
         ) : (
-          <label className="flex flex-col items-center justify-center w-full aspect-video border-2 border-dashed border-border rounded-lg cursor-pointer hover:bg-secondary/20 transition-colors">
+          <label className="flex flex-col items-center justify-center w-full aspect-video border-2 border-dashed border-border rounded-xl cursor-pointer hover:bg-accent/20 transition-colors duration-150">
             <Upload className="w-8 h-8 text-muted-foreground mb-2" />
-            <p className="text-sm text-muted-foreground">Click to upload pet photo</p>
+            <p className="text-sm text-muted-foreground font-medium">Click to upload pet photo</p>
             <p className="text-xs text-muted-foreground mt-1">PNG, JPG up to 5MB</p>
             <input
               type="file"
@@ -494,30 +494,42 @@ export default function PetsPage() {
   };
 
   return (
-    <main className="p-6 space-y-6">
-      <div className="flex justify-between items-center">
+    <main className="max-w-6xl mx-auto p-6 space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-2">
         <div>
           <h1 className="text-3xl font-bold">My Pets</h1>
-          <p className="text-muted-foreground">Manage your pet profiles</p>
+          <p className="text-sm text-muted-foreground mt-0.5">Manage your registered pet profiles</p>
         </div>
-        <Button onClick={() => setShowAddModal(true)}>
+        <Button onClick={() => setShowAddModal(true)} className="bg-primary hover:bg-primary/90 active:scale-95 transition-all duration-150 rounded-lg">
           <Plus className="w-4 h-4 mr-2" />
           Add Pet
         </Button>
       </div>
 
       {error && (
-        <div className="bg-destructive/10 border border-destructive text-destructive px-4 py-3 rounded">
-          {error}
+        <div className="flex items-start gap-3 bg-destructive/10 border border-destructive/30 text-destructive px-4 py-3 rounded-xl text-sm">
+          <span className="font-medium">{error}</span>
         </div>
       )}
 
       {loading ? (
-        <div className="text-center py-12 text-muted-foreground">Loading pets...</div>
+        <div className="flex items-center justify-center py-16">
+          <div className="text-center space-y-3">
+            <div className="w-10 h-10 rounded-full border-4 border-primary border-t-transparent animate-spin mx-auto" />
+            <p className="text-sm text-muted-foreground">Loading pets…</p>
+          </div>
+        </div>
       ) : pets.length === 0 ? (
-        <div className="text-center py-12 border border-dashed border-border rounded-lg">
-          <p className="text-muted-foreground mb-4">No pets registered yet</p>
-          <Button onClick={() => setShowAddModal(true)}>
+        <div className="bg-card rounded-2xl border border-border shadow-sm p-16 text-center">
+          <div className="w-16 h-16 bg-accent rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <span className="text-4xl">🐾</span>
+          </div>
+          <h3 className="text-lg font-bold mb-2">No pets registered yet</h3>
+          <p className="text-sm text-muted-foreground mb-6 max-w-xs mx-auto">
+            Add your first pet to start booking appointments and tracking their health.
+          </p>
+          <Button onClick={() => setShowAddModal(true)} className="bg-primary hover:bg-primary/90 active:scale-95 transition-all duration-150 rounded-lg">
             <Plus className="w-4 h-4 mr-2" />
             Add Your First Pet
           </Button>
@@ -525,46 +537,75 @@ export default function PetsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {pets.map((pet) => (
-            <div key={pet.id} className="bg-card border border-border rounded-lg overflow-hidden">
+            <div
+              key={pet.id}
+              className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm hover:-translate-y-0.5 hover:shadow-md transition-all duration-150 group"
+            >
               {pet.photo_url ? (
-                <div className="aspect-video bg-secondary/20 relative">
-                  <img src={pet.photo_url} alt={pet.name} className="w-full h-full object-cover" />
+                <div className="aspect-video bg-accent/20 relative overflow-hidden">
+                  <img src={pet.photo_url} alt={pet.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                 </div>
               ) : (
-                <div className="aspect-video bg-secondary/20 flex items-center justify-center">
+                <div className="aspect-video bg-accent/20 flex items-center justify-center">
                   <span className="text-6xl">
                     {pet.species === 'dog' ? '🐕' : pet.species === 'cat' ? '🐈' : '🐾'}
                   </span>
                 </div>
               )}
 
-              <div className="p-6">
-                <div className="flex justify-between items-start mb-4">
+              <div className="p-5">
+                <div className="flex items-start justify-between mb-4">
                   <div>
-                    <h3 className="text-xl font-bold">{pet.name}</h3>
-                    <p className="text-sm text-muted-foreground capitalize">{pet.species}</p>
+                    <h3 className="text-lg font-bold text-foreground">{pet.name}</h3>
+                    <p className="text-xs text-muted-foreground capitalize mt-0.5">{pet.species}</p>
                   </div>
-                  <div className="flex gap-2">
-                    <Button variant="ghost" size="sm" onClick={() => handleEditClick(pet)}>
-                      <Edit className="w-4 h-4" />
-                    </Button>
+                  <div className="flex gap-1">
+                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${pet.is_spayed_neutered ? 'bg-accent text-primary' : 'bg-muted text-muted-foreground'}`}>
+                      {pet.is_spayed_neutered ? 'Spayed/Neutered' : 'Intact'}
+                    </span>
                   </div>
                 </div>
 
-                <div className="space-y-2 text-sm">
-                  <p><span className="font-medium">Age:</span> {calculateAge(pet.date_of_birth)}</p>
-                  <p><span className="font-medium">Breed:</span> {pet.breed || 'Mixed'}</p>
-                  <p><span className="font-medium">Gender:</span> <span className="capitalize">{pet.gender}</span></p>
-                  {pet.color && <p><span className="font-medium">Color:</span> {pet.color}</p>}
-                  <p><span className="font-medium">Weight:</span> {pet.weight} kg</p>
-                  <p><span className="font-medium">Spayed/Neutered:</span> {pet.is_spayed_neutered ? 'Yes' : 'No'}</p>
-                  {pet.behavioral_notes && (
-                    <div>
-                      <p className="font-medium">Behavioral Notes:</p>
-                      <p className="text-muted-foreground text-xs mt-1">{pet.behavioral_notes}</p>
+                <div className="space-y-1.5 text-sm mb-4">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Age</span>
+                    <span className="font-medium">{calculateAge(pet.date_of_birth)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Breed</span>
+                    <span className="font-medium">{pet.breed || 'Mixed'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Gender</span>
+                    <span className="font-medium capitalize">{pet.gender}</span>
+                  </div>
+                  {pet.color && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Color</span>
+                      <span className="font-medium">{pet.color}</span>
                     </div>
                   )}
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Weight</span>
+                    <span className="font-medium">{pet.weight} kg</span>
+                  </div>
                 </div>
+
+                {pet.behavioral_notes && (
+                  <div className="bg-accent/30 rounded-lg px-3 py-2 text-xs text-muted-foreground mb-4 border-l-2 border-primary">
+                    {pet.behavioral_notes}
+                  </div>
+                )}
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleEditClick(pet)}
+                  className="w-full rounded-lg hover:bg-accent border-border active:scale-95 transition-all duration-150"
+                >
+                  <Edit className="w-3.5 h-3.5 mr-2" />
+                  Edit Profile
+                </Button>
               </div>
             </div>
           ))}

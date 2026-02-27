@@ -75,16 +75,16 @@ function fmtDate(d?: string): string {
 
 function statusBadge(s: string): string {
   const m: Record<string, string> = {
-    active: 'badge badge-green',
-    confirmed: 'badge badge-green',
-    completed: 'badge badge-blue',
-    pending: 'badge badge-yellow',
-    cancelled: 'badge badge-red',
-    inactive: 'badge badge-gray',
-    suspended: 'badge badge-red',
-    no_show: 'badge badge-gray',
+    active: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700',
+    confirmed: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700',
+    completed: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-blue-100 text-blue-700',
+    pending: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-yellow-100 text-yellow-800',
+    cancelled: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-red-100 text-red-700',
+    inactive: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-muted text-muted-foreground',
+    suspended: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-red-100 text-red-700',
+    no_show: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-muted text-muted-foreground',
   };
-  return m[s] ?? 'badge badge-gray';
+  return m[s] ?? 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-muted text-muted-foreground';
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -173,21 +173,27 @@ export default function ClientDetailPage() {
 
   if (loading) {
     return (
-      <div className="page">
-        <div className="loading-state"><div className="spinner" /><span>Loading client…</span></div>
+      <div className="max-w-[1400px] mx-auto px-6 py-8">
+        <div className="flex flex-col items-center justify-center py-20 gap-4 text-muted-foreground">
+          <div className="w-8 h-8 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+          <span>Loading client…</span>
+        </div>
       </div>
     );
   }
 
   if (error || !client) {
     return (
-      <div className="page">
-        <div className="alert alert-error" style={{ maxWidth: 480, margin: '60px auto' }}>
-          <AlertTriangle size={18} />
+      <div className="max-w-[1400px] mx-auto px-6 py-8">
+        <div className="bg-destructive/10 text-destructive border border-destructive/20 rounded-xl p-4 flex items-start gap-3 max-w-md mx-auto mt-16">
+          <AlertTriangle size={18} className="flex-shrink-0 mt-0.5" />
           <div><strong>Error</strong><br />{error || 'Client not found'}</div>
         </div>
-        <div style={{ textAlign: 'center', marginTop: 16 }}>
-          <button className="btn btn-outline" onClick={() => router.back()}>
+        <div className="text-center mt-4">
+          <button
+            onClick={() => router.back()}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold border border-border bg-card hover:bg-accent transition-all duration-150"
+          >
             <ArrowLeft size={16} /> Back
           </button>
         </div>
@@ -196,44 +202,46 @@ export default function ClientDetailPage() {
   }
 
   return (
-    <div className="page">
+    <div className="max-w-[1400px] mx-auto px-6 py-8">
       {/* Toast */}
       {toast && (
-        <div style={{
-          position: 'fixed', bottom: 24, right: 24, zIndex: 9999,
-          background: toast.type === 'success' ? '#059669' : '#dc2626',
-          color: 'white', padding: '12px 20px',
-          borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-lg)',
-          fontSize: 14, fontWeight: 600,
-        }}>
+        <div className={`fixed bottom-6 right-6 z-[9999] px-5 py-3 rounded-xl shadow-lg text-sm font-semibold text-white ${toast.type === 'success' ? 'bg-emerald-600' : 'bg-destructive'}`}>
           {toast.msg}
         </div>
       )}
 
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <button className="btn btn-outline btn-sm btn-icon" onClick={() => router.back()}>
+      <div className="flex justify-between items-start mb-7">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => router.back()}
+            className="p-2 rounded-lg border border-border bg-card hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-150"
+          >
             <ArrowLeft size={16} />
           </button>
           <div>
-            <h1 style={{ fontSize: 26, fontWeight: 750, margin: 0, letterSpacing: '-0.5px' }}>
-              {client.first_name} {client.last_name}
-            </h1>
-            <span style={{ fontSize: 12, color: 'var(--slate)', fontFamily: 'var(--font-mono)' }}>
-              {client.id}
-            </span>
+            <h1 className="text-2xl font-bold tracking-tight">{client.first_name} {client.last_name}</h1>
+            <span className="text-xs text-muted-foreground font-mono">{client.id}</span>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button className="btn btn-ghost btn-sm" onClick={fetchClientDetails}>
+        <div className="flex gap-2.5">
+          <button
+            onClick={fetchClientDetails}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold border border-transparent bg-transparent hover:bg-accent text-muted-foreground transition-all duration-150"
+          >
             <RefreshCw size={14} /> Refresh
           </button>
-          <Link href={`/client-admin/clients/${client.id}/edit`} className="btn btn-outline btn-sm">
+          <Link
+            href={`/client-admin/clients/${client.id}/edit`}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold border border-border bg-card hover:bg-accent text-foreground transition-all duration-150"
+          >
             <Edit size={14} /> Edit
           </Link>
           {!userData?.deleted_at && (
-            <button className="btn btn-danger btn-sm" onClick={handleArchiveClient}>
+            <button
+              onClick={handleArchiveClient}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold bg-destructive hover:bg-destructive/90 text-white transition-all duration-150"
+            >
               <Archive size={14} /> Archive
             </button>
           )}
@@ -241,7 +249,7 @@ export default function ClientDetailPage() {
       </div>
 
       {/* Tabs */}
-      <div className="tab-bar">
+      <div className="flex border-b border-border mb-6">
         {([
           { key: 'overview', label: 'Overview', icon: <User size={15} />, count: null },
           { key: 'pets', label: 'Pets', icon: <PawPrint size={15} />, count: pets.length },
@@ -249,13 +257,19 @@ export default function ClientDetailPage() {
         ] as const).map(tab => (
           <button
             key={tab.key}
-            className={`tab-item ${activeTab === tab.key ? 'tab-item--active' : ''}`}
             onClick={() => setActiveTab(tab.key)}
+            className={`flex items-center gap-1.5 px-5 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors duration-150 ${
+              activeTab === tab.key
+                ? 'text-primary border-primary'
+                : 'text-muted-foreground border-transparent hover:text-foreground'
+            }`}
           >
             {tab.icon}
             {tab.label}
             {tab.count !== null && (
-              <span className="tab-count">{tab.count}</span>
+              <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full border ${
+                activeTab === tab.key ? 'bg-accent text-primary border-primary/30' : 'bg-muted text-muted-foreground border-border'
+              }`}>{tab.count}</span>
             )}
           </button>
         ))}
@@ -263,94 +277,87 @@ export default function ClientDetailPage() {
 
       {/* ── Overview ── */}
       {activeTab === 'overview' && (
-        <div className="grid-2 animate-in">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {/* Account Info */}
-          <div className="card">
-            <div className="card-header"><h2 className="card-title">Account Information</h2></div>
-            <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-              <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                <Mail size={18} style={{ color: 'var(--slate-light)', marginTop: 2, flexShrink: 0 }} />
-                <div className="info-row">
-                  <span className="info-label">Email</span>
-                  <span className="info-value">{userData?.email || '—'}</span>
+          <div className="bg-card rounded-2xl border border-border shadow-sm">
+            <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+              <h2 className="text-[17px] font-bold">Account Information</h2>
+            </div>
+            <div className="p-6 flex flex-col gap-5">
+              <div className="flex gap-3 items-start">
+                <Mail size={18} className="text-muted-foreground mt-0.5 flex-shrink-0" />
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs text-muted-foreground font-medium">Email</span>
+                  <span className="text-sm font-medium">{userData?.email || '—'}</span>
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                <Phone size={18} style={{ color: 'var(--slate-light)', marginTop: 2, flexShrink: 0 }} />
-                <div className="info-row">
-                  <span className="info-label">Phone</span>
-                  <span className="info-value">{client.phone}</span>
+              <div className="flex gap-3 items-start">
+                <Phone size={18} className="text-muted-foreground mt-0.5 flex-shrink-0" />
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs text-muted-foreground font-medium">Phone</span>
+                  <span className="text-sm font-medium">{client.phone}</span>
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                <MapPin size={18} style={{ color: 'var(--slate-light)', marginTop: 2, flexShrink: 0 }} />
-                <div className="info-row">
-                  <span className="info-label">Address</span>
-                  <span className="info-value">
-                    {client.address_line1}
-                    {client.address_line2 && `, ${client.address_line2}`}
-                  </span>
-                  <span className="info-value" style={{ color: 'var(--slate)' }}>
-                    {client.city}, {client.state} {client.zip_code}
-                  </span>
+              <div className="flex gap-3 items-start">
+                <MapPin size={18} className="text-muted-foreground mt-0.5 flex-shrink-0" />
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs text-muted-foreground font-medium">Address</span>
+                  <span className="text-sm font-medium">{client.address_line1}{client.address_line2 && `, ${client.address_line2}`}</span>
+                  <span className="text-sm text-muted-foreground">{client.city}, {client.state} {client.zip_code}</span>
                 </div>
               </div>
-              <hr className="divider" style={{ margin: 0 }} />
-              <div className="grid-2" style={{ gap: 16 }}>
-                <div className="info-row">
-                  <span className="info-label">Account Status</span>
-                  <span className={statusBadge(userData?.account_status || 'unknown')} style={{ marginTop: 4 }}>
+              <hr className="border-t border-border" />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs text-muted-foreground font-medium">Account Status</span>
+                  <span className={`${statusBadge(userData?.account_status || 'unknown')} mt-1`}>
                     {userData?.account_status || '—'}
                   </span>
                 </div>
-                <div className="info-row">
-                  <span className="info-label">Email Verified</span>
-                  <span className="info-value" style={{ marginTop: 4 }}>
-                    {userData?.email_verified ? '✅ Yes' : '❌ No'}
-                  </span>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs text-muted-foreground font-medium">Email Verified</span>
+                  <span className="text-sm font-medium mt-1">{userData?.email_verified ? '✅ Yes' : '❌ No'}</span>
                 </div>
               </div>
-              <div className="grid-2" style={{ gap: 16 }}>
-                <div className="info-row">
-                  <span className="info-label">Member Since</span>
-                  <span className="info-value">{fmtDate(userData?.created_at)}</span>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs text-muted-foreground font-medium">Member Since</span>
+                  <span className="text-sm font-medium">{fmtDate(userData?.created_at)}</span>
                 </div>
-                <div className="info-row">
-                  <span className="info-label">Last Login</span>
-                  <span className="info-value">{fmtDate(userData?.last_login_at)}</span>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs text-muted-foreground font-medium">Last Login</span>
+                  <span className="text-sm font-medium">{fmtDate(userData?.last_login_at)}</span>
                 </div>
               </div>
-              <div className="info-row">
-                <span className="info-label">Communication Preference</span>
-                <span className="info-value" style={{ textTransform: 'capitalize' }}>
-                  {client.communication_preference}
-                </span>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs text-muted-foreground font-medium">Communication Preference</span>
+                <span className="text-sm font-medium capitalize">{client.communication_preference}</span>
               </div>
             </div>
           </div>
 
-          {/* Stats */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div className="stat-card card">
+          {/* Stat cards */}
+          <div className="flex flex-col gap-4">
+            <div className="bg-card rounded-2xl border border-border border-l-4 border-l-primary shadow-sm p-6 flex items-center justify-between">
               <div>
-                <p className="stat-label">Total Pets</p>
-                <p className="stat-value">{pets.length}</p>
-                <p className="stat-sub">{pets.filter(p => p.is_active).length} active</p>
+                <p className="text-sm text-muted-foreground mb-1.5">Total Pets</p>
+                <p className="text-3xl font-bold">{pets.length}</p>
+                <p className="text-xs text-muted-foreground mt-1">{pets.filter(p => p.is_active).length} active</p>
               </div>
-              <div className="stat-icon" style={{ background: 'var(--green-pale)' }}>
-                <PawPrint size={24} style={{ color: 'var(--green)' }} />
+              <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center flex-shrink-0">
+                <PawPrint size={24} className="text-emerald-600" />
               </div>
             </div>
-            <div className="stat-card card">
+            <div className="bg-card rounded-2xl border border-border border-l-4 border-l-primary shadow-sm p-6 flex items-center justify-between">
               <div>
-                <p className="stat-label">Total Appointments</p>
-                <p className="stat-value">{appointments.length}</p>
-                <p className="stat-sub">
+                <p className="text-sm text-muted-foreground mb-1.5">Total Appointments</p>
+                <p className="text-3xl font-bold">{appointments.length}</p>
+                <p className="text-xs text-muted-foreground mt-1">
                   {appointments.filter(a => a.appointment_status === 'confirmed').length} upcoming
                 </p>
               </div>
-              <div className="stat-icon" style={{ background: 'var(--blue-pale)' }}>
-                <Calendar size={24} style={{ color: 'var(--blue)' }} />
+              <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
+                <Calendar size={24} className="text-blue-600" />
               </div>
             </div>
           </div>
@@ -359,45 +366,47 @@ export default function ClientDetailPage() {
 
       {/* ── Pets ── */}
       {activeTab === 'pets' && (
-        <div className="card animate-in">
+        <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
           {pets.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-state-icon"><PawPrint size={24} /></div>
-              <h3>No pets registered</h3>
-              <p>This client has no pets on file</p>
+            <div className="py-16 px-6 text-center text-muted-foreground">
+              <div className="w-14 h-14 bg-accent rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <PawPrint size={24} className="text-primary" />
+              </div>
+              <h3 className="text-base font-bold text-foreground mb-1">No pets registered</h3>
+              <p className="text-sm">This client has no pets on file</p>
             </div>
           ) : (
             <div>
-              {pets.map(pet => (
-                <div key={pet.id} style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                        <span style={{ fontSize: 16, fontWeight: 700 }}>{pet.name}</span>
-                        <span className={pet.is_active ? 'badge badge-green' : 'badge badge-gray'}>
+              {pets.map((pet, i) => (
+                <div key={pet.id} className={`p-6 ${i < pets.length - 1 ? 'border-b border-border' : ''}`}>
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2.5 mb-3">
+                        <span className="text-base font-bold">{pet.name}</span>
+                        <span className={pet.is_active
+                          ? 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700'
+                          : 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-muted text-muted-foreground'}>
                           {pet.is_active ? 'Active' : 'Inactive'}
                         </span>
                       </div>
-                      <div className="grid-4" style={{ gap: 12 }}>
-                        <div className="info-row">
-                          <span className="info-label">Species</span>
-                          <span className="info-value">{pet.species}</span>
-                        </div>
-                        <div className="info-row">
-                          <span className="info-label">Breed</span>
-                          <span className="info-value">{pet.breed || '—'}</span>
-                        </div>
-                        <div className="info-row">
-                          <span className="info-label">Age</span>
-                          <span className="info-value">{calcAge(pet.date_of_birth)}</span>
-                        </div>
-                        <div className="info-row">
-                          <span className="info-label">Weight</span>
-                          <span className="info-value">{pet.weight ? `${pet.weight} kg` : '—'}</span>
-                        </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {[
+                          { label: 'Species', value: pet.species },
+                          { label: 'Breed', value: pet.breed || '—' },
+                          { label: 'Age', value: calcAge(pet.date_of_birth) },
+                          { label: 'Weight', value: pet.weight ? `${pet.weight} kg` : '—' },
+                        ].map(({ label, value }) => (
+                          <div key={label} className="flex flex-col gap-0.5">
+                            <span className="text-xs text-muted-foreground font-medium">{label}</span>
+                            <span className="text-sm font-medium">{value}</span>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                    <Link href={`/client-admin/pets/${pet.id}`} className="btn btn-outline btn-sm" style={{ marginLeft: 16 }}>
+                    <Link
+                      href={`/client-admin/pets/${pet.id}`}
+                      className="ml-4 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold border border-border bg-card hover:bg-accent text-foreground transition-all duration-150"
+                    >
                       View →
                     </Link>
                   </div>
@@ -410,45 +419,47 @@ export default function ClientDetailPage() {
 
       {/* ── Appointments ── */}
       {activeTab === 'appointments' && (
-        <div className="card animate-in">
+        <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
           {appointments.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-state-icon"><Calendar size={24} /></div>
-              <h3>No appointments</h3>
-              <p>This client has no appointment history</p>
+            <div className="py-16 px-6 text-center text-muted-foreground">
+              <div className="w-14 h-14 bg-accent rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <Calendar size={24} className="text-primary" />
+              </div>
+              <h3 className="text-base font-bold text-foreground mb-1">No appointments</h3>
+              <p className="text-sm">This client has no appointment history</p>
             </div>
           ) : (
             <div>
-              {appointments.map((apt: any) => (
-                <div key={apt.id} style={{ padding: '18px 24px', borderBottom: '1px solid var(--border)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-                        {/* BUG FIX: appointment_status vs status — the API returns appointment_status */}
+              {appointments.map((apt: any, i: number) => (
+                <div key={apt.id} className={`p-5 ${i < appointments.length - 1 ? 'border-b border-border' : ''}`}>
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2.5 mb-1.5">
                         <span className={statusBadge(apt.appointment_status || apt.status || 'pending')}>
                           {apt.appointment_status || apt.status}
                         </span>
                         {apt.pets?.name && (
-                          <span style={{ fontSize: 13, color: 'var(--slate)' }}>
-                            <PawPrint size={12} style={{ display: 'inline', marginRight: 4 }} />
+                          <span className="text-[13px] text-muted-foreground flex items-center gap-1">
+                            <PawPrint size={12} />
                             {apt.pets.name} ({apt.pets.species})
                           </span>
                         )}
                       </div>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--navy)', marginBottom: 4 }}>
-                        {apt.reason_for_visit}
-                      </div>
-                      <div style={{ fontSize: 13, color: 'var(--slate)' }}>
-                        <Calendar size={12} style={{ display: 'inline', marginRight: 4 }} />
+                      <p className="text-sm font-semibold mb-1">{apt.reason_for_visit}</p>
+                      <p className="text-[13px] text-muted-foreground flex items-center gap-1">
+                        <Calendar size={12} />
                         {apt.scheduled_start
                           ? new Date(apt.scheduled_start).toLocaleString('en-US', {
                               month: 'short', day: 'numeric', year: 'numeric',
                               hour: '2-digit', minute: '2-digit',
                             })
                           : 'N/A'}
-                      </div>
+                      </p>
                     </div>
-                    <Link href={`/client-admin/appointments/${apt.id}`} className="btn btn-outline btn-sm" style={{ marginLeft: 16 }}>
+                    <Link
+                      href={`/client-admin/appointments/${apt.id}`}
+                      className="ml-4 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold border border-border bg-card hover:bg-accent text-foreground transition-all duration-150"
+                    >
                       View →
                     </Link>
                   </div>
