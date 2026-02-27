@@ -109,7 +109,7 @@ export default function NeuterContent() {
       });
 
       // Refresh the queue
-      await mutate('capture-queue');
+      await mutate('/api/triage');
       
       // Reset form
       setSelectedAppt(null);

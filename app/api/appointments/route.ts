@@ -1,6 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
-import { createClient as createSupabaseServerClient } from "@/utils/supabase/server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -56,7 +55,8 @@ export async function GET(request: NextRequest) {
         )
       `,
       )
-      .order("scheduled_start", { ascending: false });
+      .order("scheduled_start", { ascending: false })
+      .limit(10);
 
     if (status && status !== "all") {
       query = query.eq("appointment_status", status);
@@ -274,12 +274,13 @@ export async function PATCH(request: NextRequest) {
     const {
       data: { user },
       error: authError,
-    } = await supabase.auth.getUser();
+    } = await getSupabaseClient().auth.getUser(token);
 
-    if (authError || !user) {
+    if(authError || !user) {
+      console.error("Authentication error:", authError);
       return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 },
+        { error: "Unauthorized access" },
+        { status: 401 }
       );
     }
 

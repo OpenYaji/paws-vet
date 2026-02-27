@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
     const supabase = getSupabaseClient();
     const { data, error } = await supabase
       .from('veterinarian_profiles')
-      .select('id, first_name, last_name, specializations, employment_status')
+      .select(`*`)
       .eq('employment_status', 'full_time')
       .order('last_name', { ascending: true });
 

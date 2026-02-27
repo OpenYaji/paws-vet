@@ -13,39 +13,11 @@ import {
   Stethoscope, FileText, ClipboardCheck
 } from 'lucide-react';
 import { format } from 'date-fns';
-
-const fetchQueue = async () => {
-  const today = new Date().toISOString().split('T')[0];
-  const { data, error } = await supabase
-    .from('appointments')
-    .select(`
-      id,
-      scheduled_start,
-      appointment_status,
-      appointment_type,
-      reason_for_visit,
-      pets (
-        id,
-        name,
-        species,
-        breed,
-        gender,
-        date_of_birth,
-        client_profiles (first_name, last_name)
-      )
-    `)
-    .gte('scheduled_start', `${today}T00:00:00`)
-    .lt('scheduled_start', `${today}T23:59:59`)
-    .in('appointment_status', ['checked-in', 'confirmed', 'in-consultation'])
-    .eq('appointment_type', 'consultation')
-    .order('scheduled_start', { ascending: true });
-
-  if (error) throw error;
-  return data;
-};
+import { Fetcher } from '@/lib/fetcher'
 
 export default function ConsultationContent() {
-  const { data: queue = [], isLoading } = useSWR('consultation-queue', fetchQueue);
+  const { data: queue = [] } = useSWR<any[]>('/api/consultations', Fetcher);
+  const isLoading = false;
   const [selectedAppt, setSelectedAppt] = useState<any | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 

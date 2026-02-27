@@ -1,21 +1,45 @@
 'use client';
 
 import { useState } from 'react';
+import useSWR, { useSWRConfig } from 'swr';
 import { supabase } from '@/lib/auth-client';
-import useSWR from 'swr';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Clock, Calendar as CalendarIcon, User, FileText } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+} from '@/components/ui/dialog';
+import { Separator } from '@/components/ui/separator';
+import {
+  Clock, Calendar as CalendarIcon, User, FileText, FileBarChart,
+  Stethoscope, AlertTriangle, Phone, PawPrint,
+} from 'lucide-react';
 import { format, isSameDay, parseISO } from 'date-fns';
 import { AppointmentWithRelations } from '@/types/appointments';
+import AppointmentReportDialog from './appointment-report-dialog';
+import { useToast } from '@/hooks/use-toast';
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
+const STATUS_BADGE: Record<string, string> = {
+  confirmed:   'bg-green-600',
+  pending:     'bg-orange-500',
+  completed:   'bg-blue-600',
+  no_show:     'bg-red-600',
+  cancelled:   'bg-gray-400',
+  in_progress: 'bg-purple-600',
+};
+
 export default function AppointmentsContent() {
   const { data: appointments = [], isLoading } = useSWR<AppointmentWithRelations[]>('/api/appointments', fetcher);
+  const { mutate } = useSWRConfig();
+  const { toast } = useToast();
 
   const [date, setDate] = useState<Date | undefined>(new Date());
+  const [showReport, setShowReport] = useState(false);
+  const [selectedAppt, setSelectedAppt] = useState<any | null>(null);
+  const [isSending, setIsSending] = useState(false);
 
   const appointmentDates = appointments.map((app) => parseISO(app.scheduled_start));
 
@@ -23,11 +47,61 @@ export default function AppointmentsContent() {
     date && isSameDay(parseISO(app.scheduled_start), date)
   );
 
+  // API field is `pet` (aliased in query), type definition uses `pets`
+  // Handle both for safety
+  const getPet = (app: any) => app.pet ?? app.pets ?? null;
+  const getOwner = (app: any) =>
+    app.client ?? app.pet?.client ?? app.pets?.client_profiles ?? null;
+
+  const handleSendToTriage = async () => {
+    if (!selectedAppt || isSending) return;
+    setIsSending(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) throw new Error('Not authenticated');
+
+      const res = await fetch('/api/appointments', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          id: selectedAppt.id,
+          appointment_status: 'in_progress',
+          checked_in_at: new Date().toISOString(),
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to send to triage');
+      }
+
+      toast({
+        title: 'Patient Sent to Triage',
+        description: `${getPet(selectedAppt)?.name ?? 'Patient'} has been checked in and is now in the triage queue.`,
+      });
+
+      await mutate('/api/appointments');
+      setSelectedAppt(null);
+    } catch (e: any) {
+      toast({
+        title: 'Error',
+        description: e.message || 'Could not send patient to triage',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
 
-        {/* LEFT COLUMN: Calendar */}
+        {/* LEFT: Calendar */}
         <div className="md:col-span-4 lg:col-span-3 space-y-4">
           <Card>
             <CardContent className="p-4 flex justify-center">
@@ -36,15 +110,9 @@ export default function AppointmentsContent() {
                 selected={date}
                 onSelect={setDate}
                 className="rounded-md border shadow-sm"
-                classNames={{
-                   today: `border-2 border-green-500 text-green-700 font-bold hover:bg-green-50`
-                }}
-                modifiers={{
-                  hasAppointment: appointmentDates
-                }}
-                modifiersClassNames={{
-                  hasAppointment: "bg-green-100 text-green-900 font-bold hover:bg-green-200"
-                }}
+                classNames={{ today: 'border-2 border-green-500 text-green-700 font-bold hover:bg-green-50' }}
+                modifiers={{ hasAppointment: appointmentDates }}
+                modifiersClassNames={{ hasAppointment: 'bg-green-100 text-green-900 font-bold hover:bg-green-200' }}
               />
             </CardContent>
           </Card>
@@ -56,21 +124,28 @@ export default function AppointmentsContent() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
-                {selectedDateAppointments.length}
-              </div>
+              <div className="text-2xl font-bold">{selectedDateAppointments.length}</div>
               <p className="text-xs text-muted-foreground">Patients</p>
             </CardContent>
           </Card>
         </div>
 
-        {/* RIGHT COLUMN: List */}
+        {/* RIGHT: Appointment List */}
         <div className="md:col-span-8 lg:col-span-9 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold flex items-center gap-2">
               <CalendarIcon className="text-green-600 h-5 w-5" />
               {date ? format(date, 'EEEE, MMMM do, yyyy') : 'Select a date'}
             </h2>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 border-green-300 hover:bg-green-50 hover:text-green-700"
+              onClick={() => setShowReport(true)}
+            >
+              <FileBarChart className="h-4 w-4" />
+              Weekly Report
+            </Button>
           </div>
 
           {isLoading ? (
@@ -84,15 +159,27 @@ export default function AppointmentsContent() {
             </div>
           ) : (
             <div className="grid gap-4">
-              {selectedDateAppointments.map((app) => {
-                const owner = app.pets?.client_profiles;
-                const ownerName = owner ? `${owner.first_name} ${owner.last_name}` : 'Unknown Owner';
+              {selectedDateAppointments.map((app: any) => {
+                const pet = getPet(app);
+                const owner = getOwner(app);
+                const ownerName = owner
+                  ? `${owner.first_name} ${owner.last_name}`
+                  : 'Unknown Owner';
+                const isActionable = ['pending', 'confirmed'].includes(app.appointment_status);
 
                 return (
-                  <Card key={app.id} className="group hover:border-green-400 transition-colors">
+                  <Card
+                    key={app.id}
+                    className={`group transition-all cursor-pointer shadow-sm hover:shadow-md ${
+                      isActionable
+                        ? 'hover:border-green-400 hover:bg-green-50/30'
+                        : 'hover:border-gray-300 opacity-80'
+                    }`}
+                    onClick={() => setSelectedAppt(app)}
+                  >
                     <CardContent className="p-5 flex flex-col md:flex-row gap-6 items-start md:items-center">
 
-                      {/* Time Slot */}
+                      {/* Time */}
                       <div className="flex flex-col items-center justify-center min-w-[80px] p-2 bg-green-50 text-green-700 rounded-lg">
                         <Clock size={18} className="mb-1" />
                         <span className="font-bold text-lg">
@@ -103,37 +190,38 @@ export default function AppointmentsContent() {
                       {/* Info */}
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-1">
-                          <h3 className="font-bold text-xl text-gray-800">{app.pets?.name}</h3>
-                          <Badge variant="outline" className="text-xs font-normal bg-gray-50">
-                            {app.pets?.species} • {app.pets?.breed}
-                          </Badge>
+                          <h3 className="font-bold text-xl text-gray-800">
+                            {pet?.name ?? <span className="text-gray-400 italic">Unknown Patient</span>}
+                          </h3>
+                          {pet && (
+                            <Badge variant="outline" className="text-xs font-normal bg-gray-50">
+                              {pet.species} • {pet.breed}
+                            </Badge>
+                          )}
                         </div>
-
-                        <div className="flex items-center gap-4 text-sm text-gray-500 mb-3">
-                          <div className="flex items-center gap-1">
-                            <User size={14} />
-                            <span>Owner: {ownerName}</span>
-                          </div>
+                        <div className="flex items-center gap-1 text-sm text-gray-500 mb-3">
+                          <User size={14} />
+                          <span>Owner: {ownerName}</span>
                         </div>
-
                         <div className="flex items-start gap-2 bg-gray-50 p-3 rounded-md text-sm text-gray-700">
                           <FileText size={16} className="mt-0.5 text-gray-400 shrink-0" />
                           <p>{app.reason_for_visit || 'Routine Checkup'}</p>
                         </div>
                       </div>
 
-                      {/* Status & Type */}
+                      {/* Status + action hint */}
                       <div className="flex flex-col items-end gap-2">
-                         <Badge className={`
-                           ${app.appointment_status === 'confirmed' ? 'bg-green-600' :
-                             app.appointment_status === 'pending' ? 'bg-orange-500' :
-                             app.appointment_status === 'completed' ? 'bg-blue-600' : 'bg-gray-400'}
-                         `}>
-                           {app.appointment_status}
-                         </Badge>
-                         <Badge variant="outline" className="text-xs capitalize">
-                           {app.appointment_type}
-                         </Badge>
+                        <Badge className={STATUS_BADGE[app.appointment_status] ?? 'bg-gray-400'}>
+                          {app.appointment_status}
+                        </Badge>
+                        <Badge variant="outline" className="text-xs capitalize">
+                          {app.appointment_type}
+                        </Badge>
+                        {isActionable && (
+                          <span className="text-xs text-green-600 font-medium group-hover:underline">
+                            Click to process →
+                          </span>
+                        )}
                       </div>
 
                     </CardContent>
@@ -144,6 +232,109 @@ export default function AppointmentsContent() {
           )}
         </div>
       </div>
+
+      {/* ── Patient Action Dialog ── */}
+      {selectedAppt && (() => {
+        const pet   = getPet(selectedAppt);
+        const owner = getOwner(selectedAppt);
+        const ownerName = owner ? `${owner.first_name} ${owner.last_name}` : 'Unknown Owner';
+        const isActionable = ['pending', 'confirmed'].includes(selectedAppt.appointment_status);
+        return (
+          <Dialog open={!!selectedAppt} onOpenChange={(o) => !o && setSelectedAppt(null)}>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-xl">
+                  <PawPrint className="h-5 w-5 text-green-600" />
+                  {pet?.name ?? 'Patient Details'}
+                </DialogTitle>
+                <DialogDescription>
+                  {format(parseISO(selectedAppt.scheduled_start), 'EEEE, MMMM do, yyyy · h:mm a')}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4 py-2">
+                {/* Pet info */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 bg-muted rounded-lg">
+                    <p className="text-xs text-muted-foreground uppercase font-medium">Species</p>
+                    <p className="font-semibold mt-0.5">{pet?.species ?? '—'}</p>
+                  </div>
+                  <div className="p-3 bg-muted rounded-lg">
+                    <p className="text-xs text-muted-foreground uppercase font-medium">Breed</p>
+                    <p className="font-semibold mt-0.5">{pet?.breed ?? '—'}</p>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Owner info */}
+                <div className="flex items-center gap-3">
+                  <User className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium">{ownerName}</p>
+                    {owner?.phone && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                        <Phone className="h-3 w-3" /> {owner.phone}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Appointment details */}
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">Type</span>
+                    <Badge variant="outline" className="capitalize">{selectedAppt.appointment_type}</Badge>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">Status</span>
+                    <Badge className={STATUS_BADGE[selectedAppt.appointment_status] ?? 'bg-gray-400'}>
+                      {selectedAppt.appointment_status}
+                    </Badge>
+                  </div>
+                </div>
+
+                {/* Reason */}
+                {selectedAppt.reason_for_visit && (
+                  <div className="p-3 bg-muted rounded-lg">
+                    <p className="text-xs text-muted-foreground uppercase font-medium mb-1">Reason for Visit</p>
+                    <p className="text-sm">{selectedAppt.reason_for_visit}</p>
+                  </div>
+                )}
+
+                {/* Already in triage or done */}
+                {!isActionable && (
+                  <div className="flex items-center gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
+                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                    This appointment cannot be sent to triage (status: {selectedAppt.appointment_status}).
+                  </div>
+                )}
+              </div>
+
+              <DialogFooter className="gap-2">
+                <Button variant="outline" onClick={() => setSelectedAppt(null)}>
+                  Close
+                </Button>
+                {isActionable && (
+                  <Button
+                    className="bg-green-600 hover:bg-green-700 gap-2"
+                    onClick={handleSendToTriage}
+                    disabled={isSending}
+                  >
+                    <Stethoscope className="h-4 w-4" />
+                    {isSending ? 'Sending…' : 'Send to Triage'}
+                  </Button>
+                )}
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
+
+      {/* Weekly Report Dialog */}
+      <AppointmentReportDialog open={showReport} onOpenChange={setShowReport} />
     </div>
   );
 }

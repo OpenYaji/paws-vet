@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { mutate } from "swr";
 import { supabase } from "@/lib/auth-client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -147,6 +148,7 @@ export default function AddNewPet({ onPetAdded }: AddNewPetProps) {
       });
       setSelectedImageFile(null);
       setImagePreviewUrl(null);
+      mutate('/api/pets'); // Refresh pet list after adding
     } catch (error: any) {
       alert("Error adding pet: " + error.message);
     } finally {
