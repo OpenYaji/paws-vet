@@ -27,38 +27,37 @@ export default function FAQPage() {
   };
 
   return (
-    <div className="container mx-auto p-6 max-w-4xl">
+    <div className="max-w-4xl mx-auto p-6 space-y-8">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Frequently Asked Questions</h1>
-        <p className="text-gray-600 mt-2">
-          Find answers to common questions about our services, procedures, and pet care.
-        </p>
+      <div className="pt-2">
+        <h1 className="text-3xl font-bold mb-1">Frequently Asked Questions</h1>
+        <p className="text-muted-foreground">Find answers to common questions about our services, procedures, and pet care.</p>
       </div>
 
       {/* FAQ Items */}
-      <div className="space-y-4 mb-12">
+      <div className="space-y-3">
         {faqs.map((faq, index) => (
           <div
             key={index}
-            className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden"
+            className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden hover:-translate-y-0.5 hover:shadow-md transition-all duration-150"
           >
             <button
               onClick={() => toggleFAQ(index)}
-              className="w-full flex items-center justify-between p-6 text-left hover:bg-gray-50 transition-colors"
+              className="w-full flex items-center justify-between p-6 text-left hover:bg-accent/30 transition-colors duration-150"
             >
-              <h3 className="text-lg font-semibold text-gray-900 pr-4">
+              <h3 className="text-base font-semibold text-foreground pr-4">
                 {faq.question}
               </h3>
               <ChevronDown
-                className={`flex-shrink-0 w-5 h-5 text-gray-500 transition-transform ${
-                  openIndex === index ? 'transform rotate-180' : ''
+                className={`flex-shrink-0 w-5 h-5 text-muted-foreground transition-transform duration-200 ${
+                  openIndex === index ? 'rotate-180' : ''
                 }`}
               />
             </button>
             {openIndex === index && (
-              <div className="px-6 pb-6">
-                <p className="text-gray-700 leading-relaxed">{faq.answer}</p>
+              <div className="px-6 pb-6 pt-0">
+                <div className="h-px bg-border mb-4" />
+                <p className="text-muted-foreground leading-relaxed text-sm">{faq.answer}</p>
               </div>
             )}
           </div>
@@ -66,25 +65,23 @@ export default function FAQPage() {
       </div>
 
       {/* Contact Section */}
-      <div className="bg-blue-50 rounded-lg p-8 border border-blue-100">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">
-          Didn't Find Your Answer?
-        </h2>
-        <p className="text-gray-700 mb-6">
+      <div className="bg-accent/30 rounded-2xl border border-border p-8">
+        <h2 className="text-2xl font-bold text-foreground mb-2">Didn't Find Your Answer?</h2>
+        <p className="text-muted-foreground mb-6 text-sm">
           Our team is here to help! Contact us directly with any questions about your pet's care.
         </p>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {/* Phone */}
-          <div className="flex items-start gap-3">
-            <div className="flex-shrink-0 w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-              <Phone className="w-5 h-5 text-white" />
+          <div className="flex items-start gap-3 bg-card rounded-xl border border-border p-4 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
+            <div className="flex-shrink-0 w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+              <Phone className="w-5 h-5 text-primary-foreground" />
             </div>
             <div>
-              <h3 className="font-semibold text-gray-900 mb-1">Call Us</h3>
+              <h3 className="font-semibold text-foreground mb-0.5 text-sm">Call Us</h3>
               <a
                 href="tel:1234567890"
-                className="text-blue-600 hover:text-blue-700 hover:underline"
+                className="text-primary hover:underline text-sm font-medium transition-colors"
               >
                 (123) 456-7890
               </a>
@@ -92,15 +89,15 @@ export default function FAQPage() {
           </div>
 
           {/* Email */}
-          <div className="flex items-start gap-3">
-            <div className="flex-shrink-0 w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-              <Mail className="w-5 h-5 text-white" />
+          <div className="flex items-start gap-3 bg-card rounded-xl border border-border p-4 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
+            <div className="flex-shrink-0 w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+              <Mail className="w-5 h-5 text-primary-foreground" />
             </div>
             <div>
-              <h3 className="font-semibold text-gray-900 mb-1">Email Us</h3>
+              <h3 className="font-semibold text-foreground mb-0.5 text-sm">Email Us</h3>
               <a
                 href="mailto:info@pawsclinic.com"
-                className="text-blue-600 hover:text-blue-700 hover:underline break-all"
+                className="text-primary hover:underline text-sm font-medium break-all transition-colors"
               >
                 info@pawsclinic.com
               </a>
@@ -108,13 +105,13 @@ export default function FAQPage() {
           </div>
 
           {/* Location */}
-          <div className="flex items-start gap-3">
-            <div className="flex-shrink-0 w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-              <MapPin className="w-5 h-5 text-white" />
+          <div className="flex items-start gap-3 bg-card rounded-xl border border-border p-4 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
+            <div className="flex-shrink-0 w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+              <MapPin className="w-5 h-5 text-primary-foreground" />
             </div>
             <div>
-              <h3 className="font-semibold text-gray-900 mb-1">Visit Us</h3>
-              <p className="text-gray-700">
+              <h3 className="font-semibold text-foreground mb-0.5 text-sm">Visit Us</h3>
+              <p className="text-muted-foreground text-sm">
                 123 Pet Street, VC 12345
               </p>
             </div>

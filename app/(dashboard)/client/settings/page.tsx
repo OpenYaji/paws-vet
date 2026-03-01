@@ -692,7 +692,7 @@ export default function ClientSettingsPage() {
                     <div className="flex gap-1 h-1">
                       {[...Array(5)].map((_, i) => (
                         <div key={i} className={cn('flex-1 rounded-full transition-all duration-300',
-                          i < passwordStrength ? strengthColors[passwordStrength - 1] : 'bg-gray-200'
+                          i < passwordStrength ? strengthColors[passwordStrength - 1] : 'bg-border'
                         )} />
                       ))}
                     </div>

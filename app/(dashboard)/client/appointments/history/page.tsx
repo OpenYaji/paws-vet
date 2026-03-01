@@ -162,10 +162,10 @@ export default function AppointmentHistoryPage() {
 
   if (loading) {
     return (
-      <div className="page">
-        <div className="loading-state">
-          <div className="spinner" />
-          <span>Loading appointment history…</span>
+      <div className="max-w-5xl mx-auto p-6 flex items-center justify-center min-h-[60vh]">
+        <div className="text-center space-y-3">
+          <div className="w-12 h-12 rounded-full border-4 border-primary border-t-transparent animate-spin mx-auto" />
+          <p className="text-muted-foreground font-medium">Loading appointment history…</p>
         </div>
       </div>
     );
@@ -173,9 +173,9 @@ export default function AppointmentHistoryPage() {
 
   if (error) {
     return (
-      <div className="page">
-        <div className="alert alert-error" style={{ maxWidth: 500, margin: '60px auto' }}>
-          <AlertCircle size={18} />
+      <div className="max-w-5xl mx-auto p-6">
+        <div className="max-w-md mx-auto mt-16 flex items-start gap-3 bg-destructive/10 border border-destructive/30 text-destructive p-4 rounded-2xl">
+          <AlertCircle size={18} className="flex-shrink-0 mt-0.5" />
           <div><strong>Error</strong><br />{error}</div>
         </div>
       </div>
@@ -183,68 +183,66 @@ export default function AppointmentHistoryPage() {
   }
 
   return (
-    <div className="page">
+    <div className="max-w-5xl mx-auto p-6 space-y-6">
       {/* Header */}
-      <div className="page-header">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-2">
         <div>
-          <h1 style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 32, fontWeight: 800, marginBottom: 4 }}>
-            <div style={{ 
-              width: 48, 
-              height: 48, 
-              borderRadius: 12, 
-              background: 'linear-gradient(135deg, #0d9488 0%, #06b6d4 100%)', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center' 
-            }}>
-              <History size={24} color="white" />
+          <div className="flex items-center gap-3 mb-1">
+            <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center flex-shrink-0">
+              <History size={20} className="text-primary-foreground" />
             </div>
-            Appointment History
-          </h1>
-          <p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>Track and review all your pet's appointments</p>
+            <h1 className="text-3xl font-bold">Appointment History</h1>
+          </div>
+          <p className="text-sm text-muted-foreground ml-[52px]">Track and review all your pet's appointments</p>
         </div>
+        {filteredAppointments.length > 0 && (
+          <button
+            onClick={exportToCSV}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-card hover:bg-accent text-sm font-semibold transition-all duration-150 active:scale-95"
+          >
+            <Download size={14} /> Export CSV
+          </button>
+        )}
       </div>
 
       {/* Stats Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
-        <div className="card" style={{ padding: 20, textAlign: 'center', background: 'linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%)', borderLeft: '4px solid #0d9488' }}>
-          <div style={{ fontSize: 32, fontWeight: 700, color: '#0d9488' }}>{appointments.length}</div>
-          <div style={{ fontSize: 12, color: '#0f766e', marginTop: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Appointments</div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-card rounded-2xl border border-border shadow-sm border-l-4 border-l-primary p-5 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
+          <p className="text-xs font-bold tracking-widest uppercase text-muted-foreground mb-1">Total</p>
+          <p className="text-4xl font-bold text-primary">{appointments.length}</p>
+          <p className="text-xs text-muted-foreground mt-1">All appointments</p>
         </div>
-        <div className="card" style={{ padding: 20, textAlign: 'center', background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)', borderLeft: '4px solid #3b82f6' }}>
-          <div style={{ fontSize: 32, fontWeight: 700, color: '#3b82f6' }}>{appointments.filter(a => a.appointment_status === 'completed').length}</div>
-          <div style={{ fontSize: 12, color: '#1e40af', marginTop: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Completed</div>
+        <div className="bg-card rounded-2xl border border-border shadow-sm border-l-4 border-l-primary p-5 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
+          <p className="text-xs font-bold tracking-widest uppercase text-muted-foreground mb-1">Completed</p>
+          <p className="text-4xl font-bold text-primary">{appointments.filter(a => a.appointment_status === 'completed').length}</p>
+          <p className="text-xs text-muted-foreground mt-1">Successfully done</p>
         </div>
-        <div className="card" style={{ padding: 20, textAlign: 'center', background: 'linear-gradient(135deg, #f5f9ff 0%, #e0f2fe 100%)', borderLeft: '4px solid #0d9488' }}>
-          <div style={{ fontSize: 32, fontWeight: 700, color: '#0d9488' }}>{appointments.filter(a => a.appointment_status === 'confirmed').length}</div>
-          <div style={{ fontSize: 12, color: '#0f766e', marginTop: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Confirmed</div>
+        <div className="bg-card rounded-2xl border border-border shadow-sm border-l-4 border-l-primary p-5 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
+          <p className="text-xs font-bold tracking-widest uppercase text-muted-foreground mb-1">Confirmed</p>
+          <p className="text-4xl font-bold text-primary">{appointments.filter(a => a.appointment_status === 'confirmed').length}</p>
+          <p className="text-xs text-muted-foreground mt-1">Upcoming visits</p>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="card" style={{ marginBottom: 24, padding: 16, background: '#f8fafc' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, alignItems: 'end' }}>
-          <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 6, display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Search</label>
-            <div style={{ position: 'relative' }}>
-              <Search
-                size={16}
-                style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}
-              />
+      <div className="bg-accent/30 rounded-xl p-4 border border-border">
+        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-end flex-wrap">
+          <div className="flex-1 min-w-[220px]">
+            <label className="text-xs font-bold tracking-widest uppercase text-muted-foreground block mb-1.5">Search</label>
+            <div className="relative">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
               <input
-                className="form-input"
-                style={{ paddingLeft: 36 }}
+                className="w-full pl-9 pr-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-150"
                 placeholder="Pet name, reason, or #…"
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
               />
             </div>
           </div>
-
-          <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 6, display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Status</label>
+          <div className="min-w-[180px]">
+            <label className="text-xs font-bold tracking-widest uppercase text-muted-foreground block mb-1.5">Status</label>
             <select
-              className="form-input"
+              className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-150 cursor-pointer"
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value)}
             >
@@ -256,42 +254,25 @@ export default function AppointmentHistoryPage() {
               <option value="no_show">No Show</option>
             </select>
           </div>
-
-          <div style={{ display: 'flex', gap: 8 }}>
-            {(searchTerm || statusFilter !== 'all') && (
-              <button 
-                className="btn btn-outline btn-sm" 
-                onClick={() => { setSearchTerm(''); setStatusFilter('all'); }}
-              >
-                Clear Filters
-              </button>
-            )}
-            {filteredAppointments.length > 0 && (
-              <button className="btn btn-outline btn-sm" onClick={exportToCSV} style={{ gap: 6 }}>
-                <Download size={14} /> Export
-              </button>
-            )}
-          </div>
+          {(searchTerm || statusFilter !== 'all') && (
+            <button
+              onClick={() => { setSearchTerm(''); setStatusFilter('all'); }}
+              className="px-4 py-2 rounded-lg border border-border bg-background hover:bg-accent text-sm font-semibold transition-all duration-150 active:scale-95 self-end"
+            >
+              Clear
+            </button>
+          )}
         </div>
       </div>
 
       {/* Appointments List */}
       {filteredAppointments.length === 0 ? (
-        <div className="card" style={{ padding: 60, textAlign: 'center' }}>
-          <div style={{
-            width: 72,
-            height: 72,
-            borderRadius: 16,
-            background: '#f1f5f9',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            margin: '0 auto 20px',
-          }}>
-            <History size={32} style={{ color: '#cbd5e1' }} />
+        <div className="bg-card rounded-2xl border border-border shadow-sm p-16 text-center">
+          <div className="w-16 h-16 bg-accent rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <History size={28} className="text-muted-foreground" />
           </div>
-          <h3 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 8px', color: '#0f172a' }}>No appointments found</h3>
-          <p style={{ fontSize: 14, color: '#64748b', margin: 0, maxWidth: 300, marginLeft: 'auto', marginRight: 'auto' }}>
+          <h3 className="text-lg font-bold text-foreground mb-2">No appointments found</h3>
+          <p className="text-sm text-muted-foreground max-w-xs mx-auto">
             {searchTerm || statusFilter !== 'all'
               ? 'Try adjusting your search or filters to find appointments'
               : 'You have no appointment history yet. Your appointments will appear here once scheduled.'}
@@ -300,157 +281,77 @@ export default function AppointmentHistoryPage() {
       ) : (
         <>
           {/* Appointments Grid */}
-          <div style={{ display: 'grid', gap: 12, marginBottom: 24 }}>
-            {paginatedAppointments.map((apt, idx) => {
-              const statusColors: Record<string, { bg: string; border: string; text: string; badge: string }> = {
-                completed: { bg: '#f0f9ff', border: '#3b82f6', text: '#0c4a6e', badge: 'bg-blue-100 text-blue-700' },
-                confirmed: { bg: '#f0fdf4', border: '#22c55e', text: '#14532d', badge: 'bg-green-100 text-green-700' },
-                pending: { bg: '#fefce8', border: '#eab308', text: '#542e0c', badge: 'bg-yellow-100 text-yellow-700' },
-                cancelled: { bg: '#fef2f2', border: '#ef4444', text: '#7c2d12', badge: 'bg-red-100 text-red-700' },
-                no_show: { bg: '#f3f4f6', border: '#6b7280', text: '#1f2937', badge: 'bg-gray-100 text-gray-700' },
+          <div className="space-y-3">
+            {paginatedAppointments.map((apt) => {
+              const statusConfig: Record<string, { cardCls: string; badgeCls: string; label: string }> = {
+                completed: { cardCls: 'border-l-blue-500 bg-blue-50/40', badgeCls: 'bg-blue-100 text-blue-700', label: 'Completed' },
+                confirmed: { cardCls: 'border-l-emerald-500 bg-emerald-50/40', badgeCls: 'bg-emerald-100 text-emerald-700', label: 'Confirmed' },
+                pending: { cardCls: 'border-l-yellow-500 bg-yellow-50/40', badgeCls: 'bg-yellow-100 text-yellow-700', label: 'Pending' },
+                cancelled: { cardCls: 'border-l-red-500 bg-red-50/40', badgeCls: 'bg-red-100 text-red-700', label: 'Cancelled' },
+                no_show: { cardCls: 'border-l-border bg-muted/30', badgeCls: 'bg-muted text-muted-foreground', label: 'No Show' },
               };
-              const colors = statusColors[apt.appointment_status] || statusColors.pending;
+              const cfg = statusConfig[apt.appointment_status] || statusConfig.pending;
 
               return (
                 <div
                   key={apt.id}
-                  style={{
-                    background: colors.bg,
-                    borderLeft: `4px solid ${colors.border}`,
-                    borderRadius: 12,
-                    padding: 20,
-                    transition: 'all 0.2s ease',
-                  }}
-                  className="appointment-card"
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)';
-                    (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)';
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
-                    (e.currentTarget as HTMLElement).style.boxShadow = 'none';
-                  }}
+                  className={`rounded-2xl border border-border border-l-4 ${cfg.cardCls} p-5 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150`}
                 >
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 16, alignItems: 'start' }}>
-                    {/* Left Section - Main Info */}
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                        <div style={{
-                          width: 40,
-                          height: 40,
-                          borderRadius: 10,
-                          background: colors.border + '20',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: colors.border,
-                        }}>
-                          <Calendar size={20} />
+                  <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-4 items-start">
+                    {/* Left Section */}
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-background/70 border border-border flex items-center justify-center flex-shrink-0">
+                          <Calendar size={18} className="text-muted-foreground" />
                         </div>
                         <div>
-                          <div style={{ fontSize: 14, fontWeight: 700, color: colors.text }}>
-                            {new Date(apt.scheduled_start).toLocaleDateString('en-US', {
-                              weekday: 'short',
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric',
-                            })}
-                          </div>
-                          <div style={{ fontSize: 13, color: colors.text, opacity: 0.8, display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
-                            <Clock size={12} />
-                            {new Date(apt.scheduled_start).toLocaleTimeString('en-US', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                            {` - ${new Date(apt.scheduled_end).toLocaleTimeString('en-US', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}`}
-                          </div>
+                          <p className="text-sm font-bold text-foreground">
+                            {new Date(apt.scheduled_start).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                          </p>
+                          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                            <Clock size={11} />
+                            {new Date(apt.scheduled_start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                            {' – '}
+                            {new Date(apt.scheduled_end).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                          </p>
                         </div>
                       </div>
 
-                      {/* Reason */}
-                      <div style={{ marginBottom: 10 }}>
-                        <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>
-                          {apt.reason_for_visit}
-                        </div>
-                      </div>
+                      <p className="font-bold text-foreground">{apt.reason_for_visit}</p>
 
-                      {/* Pet Info */}
                       {apt.pets?.[0] && (
-                        <div style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 8,
-                          fontSize: 13,
-                          color: '#64748b',
-                          background: 'rgba(255,255,255,0.6)',
-                          padding: '8px 12px',
-                          borderRadius: 8,
-                          width: 'fit-content',
-                          marginBottom: 10,
-                        }}>
-                          <PawPrint size={14} style={{ color: '#0d9488' }} />
-                          <span style={{ fontWeight: 600 }}>{apt.pets[0].name}</span>
-                          <span style={{ color: '#94a3b8' }}>•</span>
+                        <div className="inline-flex items-center gap-2 bg-background/70 border border-border rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground">
+                          <PawPrint size={12} className="text-primary" />
+                          <span className="font-semibold text-foreground">{apt.pets[0].name}</span>
+                          <span>•</span>
                           <span>{apt.pets[0].species}</span>
-                          {apt.pets[0].breed && (
-                            <>
-                              <span style={{ color: '#94a3b8' }}>•</span>
-                              <span>{apt.pets[0].breed}</span>
-                            </>
-                          )}
+                          {apt.pets[0].breed && <><span>•</span><span>{apt.pets[0].breed}</span></>}
                         </div>
                       )}
 
-                      {/* Special Instructions */}
                       {apt.special_instructions && (
-                        <div style={{
-                          fontSize: 13,
-                          color: '#64748b',
-                          background: 'rgba(255,255,255,0.8)',
-                          padding: '10px 12px',
-                          borderRadius: 8,
-                          borderLeft: '2px solid #f59e0b',
-                          display: 'flex',
-                          gap: 8,
-                        }}>
-                          <FileText size={14} style={{ flexShrink: 0, marginTop: 2 }} />
+                        <div className="flex items-start gap-2 bg-background/80 border-l-2 border-yellow-400 rounded-r-lg px-3 py-2 text-xs text-muted-foreground">
+                          <FileText size={13} className="flex-shrink-0 mt-0.5" />
                           <span>{apt.special_instructions}</span>
                         </div>
                       )}
                     </div>
 
-                    {/* Right Section - Status & Number */}
-                    <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, justifyContent: 'flex-start' }}>
-                        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                          <span className={`badge ${colors.badge}`} style={{
-                            padding: '6px 12px',
-                            fontSize: 12,
-                            fontWeight: 600,
-                            textTransform: 'capitalize',
-                          }}>
-                            {apt.appointment_status === 'no_show' ? 'No Show' : apt.appointment_status}
+                    {/* Right Section */}
+                    <div className="flex flex-row sm:flex-col items-start sm:items-end gap-3">
+                      <div className="flex flex-wrap gap-2">
+                        <span className={`rounded-full px-3 py-0.5 text-xs font-semibold capitalize ${cfg.badgeCls}`}>
+                          {cfg.label}
+                        </span>
+                        {apt.is_emergency && (
+                          <span className="rounded-full px-3 py-0.5 text-xs font-semibold bg-red-100 text-red-700">
+                            🚨 Emergency
                           </span>
-                          {apt.is_emergency && (
-                            <span className="badge bg-red-100 text-red-700" style={{
-                              padding: '6px 12px',
-                              fontSize: 12,
-                              fontWeight: 600,
-                            }}>
-                              🚨 Emergency
-                            </span>
-                          )}
-                        </div>
+                        )}
                       </div>
-
-                      <div>
-                        <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Appointment #</div>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: colors.text, fontFamily: 'monospace', letterSpacing: '1px' }}>
-                          {apt.appointment_number}
-                        </div>
+                      <div className="text-right">
+                        <p className="text-xs font-bold tracking-widest uppercase text-muted-foreground mb-0.5">Appt #</p>
+                        <p className="text-sm font-bold font-mono text-foreground">{apt.appointment_number}</p>
                       </div>
                     </div>
                   </div>
@@ -461,28 +362,22 @@ export default function AppointmentHistoryPage() {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: '16px 0',
-              borderTop: '1px solid #e2e8f0',
-            }}>
-              <span style={{ fontSize: 13, color: '#64748b', fontWeight: 500 }}>
-                Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredAppointments.length)} of {filteredAppointments.length}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-4 border-t border-border">
+              <span className="text-sm text-muted-foreground font-medium">
+                Showing {((currentPage - 1) * itemsPerPage) + 1}–{Math.min(currentPage * itemsPerPage, filteredAppointments.length)} of {filteredAppointments.length}
               </span>
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div className="flex gap-2">
                 <button
-                  className="btn btn-outline btn-sm"
                   onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-border bg-card text-sm font-semibold hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 active:scale-95"
                 >
                   <ChevronLeft size={14} /> Previous
                 </button>
                 <button
-                  className="btn btn-outline btn-sm"
                   onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                   disabled={currentPage === totalPages}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-border bg-card text-sm font-semibold hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 active:scale-95"
                 >
                   Next <ChevronRight size={14} />
                 </button>
@@ -491,17 +386,6 @@ export default function AppointmentHistoryPage() {
           )}
         </>
       )}
-
-      <style>{`
-        .appointment-card {
-          box-shadow: none;
-        }
-        .badge {
-          display: inline-block;
-          border-radius: 6px;
-          font-weight: 600;
-        }
-      `}</style>
     </div>
   );
 }

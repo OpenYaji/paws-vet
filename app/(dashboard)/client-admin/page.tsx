@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/auth-client';
 import Link from 'next/link';
 import {
-  Search, Plus, Edit, Archive, Eye, RefreshCw,
+  Search, Edit, Archive, Eye, RefreshCw,
   MoreVertical, Users, PawPrint, Calendar,
   AlertTriangle,
 } from 'lucide-react';
@@ -64,16 +64,16 @@ type ActiveTab = 'clients' | 'pets' | 'appointments';
 
 function statusBadge(status: string): string {
   const map: Record<string, string> = {
-    active: 'badge badge-green',
-    confirmed: 'badge badge-green',
-    completed: 'badge badge-blue',
-    pending: 'badge badge-yellow',
-    cancelled: 'badge badge-red',
-    inactive: 'badge badge-gray',
-    suspended: 'badge badge-red',
-    no_show: 'badge badge-gray',
+    active: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700',
+    confirmed: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700',
+    completed: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-blue-100 text-blue-700',
+    pending: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-yellow-100 text-yellow-800',
+    cancelled: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-red-100 text-red-700',
+    inactive: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-muted text-muted-foreground',
+    suspended: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-red-100 text-red-700',
+    no_show: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-muted text-muted-foreground',
   };
-  return map[status] ?? 'badge badge-gray';
+  return map[status] ?? 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-muted text-muted-foreground';
 }
 
 function formatDate(d?: string): string {
@@ -101,9 +101,9 @@ function Dropdown({ children, items }: {
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <div style={{ position: 'relative' }}>
+    <div className="relative">
       <button
-        className="btn btn-ghost btn-sm btn-icon"
+        className="p-2 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-150"
         onClick={(e) => { e.stopPropagation(); setOpen(o => !o); }}
         aria-label="Actions"
       >
@@ -112,29 +112,16 @@ function Dropdown({ children, items }: {
       {open && (
         <>
           <div
-            style={{ position: 'fixed', inset: 0, zIndex: 40 }}
+            className="fixed inset-0 z-40"
             onClick={() => setOpen(false)}
           />
-          <div style={{
-            position: 'absolute', right: 0, top: '110%', zIndex: 50,
-            background: 'white', border: '1px solid var(--border)',
-            borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-lg)',
-            minWidth: 160, overflow: 'hidden',
-          }}>
+          <div className="absolute right-0 top-[110%] z-50 bg-card border border-border rounded-xl shadow-lg min-w-[160px] overflow-hidden py-1">
             {items.map((item, i) =>
               item.href ? (
                 <Link
                   key={i}
                   href={item.href}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 8,
-                    padding: '10px 14px',
-                    fontSize: 14,
-                    color: item.danger ? 'var(--red)' : 'var(--navy-700)',
-                    textDecoration: 'none',
-                    transition: 'background 0.1s',
-                  }}
-                  className="dropdown-item"
+                  className={`flex items-center gap-2 px-3.5 py-2.5 text-sm hover:bg-accent transition-colors duration-100 ${item.danger ? 'text-destructive' : 'text-foreground'}`}
                   onClick={() => setOpen(false)}
                 >
                   {item.label}
@@ -143,23 +130,13 @@ function Dropdown({ children, items }: {
                 <button
                   key={i}
                   onClick={() => { setOpen(false); item.onClick?.(); }}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 8,
-                    padding: '10px 14px',
-                    fontSize: 14, width: '100%', textAlign: 'left',
-                    color: item.danger ? 'var(--red)' : 'var(--navy-700)',
-                    background: 'none', border: 'none', cursor: 'pointer',
-                    fontFamily: 'var(--font)',
-                    transition: 'background 0.1s',
-                  }}
-                  className="dropdown-item"
+                  className={`flex items-center gap-2 px-3.5 py-2.5 text-sm w-full text-left hover:bg-accent transition-colors duration-100 ${item.danger ? 'text-destructive' : 'text-foreground'}`}
                 >
                   {item.label}
                 </button>
               )
             )}
           </div>
-          <style>{`.dropdown-item:hover { background: var(--off-white); }`}</style>
         </>
       )}
     </div>
@@ -383,24 +360,13 @@ function ClientAdminPageInner() {
 
       <div className="animate-in fade-in duration-300">
         {/* Header */}
-        <div className="flex justify-between items-start mb-8 p-6 md:p-8 bg-gradient-to-br from-primary/10 via-transparent to-primary/5 rounded-xl border border-border/50">
+        <div className="mb-8 p-6 md:p-8 bg-gradient-to-br from-primary/10 via-transparent to-primary/5 rounded-xl border border-border/50">
           <div>
             <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent mb-2">
               {tabLabel[activeTab]}
             </h1>
             <p className="text-muted-foreground text-sm md:text-base">{tabDesc[activeTab]}</p>
           </div>
-          <Link
-            href={
-              activeTab === 'clients' ? '/client-admin/clients/new' :
-              activeTab === 'pets' ? '/client-admin/pets/new' :
-              '/client-admin/appointments/new'
-            }
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-all duration-200 hover:shadow-lg hover:scale-105 font-semibold text-sm whitespace-nowrap flex-shrink-0"
-          >
-            <Plus size={16} />
-            New {activeTab === 'clients' ? 'Client' : activeTab === 'pets' ? 'Pet' : 'Appointment'}
-          </Link>
         </div>
 
         {/* Filters */}
@@ -536,7 +502,7 @@ function ClientAdminPageInner() {
                             c.account_status === 'active' 
                               ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
                               : c.account_status === 'inactive'
-                              ? 'bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300'
+                              ? 'bg-muted text-muted-foreground'
                               : 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300'
                           }`}>{c.account_status}</span></td>
                           <td className="px-6 py-4 text-center font-semibold text-foreground">{c.pet_count ?? '—'}</td>
@@ -604,7 +570,7 @@ function ClientAdminPageInner() {
                             <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
                               p.is_active
                                 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
-                                : 'bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300'
+                                : 'bg-muted text-muted-foreground'
                             }`}>
                               {p.is_active ? 'Active' : 'Inactive'}
                             </span>
@@ -675,7 +641,7 @@ function ClientAdminPageInner() {
                                 : a.status === 'pending'
                                 ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-300'
                                 : a.status === 'no_show'
-                                ? 'bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300'
+                                ? 'bg-muted text-muted-foreground'
                                 : 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300'
                             }`}>{a.status}</span>
                           </td>
@@ -704,7 +670,13 @@ function ClientAdminPageInner() {
 
 export default function ClientAdminPage() {
   return (
-    <Suspense fallback={<div className="page"><div className="loading-state"><div className="spinner" /></div></div>}>
+    <Suspense fallback={
+      <div className="max-w-[1400px] mx-auto px-6 py-8">
+        <div className="flex flex-col items-center justify-center py-20 gap-4 text-muted-foreground">
+          <div className="w-8 h-8 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+        </div>
+      </div>
+    }>
       <ClientAdminPageInner />
     </Suspense>
   );
