@@ -63,17 +63,18 @@ type ActiveTab = 'clients' | 'pets' | 'appointments';
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function statusBadge(status: string): string {
+  const base = 'rounded-full px-2.5 py-0.5 text-xs font-semibold';
   const map: Record<string, string> = {
-    active: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700',
-    confirmed: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700',
-    completed: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-blue-100 text-blue-700',
-    pending: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-yellow-100 text-yellow-800',
-    cancelled: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-red-100 text-red-700',
-    inactive: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-muted text-muted-foreground',
-    suspended: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-red-100 text-red-700',
-    no_show: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-muted text-muted-foreground',
+    active:    `${base} bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300`,
+    confirmed: `${base} bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300`,
+    completed: `${base} bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300`,
+    pending:   `${base} bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300`,
+    cancelled: `${base} bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300`,
+    inactive:  `${base} bg-muted text-muted-foreground`,
+    suspended: `${base} bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300`,
+    no_show:   `${base} bg-muted text-muted-foreground`,
   };
-  return map[status] ?? 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-muted text-muted-foreground';
+  return map[status] ?? `${base} bg-muted text-muted-foreground`;
 }
 
 function formatDate(d?: string): string {
@@ -359,14 +360,13 @@ function ClientAdminPageInner() {
       )}
 
       <div className="animate-in fade-in duration-300">
+        <div className="max-w-[1400px] mx-auto px-6 py-8">
         {/* Header */}
-        <div className="mb-8 p-6 md:p-8 bg-gradient-to-br from-primary/10 via-transparent to-primary/5 rounded-xl border border-border/50">
-          <div>
-            <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent mb-2">
-              {tabLabel[activeTab]}
-            </h1>
-            <p className="text-muted-foreground text-sm md:text-base">{tabDesc[activeTab]}</p>
-          </div>
+        <div className="mb-8 rounded-xl border border-border/50 bg-gradient-to-br from-primary/10 via-transparent to-primary/5 px-8 py-7">
+          <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent mb-2">
+            {tabLabel[activeTab]}
+          </h1>
+          <p className="text-muted-foreground text-sm md:text-base">{tabDesc[activeTab]}</p>
         </div>
 
         {/* Filters */}
@@ -663,6 +663,7 @@ function ClientAdminPageInner() {
             </div>
           )}
         </div>
+        </div>{/* max-w container */}
       </div>
     </div>
   );

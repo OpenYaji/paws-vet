@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/auth-client';
-import { Plus, Calendar as CalendarIcon } from 'lucide-react';
+import { Plus, Calendar as CalendarIcon, Clock, PawPrint, History } from 'lucide-react';
 import Link from 'next/link';
 
 interface Pet {
@@ -14,6 +14,17 @@ interface Pet {
   species: string;
   breed: string;
   weight_kg: number;
+}
+
+interface CurrentAppointment {
+  id: string;
+  appointment_number: string;
+  scheduled_start: string;
+  scheduled_end: string;
+  appointment_status: string;
+  reason_for_visit: string;
+  is_emergency: boolean;
+  pets?: { name: string; species: string; breed: string }[] | null;
 }
 
 interface Service {
@@ -45,6 +56,8 @@ export default function ClientAppointmentsPage() {
   const [userEmail, setUserEmail] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [bookingStep, setBookingStep] = useState<'pet' | 'service' | 'time' | 'review' | 'success'>('pet');
+  const [currentAppointments, setCurrentAppointments] = useState<CurrentAppointment[]>([]);
+  const [loadingAppointments, setLoadingAppointments] = useState(false);
   
   const [selectedPet, setSelectedPet] = useState<Pet | null>(null);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
@@ -59,6 +72,7 @@ export default function ClientAppointmentsPage() {
   useEffect(() => {
     if (clientId) {
       fetchPets();
+      fetchCurrentAppointments(clientId);
     }
   }, [clientId]);
 
@@ -140,6 +154,54 @@ export default function ClientAppointmentsPage() {
     } catch (error) {
       console.error('Unexpected error in fetchClientData:', error);
       setLoading(false);
+    }
+  };
+
+  const fetchCurrentAppointments = async (cId: string) => {
+    setLoadingAppointments(true);
+    try {
+      const { data: petsData } = await supabase
+        .from('pets')
+        .select('id')
+        .eq('owner_id', cId);
+
+      if (!petsData || petsData.length === 0) {
+        setCurrentAppointments([]);
+        return;
+      }
+
+      const petIds = petsData.map((p: any) => p.id);
+
+      const { data, error } = await supabase
+        .from('appointments')
+        .select(`
+          id,
+          appointment_number,
+          scheduled_start,
+          scheduled_end,
+          appointment_status,
+          reason_for_visit,
+          is_emergency,
+          pets!appointments_pet_id_fkey (
+            name,
+            species,
+            breed
+          )
+        `)
+        .in('pet_id', petIds)
+        .in('appointment_status', ['pending', 'confirmed'])
+        .order('scheduled_start', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching current appointments:', error);
+        return;
+      }
+
+      setCurrentAppointments((data || []) as unknown as CurrentAppointment[]);
+    } catch (err) {
+      console.error('Unexpected error fetching current appointments:', err);
+    } finally {
+      setLoadingAppointments(false);
     }
   };
 
@@ -274,7 +336,7 @@ export default function ClientAppointmentsPage() {
     }
 
     console.log('Appointment created successfully:', result);
-    setBookingStep('success');
+    handleBookingSuccess();
   } catch (error) {
     console.error('Unexpected error creating appointment:', error);
     alert('An unexpected error occurred. Please try again.');
@@ -341,6 +403,12 @@ export default function ClientAppointmentsPage() {
       </main>
     );
   }
+
+  // After booking success, refetch current appointments
+  const handleBookingSuccess = () => {
+    setBookingStep('success');
+    if (clientId) fetchCurrentAppointments(clientId);
+  };
 
   // Success View
   if (bookingStep === 'success') {
@@ -410,8 +478,108 @@ export default function ClientAppointmentsPage() {
   return (
     <main className="p-6 space-y-8">
       <div className="pt-2">
-        <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent mb-2">Book Appointment</h1>
-        <p className="text-lg text-muted-foreground">Quick and easy pet care scheduling</p>
+        <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent mb-2">Appointments</h1>
+        <p className="text-lg text-muted-foreground">Manage your pet's appointments</p>
+      </div>
+
+      {/* Current / Upcoming Appointments */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-bold">Current Appointments</h2>
+          <Link href="/client/appointments/history" className="text-sm text-primary font-semibold hover:underline flex items-center gap-1">
+            <History size={14} /> View History
+          </Link>
+        </div>
+
+        {loadingAppointments ? (
+          <div className="flex items-center gap-3 text-muted-foreground text-sm py-4">
+            <div className="w-5 h-5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+            Loading appointments…
+          </div>
+        ) : currentAppointments.length === 0 ? (
+          <div className="bg-card border border-dashed border-border rounded-2xl p-8 text-center text-muted-foreground">
+            <CalendarIcon size={36} className="mx-auto mb-3 opacity-30" />
+            <p className="font-semibold">No current appointments</p>
+            <p className="text-sm mt-1">Book an appointment below to get started.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {currentAppointments.map((apt) => {
+              const isPending = apt.appointment_status === 'pending';
+              const cardCls = isPending
+                ? 'border-l-yellow-500 bg-yellow-50/40 dark:bg-yellow-900/10'
+                : 'border-l-emerald-500 bg-emerald-50/40 dark:bg-emerald-900/10';
+              const badgeCls = isPending
+                ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400'
+                : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400';
+              const badgeLabel = isPending ? 'Pending' : 'Confirmed';
+
+              return (
+                <div
+                  key={apt.id}
+                  className={`rounded-2xl border border-border border-l-4 ${cardCls} p-5 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150`}
+                >
+                  <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-4 items-start">
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-background/70 border border-border flex items-center justify-center flex-shrink-0">
+                          <CalendarIcon size={18} className="text-muted-foreground" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-foreground">
+                            {new Date(apt.scheduled_start).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                          </p>
+                          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                            <Clock size={11} />
+                            {new Date(apt.scheduled_start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                            {' – '}
+                            {new Date(apt.scheduled_end).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </div>
+                      </div>
+
+                      <p className="font-bold text-foreground">{apt.reason_for_visit}</p>
+
+                      {apt.pets?.[0] && (
+                        <div className="inline-flex items-center gap-2 bg-background/70 border border-border rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground">
+                          <PawPrint size={12} className="text-primary" />
+                          <span className="font-semibold text-foreground">{apt.pets[0].name}</span>
+                          <span>•</span>
+                          <span>{apt.pets[0].species}</span>
+                          {apt.pets[0].breed && <><span>•</span><span>{apt.pets[0].breed}</span></>}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex flex-row sm:flex-col items-start sm:items-end gap-3">
+                      <div className="flex flex-wrap gap-2">
+                        <span className={`rounded-full px-3 py-0.5 text-xs font-semibold capitalize ${badgeCls}`}>
+                          {badgeLabel}
+                        </span>
+                        {apt.is_emergency && (
+                          <span className="rounded-full px-3 py-0.5 text-xs font-semibold bg-red-100 text-red-700">🚨 Emergency</span>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-bold tracking-widest uppercase text-muted-foreground mb-0.5">Appt #</p>
+                        <p className="text-sm font-bold font-mono text-foreground">{apt.appointment_number}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* Divider */}
+      <div className="border-t border-border" />
+
+      {/* Booking Form Header */}
+      <div>
+        <h2 className="text-2xl font-bold mb-1">Book New Appointment</h2>
+        <p className="text-muted-foreground">Quick and easy pet care scheduling</p>
       </div>
 
       {/* Progress Indicator */}

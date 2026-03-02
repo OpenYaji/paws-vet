@@ -159,8 +159,6 @@ export default function ClientAdminLayout({
 
         body {
           font-family: var(--font);
-          background: var(--off-white);
-          color: var(--navy);
           margin: 0;
           -webkit-font-smoothing: antialiased;
         }
@@ -386,27 +384,6 @@ export default function ClientAdminLayout({
 
         .table-wrap { overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; }
-        th {
-          text-align: left;
-          padding: 12px 16px;
-          font-size: 12px;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-          color: var(--slate);
-          background: var(--off-white);
-          border-bottom: 1px solid var(--border);
-        }
-        td {
-          padding: 14px 16px;
-          font-size: 14px;
-          color: var(--navy-700);
-          border-bottom: 1px solid var(--border);
-          vertical-align: middle;
-        }
-        tr:last-child td { border-bottom: none; }
-        tbody tr { transition: background 0.1s; }
-        tbody tr:hover { background: #fafcff; }
 
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
         .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
@@ -589,7 +566,7 @@ export default function ClientAdminLayout({
         }
       `}</style>
 
-      <div className="min-h-screen flex flex-col">
+      <div className="min-h-screen flex flex-col bg-background text-foreground">
         <Suspense fallback={
           <div className="bg-slate-900 h-[60px] flex items-center px-6">
             <span className="text-white font-bold text-[17px]">PawsVet CMS</span>

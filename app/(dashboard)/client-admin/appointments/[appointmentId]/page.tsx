@@ -48,14 +48,15 @@ interface Pet {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function statusClass(s: string) {
+  const base = 'rounded-full px-2.5 py-0.5 text-xs font-semibold';
   const m: Record<string, string> = {
-    confirmed: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700',
-    completed: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-blue-100 text-blue-700',
-    pending: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-yellow-100 text-yellow-800',
-    cancelled: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-red-100 text-red-700',
-    no_show: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-muted text-muted-foreground',
+    confirmed: `${base} bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300`,
+    completed: `${base} bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300`,
+    pending:   `${base} bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300`,
+    cancelled: `${base} bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300`,
+    no_show:   `${base} bg-muted text-muted-foreground`,
   };
-  return m[s] ?? 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-muted text-muted-foreground';
+  return m[s] ?? `${base} bg-muted text-muted-foreground`;
 }
 
 function StatusIcon({ status }: { status: string }) {
@@ -250,7 +251,7 @@ export default function AppointmentDetailPage() {
 
       {/* Emergency banner */}
       {appointment.is_emergency && (
-        <div className="flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm font-semibold mb-5">
+        <div className="flex items-center gap-2 px-4 py-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-red-700 dark:text-red-400 text-sm font-semibold mb-5">
           <AlertTriangle size={16} />
           🚨 Emergency Appointment — Priority handling required
         </div>
@@ -450,7 +451,7 @@ export default function AppointmentDetailPage() {
                 <button
                   onClick={() => setSelectedStatus('cancelled')}
                   disabled={updating}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold border border-red-200 text-red-600 hover:bg-red-50 transition-all duration-150 disabled:opacity-55"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all duration-150 disabled:opacity-55"
                 >
                   <XCircle size={14} /> Cancel Appointment
                 </button>
