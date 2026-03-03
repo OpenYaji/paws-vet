@@ -34,6 +34,7 @@ export async function GET(request: NextRequest) {
     const url = new URL(request.url);
     const page = parseInt(url.searchParams.get("page") || "1");
     const limit = parseInt(url.searchParams.get("limit") || "20");
+    const showArchived = url.searchParams.get("archived") === "true";
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
@@ -50,7 +51,7 @@ export async function GET(request: NextRequest) {
         { count: "exact" },
       )
       .range(from, to)
-      .neq("is_archived", true)
+      .eq("is_archived", showArchived)
       .order("created_at", { ascending: false });
 
     // Restrict to the client's own pets if they are not staff

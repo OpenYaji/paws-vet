@@ -20,15 +20,29 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   Search,
   Eye,
-  Edit,
   FileText,
   Trash2,
   LayoutList,
   TableIcon,
   ChevronLeft,
   ChevronRight,
+  Archive,
+  AlertTriangle,
 } from "lucide-react";
 import Link from "next/link";
 import AddNewPet from "@/components/veterinarian/pets/add-new-pet";
@@ -92,12 +106,12 @@ function getSpeciesEmoji(species: string): string {
 }
 
 export default function PatientsPage() {
-  // Fetch ALL pets (high limit) so sort/filter work on the full dataset
-  const { data: apiResponse, isLoading } = useSWR(
-    `/api/pets?page=1&limit=1000`,
-    fetcher,
-    { revalidateOnFocus: false },
-  );
+  const [recordFilter, setRecordFilter] = useState<"active" | "archived">("active");
+  const swrKey = `/api/pets?page=1&limit=1000${recordFilter === "archived" ? "&archived=true" : ""}`;
+
+  const { data: apiResponse, isLoading } = useSWR(swrKey, fetcher, {
+    revalidateOnFocus: false,
+  });
 
   const allPets: Pet[] = useMemo(
     () => (Array.isArray(apiResponse?.data) ? apiResponse.data : []),
@@ -110,9 +124,11 @@ export default function PatientsPage() {
   const [viewMode, setViewMode] = useState<"list" | "table">("list");
   const [page, setPage] = useState(1);
 
-  // Reset to page 1 whenever a filter/sort/view changes
-  const resetPage = () => setPage(1);
+  // Archive confirm modal
+  const [archiveTarget, setArchiveTarget] = useState<Pet | null>(null);
+  const [isArchiving, setIsArchiving] = useState(false);
 
+  const resetPage = () => setPage(1);
   const itemsPerPage = viewMode === "list" ? ITEMS_LIST : ITEMS_TABLE;
 
   const filteredPets = useMemo(() => {
@@ -154,31 +170,35 @@ export default function PatientsPage() {
     safePage * itemsPerPage,
   );
 
-  const handleArchivePet = async (petId: string) => {
-    if (!confirm("Are you sure you want to archive this pet?")) return;
+  const handleConfirmArchive = async () => {
+    if (!archiveTarget) return;
+    setIsArchiving(true);
+    // Optimistic update
     mutate(
-      `/api/pets?page=1&limit=1000`,
+      swrKey,
       (cur: any) =>
         cur
-          ? { ...cur, data: cur.data.filter((p: Pet) => p.id !== petId) }
+          ? { ...cur, data: cur.data.filter((p: Pet) => p.id !== archiveTarget.id) }
           : cur,
       false,
     );
     try {
-      const res = await fetch(`/api/pets/${petId}`, {
+      const res = await fetch(`/api/pets/${archiveTarget.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ is_archived: true }),
       });
-      if (res.ok) {
-        mutate(`/api/pets?page=1&limit=1000`);
-      }
+      if (res.ok) mutate(swrKey);
     } catch (err) {
       console.error(err);
+      mutate(swrKey); // revert optimistic on error
+    } finally {
+      setIsArchiving(false);
+      setArchiveTarget(null);
     }
   };
 
-  const refreshData = () => mutate(`/api/pets?page=1&limit=1000`);
+  const refreshData = () => mutate(swrKey);
 
   const PetAvatar = ({ pet, size = "sm" }: { pet: Pet; size?: "sm" | "md" }) => {
     const dim = size === "sm" ? "w-8 h-8 text-base" : "w-14 h-14 text-3xl";
@@ -197,29 +217,46 @@ export default function PatientsPage() {
 
   const ActionButtons = ({ pet }: { pet: Pet }) => (
     <div className="flex gap-1">
-      <Link href={`/veterinarian/pets/${pet.id}`}>
-        <Button variant="outline" size="icon" title="View Details" className="h-8 w-8">
-          <Eye className="h-3.5 w-3.5" />
-        </Button>
-      </Link>
-      <Button
-        variant="outline"
-        size="icon"
-        title="Medical History"
-        className="h-8 w-8"
-        onClick={() => console.log("View history:", pet.id)}
-      >
-        <FileText className="h-3.5 w-3.5" />
-      </Button>
-      <Button
-        variant="outline"
-        size="icon"
-        title="Archive Pet"
-        className="h-8 w-8 text-destructive hover:text-destructive"
-        onClick={() => handleArchivePet(pet.id)}
-      >
-        <Trash2 className="h-3.5 w-3.5" />
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Link href={`/veterinarian/pets/${pet.id}`}>
+            <Button variant="outline" size="icon" className="h-8 w-8">
+              <Eye className="h-3.5 w-3.5" />
+            </Button>
+          </Link>
+        </TooltipTrigger>
+        <TooltipContent>View Details</TooltipContent>
+      </Tooltip>
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => console.log("View history:", pet.id)}
+          >
+            <FileText className="h-3.5 w-3.5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Medical History</TooltipContent>
+      </Tooltip>
+
+      {recordFilter === "active" && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8 text-destructive hover:text-destructive"
+              onClick={() => setArchiveTarget(pet)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Archive Pet</TooltipContent>
+        </Tooltip>
+      )}
     </div>
   );
 
@@ -230,7 +267,7 @@ export default function PatientsPage() {
         <p className="text-sm text-muted-foreground">
           Showing {(safePage - 1) * itemsPerPage + 1}–
           {Math.min(safePage * itemsPerPage, filteredPets.length)} of{" "}
-          {filteredPets.length} pets
+          {filteredPets.length} {recordFilter === "archived" ? "archived" : ""} pets
         </p>
         <div className="flex items-center gap-2">
           <Button
@@ -304,6 +341,7 @@ export default function PatientsPage() {
           </div>
 
           <div className="flex flex-wrap gap-3 items-end">
+            {/* Species */}
             <div className="space-y-1 min-w-35">
               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Species</label>
               <Select value={speciesFilter} onValueChange={(v) => { setSpeciesFilter(v); resetPage(); }}>
@@ -324,6 +362,7 @@ export default function PatientsPage() {
               </Select>
             </div>
 
+            {/* Sort By */}
             <div className="space-y-1 min-w-40">
               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Sort By</label>
               <Select value={sortBy} onValueChange={(v) => { setSortBy(v); resetPage(); }}>
@@ -334,6 +373,26 @@ export default function PatientsPage() {
                   <SelectItem value="name">Name (A–Z)</SelectItem>
                   <SelectItem value="recent">Most Recent</SelectItem>
                   <SelectItem value="oldest">Oldest First</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Records filter */}
+            <div className="space-y-1 min-w-40">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Records</label>
+              <Select
+                value={recordFilter}
+                onValueChange={(v: "active" | "archived") => {
+                  setRecordFilter(v);
+                  resetPage();
+                }}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Active Records</SelectItem>
+                  <SelectItem value="archived">Archived Records</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -371,6 +430,14 @@ export default function PatientsPage() {
               Refresh
             </Button>
           </div>
+
+          {/* Archived banner */}
+          {recordFilter === "archived" && (
+            <div className="flex items-center gap-2 rounded-md bg-amber-50 border border-amber-200 text-amber-800 px-3 py-2 text-xs font-medium dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-400">
+              <Archive className="h-3.5 w-3.5 shrink-0" />
+              Showing archived pet records — these are no longer active in the system.
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -380,7 +447,9 @@ export default function PatientsPage() {
           <CardContent className="py-4">
             <div className="text-2xl font-bold text-primary">{filteredPets.length}</div>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {filteredPets.length === allPets.length ? "Total Pets" : "Filtered Results"}
+              {filteredPets.length === allPets.length
+                ? recordFilter === "archived" ? "Archived Pets" : "Total Pets"
+                : "Filtered Results"}
             </p>
           </CardContent>
         </Card>
@@ -406,16 +475,27 @@ export default function PatientsPage() {
       {filteredPets.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
-            <div className="text-5xl mb-3 opacity-30">🔍</div>
-            <h3 className="text-lg font-semibold mb-1">No pets found</h3>
-            <p className="text-sm text-muted-foreground">Try adjusting your search or filters</p>
+            <div className="text-5xl mb-3 opacity-30">
+              {recordFilter === "archived" ? "🗄️" : "🔍"}
+            </div>
+            <h3 className="text-lg font-semibold mb-1">
+              {recordFilter === "archived" ? "No archived pets" : "No pets found"}
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              {recordFilter === "archived"
+                ? "No pet records have been archived yet."
+                : "Try adjusting your search or filters"}
+            </p>
           </CardContent>
         </Card>
       ) : viewMode === "list" ? (
         /* ── LIST VIEW ── */
         <div className="space-y-3">
           {paginatedPets.map((pet) => (
-            <Card key={pet.id} className="hover:shadow-md transition-shadow">
+            <Card
+              key={pet.id}
+              className={`hover:shadow-md transition-shadow ${recordFilter === "archived" ? "opacity-75" : ""}`}
+            >
               <CardContent className="py-4">
                 <div className="flex items-center gap-4">
                   <PetAvatar pet={pet} size="md" />
@@ -426,6 +506,11 @@ export default function PatientsPage() {
                       <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-primary/10 text-primary capitalize">
                         {pet.species}
                       </span>
+                      {recordFilter === "archived" && (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 border border-amber-200">
+                          Archived
+                        </span>
+                      )}
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-0.5 text-xs">
                       <span className="text-muted-foreground">
@@ -480,7 +565,10 @@ export default function PatientsPage() {
               </TableHeader>
               <TableBody>
                 {paginatedPets.map((pet) => (
-                  <TableRow key={pet.id} className="hover:bg-muted/40">
+                  <TableRow
+                    key={pet.id}
+                    className={`hover:bg-muted/40 ${recordFilter === "archived" ? "opacity-75" : ""}`}
+                  >
                     <TableCell>
                       <PetAvatar pet={pet} size="sm" />
                     </TableCell>
@@ -514,6 +602,42 @@ export default function PatientsPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* ── ARCHIVE CONFIRM MODAL ── */}
+      <Dialog open={!!archiveTarget} onOpenChange={(open) => { if (!open) setArchiveTarget(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-1">
+              <div className="h-10 w-10 rounded-full bg-destructive/10 flex items-center justify-center shrink-0">
+                <AlertTriangle className="h-5 w-5 text-destructive" />
+              </div>
+              <DialogTitle>Archive Pet Record</DialogTitle>
+            </div>
+            <DialogDescription className="text-sm leading-relaxed">
+              You are about to archive{" "}
+              <span className="font-semibold text-foreground">{archiveTarget?.name}</span>.
+              This will remove the record from active listings. You can still view it
+              by switching to <span className="font-semibold text-foreground">Archived Records</span>.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setArchiveTarget(null)}
+              disabled={isArchiving}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmArchive}
+              disabled={isArchiving}
+            >
+              {isArchiving ? "Archiving..." : "Archive Pet"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
