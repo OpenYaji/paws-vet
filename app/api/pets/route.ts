@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
         id, owner_id, name, species, breed, color, gender, weight,
         microchip_number, photo_url, is_spayed_neutered, behavioral_notes,
         special_needs, current_medical_status, created_at,
-        client_profiles ( id, first_name, last_name, phone )
+        client_profiles!pets_owner_id_fkey ( id, first_name, last_name, phone )
       `,
         { count: "exact" },
       )

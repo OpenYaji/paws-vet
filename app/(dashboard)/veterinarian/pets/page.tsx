@@ -88,7 +88,7 @@ interface Pet {
     first_name: string;
     last_name: string;
     phone: string;
-  }[];
+  } | null;
 }
 
 function getSpeciesEmoji(species: string): string {
@@ -133,7 +133,7 @@ export default function PatientsPage() {
 
   const filteredPets = useMemo(() => {
     const filtered = allPets.filter((pet) => {
-      const petOwner = pet.client_profiles?.[0];
+      const petOwner = pet.client_profiles;
       const ownerName = petOwner
         ? `${petOwner.first_name} ${petOwner.last_name}`
         : "";
@@ -524,8 +524,8 @@ export default function PatientsPage() {
                       </span>
                       <span className="text-muted-foreground">
                         <span className="font-medium text-foreground">
-                          {pet.client_profiles?.[0]
-                            ? `${pet.client_profiles[0].first_name} ${pet.client_profiles[0].last_name}`
+                          {pet.client_profiles
+                            ? `${pet.client_profiles.first_name} ${pet.client_profiles.last_name}`
                             : "Unknown"}
                         </span>{" "}
                         · Owner
@@ -582,8 +582,8 @@ export default function PatientsPage() {
                     <TableCell className="text-sm">{pet.color || "—"}</TableCell>
                     <TableCell className="text-sm">{pet.weight || "—"}</TableCell>
                     <TableCell className="text-sm">
-                      {pet.client_profiles?.[0]
-                        ? `${pet.client_profiles[0].first_name} ${pet.client_profiles[0].last_name}`
+                      {pet.client_profiles
+                        ? `${pet.client_profiles.first_name} ${pet.client_profiles.last_name}`
                         : "Unknown"}
                     </TableCell>
                     <TableCell className="text-xs font-mono text-muted-foreground">
