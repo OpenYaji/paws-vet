@@ -42,16 +42,16 @@ export async function GET(request: NextRequest) {
       .from("pets")
       .select(
         `
-        id, owner_id, name, species, breed, color, gender, weight, 
-        microchip_number, photo_url, is_spayed_neutered, behavioral_notes, 
-        special_needs, current_medical_status,
+        id, owner_id, name, species, breed, color, gender, weight,
+        microchip_number, photo_url, is_spayed_neutered, behavioral_notes,
+        special_needs, current_medical_status, created_at,
         client_profiles ( id, first_name, last_name, phone )
       `,
         { count: "exact" },
       )
       .range(from, to)
       .neq("is_archived", true)
-      .order("name", { ascending: true });
+      .order("created_at", { ascending: false });
 
     // Restrict to the client's own pets if they are not staff
     if (role === "client") {
