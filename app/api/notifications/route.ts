@@ -3,62 +3,106 @@ import { createCookieClient } from "@/lib/supabase-server";
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 
+// Initialize Supabase client with service role key for server-side operations
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || "",
   process.env.SUPABASE_SERVICE_ROLE_KEY || "",
 );
 
+// Creating JSON responses for consistent and reuable response formatting
+function jsonError(message: any, status: number = 400, details?: any) {
+  return NextResponse.json(
+    { error: message, ... (details ? { details} : { }) },
+    { status },
+  );
+}
+
+async function requireUser(req: NextRequest) {
+  const supabase = await createCookieClient();
+  const { data, error } = await supabase.auth.getUser();
+
+  if (error || !data?.user) {
+    return { supabase, user: null, response: jsonError("Unauthorized", 401) };
+  }
+
+  return { supabase, user: data.user, response: null };
+}
+
+// role check via tables (recommended vs JWT app_metadata)
+async function isVetOrAdmin(supabase: any, userId: string) {
+  const [{ data: vet }, { data: admin }] = await Promise.all([
+    supabase.from("veterinarian_profiles").select("id").eq("user_id", userId).maybeSingle(),
+    supabase.from("admin_profiles").select("id").eq("user_id", userId).maybeSingle(),
+  ]);
+
+  return Boolean(vet?.id || admin?.id);
+}
+
+// Limit what columns need to return
+const NOTIF_SELECT = `
+  id,
+  recipient_id,
+  notification_type,
+  subject,
+  content,
+  related_entity_type,
+  related_entity_id,
+  delivery_status,
+  is_read,
+  sent_at,
+  delivered_at
+`;
+
 // GET: Fetch notifications for a user
 export async function GET(request: NextRequest) {
+  // server-side auth check
+  const { supabase, user, response } = await requireUser(request);
+  // If not authenticated, return early with the error response
+  if (response) return response;
+
   try {
-    const supabase = await createCookieClient();
+    // Parse query parameters for pagination and filtering
+    const queryParams = request.nextUrl.searchParams;
 
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
+    // Limit the number of notifications returned, with a max cap to prevent abuse
+    const limit = Math.min(parseInt(queryParams.get("limit") || "20", 10), 100);
+    const unreadOnly = (queryParams.get("is_read") ?? "false") === "false";
 
-    // Reject if no valid cookie-based session is found
-    if (authError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const searchParams = request.nextUrl.searchParams;
-    const limit = parseInt(searchParams.get("limit") || "20");
-
-    // Use user.id to fetch notifications from the database
-    const { data, error } = await supabase
+    // Query the database for notifications belonging to the authenticated user, applying filters and sorting
+    let query = supabase
       .from("notification_logs")
-      .select("*")
+      .select(NOTIF_SELECT)
       .eq("recipient_id", user.id)
       .order("sent_at", { ascending: false })
-      .neq("is_read", true)
-      .limit(limit);
+      .limit(limit);  
+
+    // If the unreadOnly filter is set, add a condition to only fetch unread notifications
+    if (unreadOnly) query = query.eq("is_read", false);
+
+    // Execute the query and handle potential errors
+    const { data, error } = await query;
 
     if (error) {
-      console.error("Error fetching notifications:", error);
-      return NextResponse.json([], { status: 200 });
+      console.error("[GET /api/notifications] db error", { userId: user.id, error });
+      return jsonError("Failed to fetch notifications", 500);
     }
 
-    return NextResponse.json(data || []);
-  } catch (error) {
-    console.error("Notifications API error:", error);
-    return NextResponse.json([], { status: 200 });
+    // Return the fetched notifications as a JSON response. If no data is found, return an empty array for consistency.
+    return NextResponse.json(data ?? []);
+  } catch (err) {
+    console.error("[GET /api/notifications] unexpected", { userId: user.id, err });
+    return jsonError("Internal server error", 500);
   }
 }
 
 // POST: Create a new notification
 export async function POST(request: NextRequest) {
+   // server-side auth check
+  const { supabase, user, response } = await requireUser(request);
+  // If not authenticated, return early with the error response
+  if (response) return response;
+
   try {
-    const supabase = await createCookieClient();
-
-    // Check if the user sending this is an admin (optional, based on your rules)
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
     const body = await request.json();
     const {
       recipient_id,
@@ -107,6 +151,10 @@ export async function POST(request: NextRequest) {
 
 // PATCH: Mark notification as delivered/read
 export async function PATCH(request: NextRequest) {
+   // server-side auth check
+  const { supabase, user, response } = await requireUser(request);
+  // If not authenticated, return early with the error response
+  if (response) return response;
   try {
     const body = await request.json();
     const { notification_id, delivery_status } = body;
