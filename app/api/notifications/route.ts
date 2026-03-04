@@ -39,7 +39,7 @@ async function isVetOrAdmin(supabase: any, userId: string) {
 }
 
 // Limit what columns need to return
-const NOTIF_SELECT = `
+const notifSelect = `
   id,
   recipient_id,
   notification_type,
@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
     // Query the database for notifications belonging to the authenticated user, applying filters and sorting
     let query = supabase
       .from("notification_logs")
-      .select(NOTIF_SELECT)
+      .select(notifSelect)
       .eq("recipient_id", user.id)
       .order("sent_at", { ascending: false })
       .limit(limit);  
