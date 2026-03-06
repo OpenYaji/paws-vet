@@ -6,12 +6,15 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
 
     if (authError || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    
+
     const { data, error } = await supabase
       .from("noticeboard")
       .select("*")
@@ -27,20 +30,25 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!user)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await request.json();
 
     const { data, error } = await supabase
       .from("noticeboard")
-      .insert([{
-        title: body.title,
-        content: body.content,
-        priority: body.priority || 'normal',
-        author_id: user.id
-      }])
+      .insert([
+        {
+          title: body.title,
+          content: body.content,
+          priority: body.priority || "normal",
+          author_id: user.id,
+        },
+      ])
       .select()
       .single();
 
@@ -54,14 +62,21 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!user)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await request.json();
     const { id, title, content, priority } = body;
 
-    if (!id) return NextResponse.json({ error: "Notice ID is required" }, { status: 400 });
+    if (!id)
+      return NextResponse.json(
+        { error: "Notice ID is required" },
+        { status: 400 },
+      );
 
     const { data, error } = await supabase
       .from("noticeboard")
@@ -80,14 +95,21 @@ export async function PATCH(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!user)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const searchParams = request.nextUrl.searchParams;
     const id = searchParams.get("id");
 
-    if (!id) return NextResponse.json({ error: "Notice ID is required" }, { status: 400 });
+    if (!id)
+      return NextResponse.json(
+        { error: "Notice ID is required" },
+        { status: 400 },
+      );
 
     const { error } = await supabase.from("noticeboard").delete().eq("id", id);
 

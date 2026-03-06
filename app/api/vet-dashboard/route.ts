@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
 // Use the exact path to your server client file
-import { createCookieClient } from '@/lib/supabase-server'; 
+import { createClient } from '@/utils/supabase/server'; 
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const supabase = await createCookieClient();
+    const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user) {
