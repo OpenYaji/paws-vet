@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -11,17 +11,50 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, Eye, Edit, FileText, Trash2 } from "lucide-react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  Search,
+  Eye,
+  FileText,
+  Trash2,
+  LayoutList,
+  TableIcon,
+  ChevronLeft,
+  ChevronRight,
+  Archive,
+  AlertTriangle,
+} from "lucide-react";
 import Link from "next/link";
 import AddNewPet from "@/components/veterinarian/pets/add-new-pet";
 import useSWR, { mutate } from "swr";
 import { supabase } from "@/lib/auth-client";
 
-// Define Fetcher (Keep this outside or import it)
+const ITEMS_LIST = 5;
+const ITEMS_TABLE = 10;
+
 const fetcher = async (url: string) => {
   const {
     data: { session },
-    error: authError,
   } = await supabase.auth.getSession();
 
   const res = await fetch(url, {
@@ -45,7 +78,7 @@ interface Pet {
   breed: string;
   age: number;
   weight: string;
-  color?: string; // Added optional field based on your UI usage
+  color?: string;
   microchip_number?: string;
   photo_url?: string;
   owner_id: string;
@@ -55,179 +88,217 @@ interface Pet {
     first_name: string;
     last_name: string;
     phone: string;
-  }[];
+  } | null;
+}
+
+function getSpeciesEmoji(species: string): string {
+  const emojiMap: Record<string, string> = {
+    dog: "🐕",
+    cat: "🐱",
+    bird: "🐦",
+    rabbit: "🐰",
+    hamster: "🐹",
+    fish: "🐠",
+    reptile: "🦎",
+    other: "🐾",
+  };
+  return emojiMap[species?.toLowerCase()] || "🐾";
 }
 
 export default function PatientsPage() {
-  // State for pagination
-  const [page, setPage] = useState(1);
-  const limit = 20;
+  const [recordFilter, setRecordFilter] = useState<"active" | "archived">("active");
+  const swrKey = `/api/pets?page=1&limit=1000${recordFilter === "archived" ? "&archived=true" : ""}`;
 
-  // SWR for data fetching with pagination
-  const { data: apiResponse, isLoading } = useSWR(
-    `/api/pets?page=${page}&limit=${limit}`,
-    fetcher,
-    { revalidateOnFocus: false },
+  const { data: apiResponse, isLoading } = useSWR(swrKey, fetcher, {
+    revalidateOnFocus: false,
+  });
+
+  const allPets: Pet[] = useMemo(
+    () => (Array.isArray(apiResponse?.data) ? apiResponse.data : []),
+    [apiResponse],
   );
 
-  // Extract the array and the total count from the new API response
-  const pets = apiResponse?.data || [];
-  const totalPets = apiResponse?.total || 0;
-
-  // Calculate total pages for the buttons
-  const totalPages = Math.ceil(totalPets / limit);
-
-  // State for search, filters, and sorting
   const [searchTerm, setSearchTerm] = useState("");
   const [speciesFilter, setSpeciesFilter] = useState("all");
   const [sortBy, setSortBy] = useState("name");
-  const [sortByColor, setSortByColor] = useState("default");
+  const [viewMode, setViewMode] = useState<"list" | "table">("list");
+  const [page, setPage] = useState(1);
 
-  //Toast notifications for actions like adding, editing, or deleting pets can be implemented here using a library like react-toastify or your custom toast component.
-  const showToast = (
-    message: string,
-    type: "success" | "error" = "success",
-  ) => {
-    // Implement your toast logic here
-    console.log(`${type.toUpperCase()}: ${message}`);
-  };
+  // Archive confirm modal
+  const [archiveTarget, setArchiveTarget] = useState<Pet | null>(null);
+  const [isArchiving, setIsArchiving] = useState(false);
 
-  // Delete pet function
-  const handleArchivePet = async (petId: string) => {
-    if (
-      !confirm(
-        "Are you sure you want to archive this pet? This action cannot be undone.",
-      )
-    ) {
-      return;
-    }
+  const resetPage = () => setPage(1);
+  const itemsPerPage = viewMode === "list" ? ITEMS_LIST : ITEMS_TABLE;
 
-    // Hide the pet from the UI
-    mutate(
-      "/api/pets",
-      (currentPets: any[] | undefined) => {
-        return currentPets ? currentPets.filter((pet) => pet.id !== petId) : [];
-      },
-      false,
-    );
-
-    try {
-      // Use PATCH call to archive the pet
-      const response = await fetch(`/api/pets/${petId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ is_archived: true }),
-      });
-
-      // Check if the response is successful
-      if (response.ok) {
-        showToast("Pet archived successfully");
-        mutate("/api/pets"); // Refresh the pet list after deletion
-      } else {
-        // Throw new error when 400 and 500
-        const errorData = await response.json();
-        console.error(
-          "Archive failed with status:",
-          response.status,
-          errorData,
-        ); // Debug logging
-        throw new Error(
-          errorData.error || errorData.message || "Failed to delete pet",
-        );
-      }
-    } catch (error) {
-      console.error("Error deleting pet:", error);
-      showToast("Failed to delete pet. Please try again.", "error");
-    }
-  };
-
-  // Update the Pet's Information
-  const handleUpdatePet = async (petId: string, updatedData: Partial<Pet>) => {
-    try {
-      // Use PATCH call to update the pet
-      const response = await fetch(`/api/pets/${petId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(updatedData),
-      });
-
-      if (response.ok) {
-        showToast("Pet updated successfully");
-        mutate("/api/pets"); // Refresh the pet list after update
-      } else {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to update pet");
-      }
-    } catch (error: any) {
-      console.error("Error updating pet:", error);
-      showToast(`Failed to update pet: ${error.message}`, "error");
-    }
-  };
-
-  // Logic safe to run now that pets defaults to []
-  const petsArray = Array.isArray(pets) ? pets : [];
-  const filteredPets = petsArray
-    .filter((pet: Pet) => {
-      const petOwner = pet.client_profiles?.[0];
-
+  const filteredPets = useMemo(() => {
+    const filtered = allPets.filter((pet) => {
+      const petOwner = pet.client_profiles;
       const ownerName = petOwner
         ? `${petOwner.first_name} ${petOwner.last_name}`
-        : "Unknown";
+        : "";
 
       const matchesSearch =
         pet.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (pet.breed &&
-          pet.breed.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (pet.breed && pet.breed.toLowerCase().includes(searchTerm.toLowerCase())) ||
         ownerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (pet.microchip_number && pet.microchip_number.includes(searchTerm));
 
       const matchesSpecies =
         speciesFilter === "all" ||
-        pet.species.toLowerCase() === speciesFilter.toLowerCase();
+        pet.species?.toLowerCase() === speciesFilter.toLowerCase();
 
       return matchesSearch && matchesSpecies;
-    })
-    .sort((a: Pet, b: Pet) => {
+    });
+
+    filtered.sort((a, b) => {
       if (sortBy === "name") return a.name.localeCompare(b.name);
       if (sortBy === "recent")
-        return (
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       if (sortBy === "oldest")
-        return (
-          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-        );
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
       return 0;
     });
 
-  function getSpeciesEmoji(species: string): string {
-    const emojiMap: Record<string, string> = {
-      dog: "🐕",
-      cat: "🐱",
-      bird: "🐦",
-      rabbit: "🐰",
-      hamster: "🐹",
-      fish: "🐠",
-      reptile: "🦎",
-      other: "🐾",
-    };
-    return emojiMap[species.toLowerCase()] || "🐾";
-  }
+    return filtered;
+  }, [allPets, searchTerm, speciesFilter, sortBy]);
 
-  // Refreshes the list manually (e.g. via the Refresh button or after adding a pet)
-  const refreshData = () => {
-    mutate("/api/pets");
+  const totalPages = Math.max(1, Math.ceil(filteredPets.length / itemsPerPage));
+  const safePage = Math.min(page, totalPages);
+  const paginatedPets = filteredPets.slice(
+    (safePage - 1) * itemsPerPage,
+    safePage * itemsPerPage,
+  );
+
+  const handleConfirmArchive = async () => {
+    if (!archiveTarget) return;
+    setIsArchiving(true);
+    // Optimistic update
+    mutate(
+      swrKey,
+      (cur: any) =>
+        cur
+          ? { ...cur, data: cur.data.filter((p: Pet) => p.id !== archiveTarget.id) }
+          : cur,
+      false,
+    );
+    try {
+      const res = await fetch(`/api/pets/${archiveTarget.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_archived: true }),
+      });
+      if (res.ok) mutate(swrKey);
+    } catch (err) {
+      console.error(err);
+      mutate(swrKey); // revert optimistic on error
+    } finally {
+      setIsArchiving(false);
+      setArchiveTarget(null);
+    }
+  };
+
+  const refreshData = () => mutate(swrKey);
+
+  const PetAvatar = ({ pet, size = "sm" }: { pet: Pet; size?: "sm" | "md" }) => {
+    const dim = size === "sm" ? "w-8 h-8 text-base" : "w-14 h-14 text-3xl";
+    return (
+      <div
+        className={`${dim} rounded-full bg-primary/10 flex items-center justify-center overflow-hidden border border-border shrink-0`}
+      >
+        {pet.photo_url ? (
+          <img src={pet.photo_url} alt={pet.name} className="w-full h-full object-cover" />
+        ) : (
+          getSpeciesEmoji(pet.species)
+        )}
+      </div>
+    );
+  };
+
+  const ActionButtons = ({ pet }: { pet: Pet }) => (
+    <div className="flex gap-1">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Link href={`/veterinarian/pets/${pet.id}`}>
+            <Button variant="outline" size="icon" className="h-8 w-8">
+              <Eye className="h-3.5 w-3.5" />
+            </Button>
+          </Link>
+        </TooltipTrigger>
+        <TooltipContent>View Details</TooltipContent>
+      </Tooltip>
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => console.log("View history:", pet.id)}
+          >
+            <FileText className="h-3.5 w-3.5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Medical History</TooltipContent>
+      </Tooltip>
+
+      {recordFilter === "active" && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8 text-destructive hover:text-destructive"
+              onClick={() => setArchiveTarget(pet)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Archive Pet</TooltipContent>
+        </Tooltip>
+      )}
+    </div>
+  );
+
+  const Pagination = () => {
+    if (filteredPets.length <= itemsPerPage) return null;
+    return (
+      <div className="flex items-center justify-between pt-4 border-t">
+        <p className="text-sm text-muted-foreground">
+          Showing {(safePage - 1) * itemsPerPage + 1}–
+          {Math.min(safePage * itemsPerPage, filteredPets.length)} of{" "}
+          {filteredPets.length} {recordFilter === "archived" ? "archived" : ""} pets
+        </p>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            disabled={safePage === 1}
+            onClick={() => setPage((p) => p - 1)}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="text-sm font-medium px-2">
+            {safePage} / {totalPages}
+          </span>
+          <Button
+            variant="outline"
+            size="icon"
+            disabled={safePage >= totalPages}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    );
   };
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
+      <div className="flex items-center justify-center min-h-100">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2" />
           <p className="text-muted-foreground">Loading pets...</p>
         </div>
       </div>
@@ -235,9 +306,9 @@ export default function PatientsPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      {/* Page Header */}
-      <div className="space-y-2">
+    <div className="space-y-5 max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="space-y-1">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Link href="/veterinarian/dashboard" className="hover:text-primary">
             Dashboard
@@ -252,31 +323,29 @@ export default function PatientsPage() {
               Comprehensive database of all registered pets
             </p>
           </div>
-          {/* Pass the refresh function to your AddNewPet component */}
           <AddNewPet onPetAdded={refreshData} />
         </div>
       </div>
 
-      {/* Search and Filters */}
+      {/* Search & Filters */}
       <Card>
-        <CardContent className="pt-6 space-y-4">
-          {/* Search Bar */}
+        <CardContent className="pt-4 pb-4 space-y-3">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
             <Input
-              placeholder="Search by pet name, breed, owner, or microchip number..."
+              placeholder="Search by pet name, breed, owner, or microchip..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => { setSearchTerm(e.target.value); resetPage(); }}
               className="pl-10"
             />
           </div>
 
-          {/* Filters */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Species</label>
-              <Select value={speciesFilter} onValueChange={setSpeciesFilter}>
-                <SelectTrigger>
+          <div className="flex flex-wrap gap-3 items-end">
+            {/* Species */}
+            <div className="space-y-1 min-w-35">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Species</label>
+              <Select value={speciesFilter} onValueChange={(v) => { setSpeciesFilter(v); resetPage(); }}>
+                <SelectTrigger className="h-9">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -293,249 +362,282 @@ export default function PatientsPage() {
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Sort By</label>
-              <Select value={sortBy} onValueChange={setSortBy}>
-                <SelectTrigger>
+            {/* Sort By */}
+            <div className="space-y-1 min-w-40">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Sort By</label>
+              <Select value={sortBy} onValueChange={(v) => { setSortBy(v); resetPage(); }}>
+                <SelectTrigger className="h-9">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="name">Name (A-Z)</SelectItem>
+                  <SelectItem value="name">Name (A–Z)</SelectItem>
                   <SelectItem value="recent">Most Recent</SelectItem>
                   <SelectItem value="oldest">Oldest First</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            <div className="flex items-end">
-              <Button
-                onClick={refreshData}
-                variant="outline"
-                className="w-full"
+            {/* Records filter */}
+            <div className="space-y-1 min-w-40">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Records</label>
+              <Select
+                value={recordFilter}
+                onValueChange={(v: "active" | "archived") => {
+                  setRecordFilter(v);
+                  resetPage();
+                }}
               >
-                Refresh
-              </Button>
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Active Records</SelectItem>
+                  <SelectItem value="archived">Archived Records</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+
+            {/* View toggle */}
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">View</label>
+              <div className="flex border border-border rounded-md overflow-hidden h-9">
+                <button
+                  className={`px-3 flex items-center gap-1.5 text-sm font-medium transition-colors ${
+                    viewMode === "list"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-background hover:bg-muted text-foreground"
+                  }`}
+                  onClick={() => { setViewMode("list"); resetPage(); }}
+                >
+                  <LayoutList className="h-4 w-4" />
+                  List
+                </button>
+                <button
+                  className={`px-3 flex items-center gap-1.5 text-sm font-medium border-l border-border transition-colors ${
+                    viewMode === "table"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-background hover:bg-muted text-foreground"
+                  }`}
+                  onClick={() => { setViewMode("table"); resetPage(); }}
+                >
+                  <TableIcon className="h-4 w-4" />
+                  Table
+                </button>
+              </div>
+            </div>
+
+            <Button variant="outline" size="sm" className="h-9 ml-auto" onClick={refreshData}>
+              Refresh
+            </Button>
           </div>
+
+          {/* Archived banner */}
+          {recordFilter === "archived" && (
+            <div className="flex items-center gap-2 rounded-md bg-amber-50 border border-amber-200 text-amber-800 px-3 py-2 text-xs font-medium dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-400">
+              <Archive className="h-3.5 w-3.5 shrink-0" />
+              Showing archived pet records — these are no longer active in the system.
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-3">
         <Card>
-          <CardContent className="pt-6">
-            <div className="text-3xl font-bold text-primary">
-              {filteredPets.length}
-            </div>
-            <p className="text-sm text-muted-foreground mt-1">
-              {filteredPets.length === pets.length
-                ? "Total Pets"
+          <CardContent className="py-4">
+            <div className="text-2xl font-bold text-primary">{filteredPets.length}</div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {filteredPets.length === allPets.length
+                ? recordFilter === "archived" ? "Archived Pets" : "Total Pets"
                 : "Filtered Results"}
             </p>
           </CardContent>
         </Card>
-
         <Card>
-          <CardContent className="pt-6">
-            <div className="text-3xl font-bold">
-              {new Set(filteredPets.map((p: Pet) => p.species)).size}
+          <CardContent className="py-4">
+            <div className="text-2xl font-bold">
+              {new Set(filteredPets.map((p) => p.species)).size}
             </div>
-            <p className="text-sm text-muted-foreground mt-1">Species Types</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Species Types</p>
           </CardContent>
         </Card>
-
         <Card>
-          <CardContent className="pt-6">
-            <div className="text-3xl font-bold">
-              {new Set(filteredPets.map((p: Pet) => p.owner_id)).size}
+          <CardContent className="py-4">
+            <div className="text-2xl font-bold">
+              {new Set(filteredPets.map((p) => p.owner_id)).size}
             </div>
-            <p className="text-sm text-muted-foreground mt-1">Pet Owners</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Pet Owners</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Patient Records Grid */}
-      <div className="space-y-4">
-        {filteredPets.length === 0 ? (
-          <Card>
-            <CardContent className="pt-6 text-center py-12">
-              <div className="text-6xl mb-4 opacity-30">🔍</div>
-              <h3 className="text-xl font-semibold mb-2">No Pets found</h3>
-              <p className="text-muted-foreground">
-                Try adjusting your search or filters
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          filteredPets.map((pet: Pet, index: number) => (
+      {/* Records */}
+      {filteredPets.length === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <div className="text-5xl mb-3 opacity-30">
+              {recordFilter === "archived" ? "🗄️" : "🔍"}
+            </div>
+            <h3 className="text-lg font-semibold mb-1">
+              {recordFilter === "archived" ? "No archived pets" : "No pets found"}
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              {recordFilter === "archived"
+                ? "No pet records have been archived yet."
+                : "Try adjusting your search or filters"}
+            </p>
+          </CardContent>
+        </Card>
+      ) : viewMode === "list" ? (
+        /* ── LIST VIEW ── */
+        <div className="space-y-3">
+          {paginatedPets.map((pet) => (
             <Card
               key={pet.id}
-              className="hover:shadow-md transition-shadow cursor-pointer group"
-              style={{
-                animation: `fadeIn 0.3s ease ${index * 0.05}s both`,
-              }}
+              className={`hover:shadow-md transition-shadow ${recordFilter === "archived" ? "opacity-75" : ""}`}
             >
-              <CardContent className="pt-6">
-                <div className="grid grid-cols-1 md:grid-cols-[auto_1fr_auto] gap-6 items-center">
-                  {/* Avatar */}
-                  <div className="flex justify-center md:justify-start">
-                    <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center text-4xl overflow-hidden border border-gray-200">
-                      {pet.photo_url ? (
-                        <img
-                          src={pet.photo_url}
-                          alt={pet.name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        getSpeciesEmoji(pet.species)
-                      )}
-                    </div>
-                  </div>
+              <CardContent className="py-4">
+                <div className="flex items-center gap-4">
+                  <PetAvatar pet={pet} size="md" />
 
-                  {/* Pet Information */}
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <h3 className="text-2xl font-bold">{pet.name}</h3>
-                      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <h3 className="text-base font-bold">{pet.name}</h3>
+                      <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-primary/10 text-primary capitalize">
                         {pet.species}
                       </span>
-                    </div>
-
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div>
-                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
-                          Breed
-                        </p>
-                        <p className="text-sm font-medium mt-1">{pet.breed}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
-                          Color
-                        </p>
-                        <p className="text-sm font-medium mt-1">
-                          {pet.color || "N/A"}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
-                          Weight
-                        </p>
-                        <p className="text-sm font-medium mt-1">
-                          {pet.weight || "N/A"}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
-                          Owner
-                        </p>
-                        <p className="text-sm font-medium mt-1">
-                          {pet.client_profiles?.[0]
-                            ? `${pet.client_profiles[0].first_name} ${pet.client_profiles[0].last_name}`
-                            : "Unknown"}
-                        </p>
-                      </div>
-                    </div>
-
-                    {pet.microchip_number && (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <span className="font-medium">Microchip:</span>
-                        <span className="font-mono">
-                          {pet.microchip_number}
+                      {recordFilter === "archived" && (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 border border-amber-200">
+                          Archived
                         </span>
-                      </div>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-0.5 text-xs">
+                      <span className="text-muted-foreground">
+                        <span className="font-medium text-foreground">{pet.breed || "—"}</span> · Breed
+                      </span>
+                      <span className="text-muted-foreground">
+                        <span className="font-medium text-foreground">{pet.color || "—"}</span> · Color
+                      </span>
+                      <span className="text-muted-foreground">
+                        <span className="font-medium text-foreground">{pet.weight || "—"}</span> · Weight
+                      </span>
+                      <span className="text-muted-foreground">
+                        <span className="font-medium text-foreground">
+                          {pet.client_profiles
+                            ? `${pet.client_profiles.first_name} ${pet.client_profiles.last_name}`
+                            : "Unknown"}
+                        </span>{" "}
+                        · Owner
+                      </span>
+                    </div>
+                    {pet.microchip_number && (
+                      <p className="text-xs text-muted-foreground mt-1 font-mono">
+                        Microchip: {pet.microchip_number}
+                      </p>
                     )}
                   </div>
 
-                  {/* Actions */}
-                  <div className="flex gap-2 justify-center md:justify-end">
-                    <Link href={`/veterinarian/pets/${pet.id}`}>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        title="View Details"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </Link>
-
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      title="Edit Record"
-                      onClick={() =>
-                        handleUpdatePet(pet.id, {
-                          name: pet.name + " (Edited)",
-                        })
-                      }
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      title="Medical History"
-                      onClick={() => console.log("View history:", pet.id)}
-                    >
-                      <FileText className="h-4 w-4" />
-                    </Button>
-
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      title="Archive Pet"
-                      onClick={() => handleArchivePet(pet.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+                  <ActionButtons pet={pet} />
                 </div>
               </CardContent>
             </Card>
-          ))
-        )}
-
-        {/* Pagination Controls */}
-        {totalPets > limit && (
-          <div className="flex items-center justify-between pt-4 border-t mt-6">
-            <p className="text-sm text-muted-foreground">
-              Showing {pets.length} of {totalPets} pets
-            </p>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                disabled={page === 1}
-                onClick={() => setPage((old) => Math.max(old - 1, 1))}
-              >
-                Previous
-              </Button>
-              <div className="flex items-center px-4 text-sm font-medium">
-                Page {page} of {totalPages || 1}
-              </div>
-              <Button
-                variant="outline"
-                disabled={page >= totalPages}
-                onClick={() => setPage((old) => old + 1)}
-              >
-                Next
-              </Button>
+          ))}
+          <Pagination />
+        </div>
+      ) : (
+        /* ── TABLE VIEW ── */
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-10" />
+                  <TableHead>Name</TableHead>
+                  <TableHead>Species</TableHead>
+                  <TableHead>Breed</TableHead>
+                  <TableHead>Color</TableHead>
+                  <TableHead>Weight</TableHead>
+                  <TableHead>Owner</TableHead>
+                  <TableHead>Microchip</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paginatedPets.map((pet) => (
+                  <TableRow
+                    key={pet.id}
+                    className={`hover:bg-muted/40 ${recordFilter === "archived" ? "opacity-75" : ""}`}
+                  >
+                    <TableCell>
+                      <PetAvatar pet={pet} size="sm" />
+                    </TableCell>
+                    <TableCell className="font-semibold">{pet.name}</TableCell>
+                    <TableCell>
+                      <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-primary/10 text-primary capitalize">
+                        {pet.species}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-sm">{pet.breed || "—"}</TableCell>
+                    <TableCell className="text-sm">{pet.color || "—"}</TableCell>
+                    <TableCell className="text-sm">{pet.weight || "—"}</TableCell>
+                    <TableCell className="text-sm">
+                      {pet.client_profiles
+                        ? `${pet.client_profiles.first_name} ${pet.client_profiles.last_name}`
+                        : "Unknown"}
+                    </TableCell>
+                    <TableCell className="text-xs font-mono text-muted-foreground">
+                      {pet.microchip_number || "—"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <ActionButtons pet={pet} />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <div className="px-4 pb-4">
+              <Pagination />
             </div>
-          </div>
-        )}
-      </div>
+          </CardContent>
+        </Card>
+      )}
 
-      <style jsx global>{`
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-      `}</style>
+      {/* ── ARCHIVE CONFIRM MODAL ── */}
+      <Dialog open={!!archiveTarget} onOpenChange={(open) => { if (!open) setArchiveTarget(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-1">
+              <div className="h-10 w-10 rounded-full bg-destructive/10 flex items-center justify-center shrink-0">
+                <AlertTriangle className="h-5 w-5 text-destructive" />
+              </div>
+              <DialogTitle>Archive Pet Record</DialogTitle>
+            </div>
+            <DialogDescription className="text-sm leading-relaxed">
+              You are about to archive{" "}
+              <span className="font-semibold text-foreground">{archiveTarget?.name}</span>.
+              This will remove the record from active listings. You can still view it
+              by switching to <span className="font-semibold text-foreground">Archived Records</span>.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setArchiveTarget(null)}
+              disabled={isArchiving}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmArchive}
+              disabled={isArchiving}
+            >
+              {isArchiving ? "Archiving..." : "Archive Pet"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

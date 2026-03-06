@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Search, Loader2, X, Calendar } from "lucide-react";
+import { Plus, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 
 interface IssuePrescriptionProps {
@@ -33,9 +33,8 @@ export default function IssuePrescription({
   const [isOpen, setIsOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  const [petSearch, setPetSearch] = useState("");
-  const [isSearching, setIsSearching] = useState(false);
-  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [petsList, setPetsList] = useState<any[]>([]);
+  const [isLoadingPets, setIsLoadingPets] = useState(false);
 
   const [selectedPet, setSelectedPet] = useState<any>(null);
   const [selectedMedicalRecord, setSelectedMedicalRecord] = useState<any>(null);
@@ -50,36 +49,23 @@ export default function IssuePrescription({
     notes: "",
   });
 
+  // Fetch all pets when dialog opens
   useEffect(() => {
-    const runSearch = async () => {
-      if (!petSearch.trim()) {
-        setSearchResults([]);
-        return;
-      }
-
-      setIsSearching(true);
+    if (!isOpen) return;
+    const fetchPets = async () => {
+      setIsLoadingPets(true);
       try {
-        const res = await fetch(
-          `/api/pets?search=${encodeURIComponent(petSearch)}`,
-        );
+        const res = await fetch("/api/pets?page=1&limit=1000");
         const data = await res.json();
-
-        if (Array.isArray(data)) {
-          setSearchResults(data);
-        }
+        setPetsList(Array.isArray(data.data) ? data.data : []);
       } catch (error) {
-        console.error("Search failed", error);
+        console.error("Failed to fetch pets", error);
       } finally {
-        setIsSearching(false);
+        setIsLoadingPets(false);
       }
     };
-
-    const timer = setTimeout(() => {
-      runSearch();
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [petSearch]);
+    fetchPets();
+  }, [isOpen]);
 
   // Fetch medical records when pet is selected
   useEffect(() => {
@@ -128,7 +114,7 @@ export default function IssuePrescription({
         medical_record_id: selectedMedicalRecord.id,
         prescribed_by: selectedMedicalRecord.veterinarian_id,
         ...formData,
-        instructions: formData.notes, // Map notes to instructions as API expects
+        instructions: formData.notes,
       };
 
       const res = await fetch("/api/prescriptions", {
@@ -160,7 +146,7 @@ export default function IssuePrescription({
     setSelectedPet(null);
     setSelectedMedicalRecord(null);
     setMedicalRecords([]);
-    setPetSearch("");
+    setPetsList([]);
     setFormData({
       medication_name: "",
       dosage: "",
@@ -183,96 +169,42 @@ export default function IssuePrescription({
           <Plus size={18} /> Issue Prescription
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-125">
         <DialogHeader>
           <DialogTitle>Issue New Prescription</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 py-4">
-          {/* --- Pet Selection Section --- */}
-          <div className="space-y-2 relative">
+          {/* --- Pet Selection --- */}
+          <div className="space-y-2">
             <Label>Select Patient</Label>
-
-            {selectedPet ? (
-              // STATE A: Pet Selected (Show Card)
-              <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-md">
-                <div>
-                  <div className="font-bold text-green-800">
-                    {selectedPet.name}
-                  </div>
-                  <div className="text-xs text-green-600">
-                    {selectedPet.species} • Owner:{" "}
-                    {selectedPet.client_profiles?.last_name || "N/A"}
-                  </div>
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="text-green-700 hover:text-green-900 hover:bg-green-100"
-                  onClick={() => setSelectedPet(null)}
-                >
-                  <X size={16} />
-                </Button>
-              </div>
-            ) : (
-              // STATE B: Search Input
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Search pet name..."
-                  className="pl-9"
-                  value={petSearch}
-                  onChange={(e) => setPetSearch(e.target.value)}
+            <Select
+              onValueChange={(val) => {
+                const pet = petsList.find((p) => p.id === val);
+                setSelectedPet(pet || null);
+                setSelectedMedicalRecord(null);
+                setMedicalRecords([]);
+              }}
+            >
+              <SelectTrigger disabled={isLoadingPets}>
+                <SelectValue
+                  placeholder={
+                    isLoadingPets ? "Loading pets..." : "Select a patient..."
+                  }
                 />
-
-                {/* Search Spinner */}
-                {isSearching && (
-                  <div className="absolute right-3 top-3">
-                    <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
-                  </div>
-                )}
-
-                {/* Dropdown Results */}
-                {!selectedPet &&
-                  searchResults.length > 0 &&
-                  petSearch.length > 0 && (
-                    <div className="absolute z-50 w-full bg-white border rounded-md shadow-xl mt-1 max-h-48 overflow-y-auto">
-                      {searchResults.map((pet) => (
-                        <div
-                          key={pet.id}
-                          className="p-3 hover:bg-gray-100 cursor-pointer border-b last:border-0"
-                          onClick={() => {
-                            setSelectedPet(pet); // Set selected
-                            setPetSearch(""); // Clear search text
-                            setSearchResults([]); // Hide dropdown
-                          }}
-                        >
-                          <div className="font-medium text-gray-800">
-                            {pet.name}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            {pet.species} • {pet.breed} • Owner:{" "}
-                            {pet.client_profiles?.last_name}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                {/* No Results Message */}
-                {!isSearching &&
-                  petSearch.length > 0 &&
-                  searchResults.length === 0 && (
-                    <div className="absolute z-50 w-full bg-white border rounded-md shadow-lg mt-1 p-3 text-sm text-gray-500 text-center">
-                      No pets found.
-                    </div>
-                  )}
-              </div>
-            )}
+              </SelectTrigger>
+              <SelectContent className="max-h-50">
+                {petsList.map((pet) => (
+                  <SelectItem key={pet.id} value={pet.id}>
+                    {pet.name} ({pet.species}) —{" "}
+                    {pet.client_profiles?.last_name || "N/A"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
-          {/* --- Medical Record Selection (Only show if pet is selected) --- */}
+          {/* --- Medical Record Selection --- */}
           {selectedPet && (
             <div className="space-y-2">
               <Label>Select Medical Record / Visit</Label>
@@ -284,8 +216,8 @@ export default function IssuePrescription({
                   </span>
                 </div>
               ) : medicalRecords.length === 0 ? (
-                <div className="p-4 border border-dashed rounded-md bg-amber-50 border-amber-200">
-                  <p className="text-sm text-amber-800">
+                <div className="p-4 border border-dashed rounded-md bg-amber-500/10 border-amber-500/30">
+                  <p className="text-sm text-amber-600">
                     No medical records found for this patient. Prescriptions
                     must be linked to a completed consultation with a medical
                     record.
