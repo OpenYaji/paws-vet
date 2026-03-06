@@ -1,14 +1,20 @@
 'use client';
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { supabase } from '@/lib/auth-client';
 import Link from 'next/link';
 import {
   Search, Edit, Archive, Eye, RefreshCw,
   MoreVertical, Users, PawPrint, Calendar,
-  AlertTriangle,
+  AlertTriangle, Download, ClipboardList, MapPin, Heart,
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -57,8 +63,82 @@ interface AppointmentData {
   created_at: string;
 }
 
+interface RegularAppointmentData {
+  id: string;
+  appointment_number?: string | null;
+  scheduled_start: string;
+  appointment_status: string;
+  duration_minutes?: number | null;
+  payment_status?: string | null;
+  payment_method?: string | null;
+  client_name: string;
+  client_id: string;
+  pet_name: string;
+  pet_id: string;
+  breed?: string | null;
+  gender?: string | null;
+}
+
+interface OutreachAppointmentData {
+  id: string;
+  appointment_number?: string | null;
+  scheduled_start: string;
+  appointment_status: string;
+  is_aspin_puspin: boolean;
+  payment_amount?: number | null;
+  payment_status?: string | null;
+  outreach_program_id?: string | null;
+  outreach_program_title?: string | null;
+  client_name: string;
+  client_id: string;
+  pet_name: string;
+  pet_id: string;
+  breed?: string | null;
+}
+
 // REMOVED: 'dashboard' from type — CMS only handles clients, pets, appointments
-type ActiveTab = 'clients' | 'pets' | 'appointments';
+type ActiveTab = 'clients' | 'pets' | 'appointments' | 'regular_appointments' | 'outreach_appointments';
+
+// ── CSV helpers ────────────────────────────────────────────────────────────────
+
+function downloadCSV(rows: string[][], filename: string) {
+  const csv = rows.map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportRegularCSV(data: RegularAppointmentData[]) {
+  const rows = [
+    ['Appt #', 'Date', 'Client', 'Pet', 'Breed', 'Gender', 'Duration (min)', 'Payment Method', 'Payment Status', 'Appointment Status'],
+    ...data.map(r => [
+      r.appointment_number ?? '',
+      new Date(r.scheduled_start).toLocaleString(),
+      r.client_name, r.pet_name, r.breed ?? '', r.gender ?? '',
+      String(r.duration_minutes ?? ''),
+      r.payment_method ?? '', r.payment_status ?? '', r.appointment_status,
+    ]),
+  ];
+  downloadCSV(rows, `regular-appointments-${new Date().toISOString().slice(0,10)}.csv`);
+}
+
+function exportOutreachCSV(data: OutreachAppointmentData[]) {
+  const rows = [
+    ['Appt #', 'Date', 'Client', 'Pet', 'Breed', 'Aspin/Puspin', 'Program', 'Payment Amount', 'Payment Status', 'Appointment Status'],
+    ...data.map(r => [
+      r.appointment_number ?? '',
+      new Date(r.scheduled_start).toLocaleString(),
+      r.client_name, r.pet_name, r.breed ?? '',
+      r.is_aspin_puspin ? 'Yes' : 'No',
+      r.outreach_program_title ?? '',
+      r.payment_amount != null ? String(r.payment_amount) : '',
+      r.payment_status ?? '', r.appointment_status,
+    ]),
+  ];
+  downloadCSV(rows, `outreach-appointments-${new Date().toISOString().slice(0,10)}.csv`);
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -94,53 +174,39 @@ function calcAge(birth?: string): string {
   return m < 0 ? `${y - 1}y ${12 + m}mo` : `${y}y ${m}mo`;
 }
 
-// ── Dropdown ─────────────────────────────────────────────────────────────────
+// ── Actions Dropdown (Radix portal — escapes overflow containers) ─────────────
 
-function Dropdown({ children, items }: {
-  children: React.ReactNode;
+function ActionsDropdown({ items }: {
   items: { label: string; href?: string; onClick?: () => void; danger?: boolean }[];
 }) {
-  const [open, setOpen] = useState(false);
   return (
-    <div className="relative">
-      <button
-        className="p-2 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-150"
-        onClick={(e) => { e.stopPropagation(); setOpen(o => !o); }}
-        aria-label="Actions"
-      >
-        {children}
-      </button>
-      {open && (
-        <>
-          <div
-            className="fixed inset-0 z-40"
-            onClick={() => setOpen(false)}
-          />
-          <div className="absolute right-0 top-[110%] z-50 bg-card border border-border rounded-xl shadow-lg min-w-[160px] overflow-hidden py-1">
-            {items.map((item, i) =>
-              item.href ? (
-                <Link
-                  key={i}
-                  href={item.href}
-                  className={`flex items-center gap-2 px-3.5 py-2.5 text-sm hover:bg-accent transition-colors duration-100 ${item.danger ? 'text-destructive' : 'text-foreground'}`}
-                  onClick={() => setOpen(false)}
-                >
-                  {item.label}
-                </Link>
-              ) : (
-                <button
-                  key={i}
-                  onClick={() => { setOpen(false); item.onClick?.(); }}
-                  className={`flex items-center gap-2 px-3.5 py-2.5 text-sm w-full text-left hover:bg-accent transition-colors duration-100 ${item.danger ? 'text-destructive' : 'text-foreground'}`}
-                >
-                  {item.label}
-                </button>
-              )
-            )}
-          </div>
-        </>
-      )}
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className="p-2 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-150 outline-none"
+          aria-label="Actions"
+        >
+          <MoreVertical size={16} />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-[180px]">
+        {items.map((item, i) =>
+          item.href ? (
+            <DropdownMenuItem key={i} asChild variant={item.danger ? 'destructive' : 'default'}>
+              <Link href={item.href}>{item.label}</Link>
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem
+              key={i}
+              variant={item.danger ? 'destructive' : 'default'}
+              onClick={item.onClick}
+            >
+              {item.label}
+            </DropdownMenuItem>
+          )
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -149,6 +215,7 @@ function Dropdown({ children, items }: {
 function ClientAdminPageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const pathname = usePathname();
   const tabParam = searchParams.get('tab') as ActiveTab;
 
   // DEFAULT TO 'clients' instead of 'dashboard' — CMS has no dashboard
@@ -156,6 +223,8 @@ function ClientAdminPageInner() {
   const [clients, setClients] = useState<ClientData[]>([]);
   const [pets, setPets] = useState<PetData[]>([]);
   const [appointments, setAppointments] = useState<AppointmentData[]>([]);
+  const [regularAppointments, setRegularAppointments] = useState<RegularAppointmentData[]>([]);
+  const [outreachAppointments, setOutreachAppointments] = useState<OutreachAppointmentData[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -246,16 +315,95 @@ function ClientAdminPageInner() {
     }
   }, []);
 
+  const fetchRegularAppointments = useCallback(async () => {
+    try {
+      const { data } = await supabase
+        .from('appointments')
+        .select(`
+          id, appointment_number, scheduled_start, appointment_status,
+          duration_minutes, payment_status, payment_method,
+          pets!appointments_pet_id_fkey (
+            id, name, breed, gender,
+            client_profiles!pets_owner_id_fkey (
+              id, first_name, last_name
+            )
+          )
+        `)
+        .eq('appointment_type_detail', 'regular')
+        .order('scheduled_start', { ascending: false });
+      const mapped = (data || []).map((a: any) => ({
+        id: a.id,
+        appointment_number: a.appointment_number,
+        scheduled_start: a.scheduled_start,
+        appointment_status: a.appointment_status,
+        duration_minutes: a.duration_minutes,
+        payment_status: a.payment_status,
+        payment_method: a.payment_method,
+        pet_id: a.pets?.id ?? '',
+        pet_name: a.pets?.name ?? '—',
+        breed: a.pets?.breed ?? null,
+        gender: a.pets?.gender ?? null,
+        client_id: a.pets?.client_profiles?.id ?? '',
+        client_name: a.pets?.client_profiles
+          ? `${a.pets.client_profiles.first_name} ${a.pets.client_profiles.last_name}`
+          : '—',
+      }));
+      setRegularAppointments(mapped);
+    } catch (e) { console.error(e); }
+  }, []);
+
+  const fetchOutreachAppointments = useCallback(async () => {
+    try {
+      const { data } = await supabase
+        .from('appointments')
+        .select(`
+          id, appointment_number, scheduled_start, appointment_status,
+          is_aspin_puspin, payment_amount, payment_status,
+          outreach_program_id,
+          outreach_programs!appointments_outreach_program_id_fkey (title),
+          pets!appointments_pet_id_fkey (
+            id, name, breed,
+            client_profiles!pets_owner_id_fkey (
+              id, first_name, last_name
+            )
+          )
+        `)
+        .eq('appointment_type_detail', 'outreach')
+        .order('scheduled_start', { ascending: false });
+      const mapped = (data || []).map((a: any) => ({
+        id: a.id,
+        appointment_number: a.appointment_number,
+        scheduled_start: a.scheduled_start,
+        appointment_status: a.appointment_status,
+        is_aspin_puspin: a.is_aspin_puspin ?? false,
+        payment_amount: a.payment_amount,
+        payment_status: a.payment_status,
+        outreach_program_id: a.outreach_program_id,
+        outreach_program_title: a.outreach_programs?.title ?? null,
+        pet_id: a.pets?.id ?? '',
+        pet_name: a.pets?.name ?? '—',
+        breed: a.pets?.breed ?? null,
+        client_id: a.pets?.client_profiles?.id ?? '',
+        client_name: a.pets?.client_profiles
+          ? `${a.pets.client_profiles.first_name} ${a.pets.client_profiles.last_name}`
+          : '—',
+      }));
+      setOutreachAppointments(mapped);
+    } catch (e) { console.error(e); }
+  }, []);
+
   const loadTab = useCallback(async () => {
     setLoading(true);
     try {
       if (activeTab === 'clients') await fetchClients();
       else if (activeTab === 'pets') await fetchPets();
       else if (activeTab === 'appointments') await fetchAppointments();
+      else if (activeTab === 'regular_appointments') await fetchRegularAppointments();
+      else if (activeTab === 'outreach_appointments') await fetchOutreachAppointments();
     } finally {
       setLoading(false);
     }
-  }, [activeTab, fetchClients, fetchPets, fetchAppointments]);
+  }, [activeTab, fetchClients, fetchPets, fetchAppointments, fetchRegularAppointments, fetchOutreachAppointments]);
 
   useEffect(() => {
     loadTab();
@@ -294,6 +442,26 @@ function ClientAdminPageInner() {
     return matchesSearch && matchesStatus;
   });
 
+  const filteredRegular = regularAppointments.filter(a => {
+    const q = searchTerm.toLowerCase();
+    const matchesSearch = !q ||
+      a.client_name.toLowerCase().includes(q) ||
+      a.pet_name.toLowerCase().includes(q) ||
+      (a.breed ?? '').toLowerCase().includes(q);
+    const matchesStatus = statusFilter === 'all' || a.appointment_status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  const filteredOutreach = outreachAppointments.filter(a => {
+    const q = searchTerm.toLowerCase();
+    const matchesSearch = !q ||
+      a.client_name.toLowerCase().includes(q) ||
+      a.pet_name.toLowerCase().includes(q) ||
+      (a.outreach_program_title ?? '').toLowerCase().includes(q);
+    const matchesStatus = statusFilter === 'all' || a.appointment_status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
   // ── Actions ───────────────────────────────────────────────────────────────
 
   const handleArchiveClient = async (userId: string, name: string) => {
@@ -327,23 +495,31 @@ function ClientAdminPageInner() {
   const tabLabel: Record<ActiveTab, string> = {
     clients: 'Client Management',
     pets: 'Pet Management',
-    appointments: 'Appointment Management',
+    appointments: 'All Appointments',
+    regular_appointments: 'Regular Appointments',
+    outreach_appointments: 'Outreach Appointments',
   };
 
   const tabDesc: Record<ActiveTab, string> = {
     clients: 'Manage client accounts, profiles, and records',
     pets: 'All registered pets across all clients',
     appointments: 'Track and manage all scheduled appointments',
+    regular_appointments: 'Clinic appointments booked through regular scheduling',
+    outreach_appointments: 'Appointments booked through outreach programs',
   };
 
   const activeCount =
     activeTab === 'clients' ? filteredClients.length :
     activeTab === 'pets' ? filteredPets.length :
+    activeTab === 'regular_appointments' ? filteredRegular.length :
+    activeTab === 'outreach_appointments' ? filteredOutreach.length :
     filteredAppointments.length;
 
   const totalCount =
     activeTab === 'clients' ? clients.length :
     activeTab === 'pets' ? pets.length :
+    activeTab === 'regular_appointments' ? regularAppointments.length :
+    activeTab === 'outreach_appointments' ? outreachAppointments.length :
     appointments.length;
 
   return (
@@ -360,14 +536,54 @@ function ClientAdminPageInner() {
       )}
 
       <div className="animate-in fade-in duration-300">
-        <div className="max-w-[1400px] mx-auto px-6 py-8">
-        {/* Header */}
-        <div className="mb-8 rounded-xl border border-border/50 bg-gradient-to-br from-primary/10 via-transparent to-primary/5 px-8 py-7">
-          <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent mb-2">
-            {tabLabel[activeTab]}
-          </h1>
-          <p className="text-muted-foreground text-sm md:text-base">{tabDesc[activeTab]}</p>
+        {/* Sticky tab bar */}
+        <div className="sticky top-[60px] z-10 bg-background border-b border-border shadow-sm">
+          <div className="max-w-[1400px] mx-auto px-6 py-3">
+            {/* Page header — compact, above tabs */}
+            <div className="mb-2.5">
+              <h1 className="text-2xl font-bold text-foreground leading-tight">{tabLabel[activeTab]}</h1>
+              <p className="text-sm text-muted-foreground">{tabDesc[activeTab]}</p>
+            </div>
+
+            {/* Tab navigation */}
+            <div className="flex gap-1 overflow-x-auto pb-0.5 -mb-px">
+              {([
+                { value: 'clients' as const, label: 'Clients', icon: Users },
+                { value: 'pets' as const, label: 'Pets', icon: PawPrint },
+                { value: 'appointments' as const, label: 'All Appointments', icon: Calendar },
+                { value: 'regular_appointments' as const, label: 'Regular', icon: ClipboardList },
+                { value: 'outreach_appointments' as const, label: 'Outreach', icon: MapPin },
+              ] as const).map(tab => {
+                const Icon = tab.icon;
+                return (
+                  <button
+                    key={tab.value}
+                    onClick={() => goTab(tab.value)}
+                    className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all duration-150 ${
+                      activeTab === tab.value
+                        ? 'bg-primary text-primary-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                    }`}
+                  >
+                    <Icon size={14} />{tab.label}
+                  </button>
+                );
+              })}
+              <button
+                onClick={() => router.push('/client-admin/outreach')}
+                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all duration-150 ${
+                  pathname === '/client-admin/outreach'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                }`}
+              >
+                <Heart size={14} />Outreach Programs
+              </button>
+            </div>
+          </div>
         </div>
+
+        <div className="max-w-[1400px] mx-auto px-6 py-6">
 
         {/* Filters */}
         <div className="mb-6 p-6 rounded-xl border border-border bg-card shadow-sm transition-all duration-200">
@@ -383,6 +599,8 @@ function ClientAdminPageInner() {
                 placeholder={
                   activeTab === 'clients' ? 'Search by name, email, phone…' :
                   activeTab === 'pets' ? 'Search by pet name, species, owner…' :
+                  activeTab === 'regular_appointments' ? 'Search by client, pet, breed…' :
+                  activeTab === 'outreach_appointments' ? 'Search by client, pet, program…' :
                   'Search by client, pet, or reason…'
                 }
                 value={searchTerm}
@@ -391,7 +609,7 @@ function ClientAdminPageInner() {
             </div>
 
             {/* Status filter */}
-            {(activeTab === 'clients' || activeTab === 'appointments') && (
+            {(activeTab === 'clients' || activeTab === 'appointments' || activeTab === 'regular_appointments' || activeTab === 'outreach_appointments') && (
               <select
                 className="px-4 py-2.5 rounded-lg border border-border bg-background hover:border-primary/50 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all duration-200 text-sm font-medium cursor-pointer"
                 value={statusFilter}
@@ -428,6 +646,20 @@ function ClientAdminPageInner() {
               >
                 <Archive size={16} />
                 {showArchived ? 'Hide Archived' : 'Show Archived'}
+              </button>
+            )}
+
+            {/* Export CSV button for new tabs */}
+            {(activeTab === 'regular_appointments' || activeTab === 'outreach_appointments') && (
+              <button
+                onClick={() => {
+                  if (activeTab === 'regular_appointments') exportRegularCSV(filteredRegular);
+                  else exportOutreachCSV(filteredOutreach);
+                }}
+                disabled={activeCount === 0}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-border bg-background text-muted-foreground hover:border-primary/50 hover:bg-primary/5 transition-all duration-200 font-semibold text-sm disabled:opacity-55"
+              >
+                <Download size={15} /> Export CSV
               </button>
             )}
 
@@ -509,13 +741,11 @@ function ClientAdminPageInner() {
                           <td className="px-6 py-4 text-center font-semibold text-foreground">{c.appointment_count ?? '—'}</td>
                           <td className="px-6 py-4 text-sm text-muted-foreground">{formatDate(c.last_login_at)}</td>
                           <td className="px-6 py-4 text-right">
-                            <Dropdown items={[
+                            <ActionsDropdown items={[
                               { label: '👁  View Profile', href: `/client-admin/clients/${c.id}` },
                               { label: '✏️  Edit Profile', href: `/client-admin/clients/${c.id}/edit` },
                               ...(!showArchived ? [{ label: '🗄  Archive', danger: true, onClick: () => handleArchiveClient(c.user_id, `${c.first_name} ${c.last_name}`) }] : []),
-                            ]}>
-                              <MoreVertical size={16} className="text-muted-foreground hover:text-foreground transition-colors" />
-                            </Dropdown>
+                            ]} />
                           </td>
                         </tr>
                       ))}
@@ -576,12 +806,10 @@ function ClientAdminPageInner() {
                             </span>
                           </td>
                           <td className="px-6 py-4 text-right">
-                            <Dropdown items={[
+                            <ActionsDropdown items={[
                               { label: '👁  View Pet', href: `/client-admin/pets/${p.id}` },
                               { label: '👤  View Owner', href: `/client-admin/clients/${p.owner_id}` },
-                            ]}>
-                              <MoreVertical size={16} className="text-muted-foreground hover:text-foreground transition-colors" />
-                            </Dropdown>
+                            ]} />
                           </td>
                         </tr>
                       ))}
@@ -646,12 +874,181 @@ function ClientAdminPageInner() {
                             }`}>{a.status}</span>
                           </td>
                           <td className="px-6 py-4 text-right">
-                            <Dropdown items={[
+                            <ActionsDropdown items={[
                               { label: '👁  View Details', href: `/client-admin/appointments/${a.id}` },
                               { label: '👤  View Client', href: `/client-admin/clients/${a.client_id}` },
-                            ]}>
-                              <MoreVertical size={16} className="text-muted-foreground hover:text-foreground transition-colors" />
-                            </Dropdown>
+                            ]} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )
+              )}
+
+              {/* REGULAR APPOINTMENTS TABLE */}
+              {activeTab === 'regular_appointments' && (
+                filteredRegular.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 px-6 gap-4 text-center">
+                    <div className="flex items-center justify-center w-16 h-16 rounded-full bg-primary/10">
+                      <ClipboardList size={28} className="text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-lg text-foreground mb-1">No regular appointments found</h3>
+                      <p className="text-muted-foreground text-sm">Try adjusting your search or filters</p>
+                    </div>
+                  </div>
+                ) : (
+                  <table className="w-full">
+                    <thead className="bg-muted/50 border-b border-border">
+                      <tr>
+                        {['Date', 'Client', 'Pet', 'Breed', 'Gender', 'Duration', 'Payment', 'Status', 'Actions'].map(h => (
+                          <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {filteredRegular.map(a => (
+                        <tr key={a.id} className="hover:bg-primary/5 transition-colors duration-150">
+                          <td className="px-5 py-4">
+                            <div className="text-sm font-semibold text-foreground whitespace-nowrap">
+                              {formatDate(a.scheduled_start)}
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-0.5">
+                              {new Date(a.scheduled_start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                            </div>
+                          </td>
+                          <td className="px-5 py-4">
+                            <Link href={`/client-admin/clients/${a.client_id}`} className="text-sm text-primary hover:underline font-medium">
+                              {a.client_name}
+                            </Link>
+                          </td>
+                          <td className="px-5 py-4">
+                            <Link href={`/client-admin/pets/${a.pet_id}`} className="text-sm text-primary hover:underline font-medium">
+                              {a.pet_name}
+                            </Link>
+                          </td>
+                          <td className="px-5 py-4 text-sm text-muted-foreground">{a.breed ?? '—'}</td>
+                          <td className="px-5 py-4 text-sm text-muted-foreground capitalize">{a.gender ?? '—'}</td>
+                          <td className="px-5 py-4 text-sm text-foreground">{a.duration_minutes ? `${a.duration_minutes}min` : '—'}</td>
+                          <td className="px-5 py-4">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                              a.payment_status === 'paid' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300' :
+                              a.payment_status === 'waived' ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300' :
+                              'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300'
+                            }`}>
+                              {a.payment_status ?? 'unpaid'}
+                            </span>
+                          </td>
+                          <td className="px-5 py-4">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                              a.appointment_status === 'confirmed' || a.appointment_status === 'completed'
+                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
+                                : a.appointment_status === 'pending'
+                                ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-300'
+                                : a.appointment_status === 'no_show'
+                                ? 'bg-muted text-muted-foreground'
+                                : 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300'
+                            }`}>{a.appointment_status}</span>
+                          </td>
+                          <td className="px-5 py-4 text-right">
+                            <ActionsDropdown items={[
+                              { label: '👁  View Details', href: `/client-admin/appointments/${a.id}` },
+                              { label: '👤  View Client', href: `/client-admin/clients/${a.client_id}` },
+                            ]} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )
+              )}
+
+              {/* OUTREACH APPOINTMENTS TABLE */}
+              {activeTab === 'outreach_appointments' && (
+                filteredOutreach.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 px-6 gap-4 text-center">
+                    <div className="flex items-center justify-center w-16 h-16 rounded-full bg-primary/10">
+                      <MapPin size={28} className="text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-lg text-foreground mb-1">No outreach appointments found</h3>
+                      <p className="text-muted-foreground text-sm">Try adjusting your search or filters</p>
+                    </div>
+                  </div>
+                ) : (
+                  <table className="w-full">
+                    <thead className="bg-muted/50 border-b border-border">
+                      <tr>
+                        {['Date', 'Client', 'Pet', 'Breed', 'Aspin/Puspin', 'Program', 'Amount', 'Payment', 'Status', 'Actions'].map(h => (
+                          <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {filteredOutreach.map(a => (
+                        <tr key={a.id} className="hover:bg-primary/5 transition-colors duration-150">
+                          <td className="px-4 py-4">
+                            <div className="text-sm font-semibold text-foreground whitespace-nowrap">
+                              {formatDate(a.scheduled_start)}
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-0.5">
+                              {new Date(a.scheduled_start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                            </div>
+                          </td>
+                          <td className="px-4 py-4">
+                            <Link href={`/client-admin/clients/${a.client_id}`} className="text-sm text-primary hover:underline font-medium">
+                              {a.client_name}
+                            </Link>
+                          </td>
+                          <td className="px-4 py-4">
+                            <Link href={`/client-admin/pets/${a.pet_id}`} className="text-sm text-primary hover:underline font-medium">
+                              {a.pet_name}
+                            </Link>
+                          </td>
+                          <td className="px-4 py-4 text-sm text-muted-foreground">{a.breed ?? '—'}</td>
+                          <td className="px-4 py-4">
+                            <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${a.is_aspin_puspin ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300' : 'bg-muted text-muted-foreground'}`}>
+                              {a.is_aspin_puspin ? 'Yes' : 'No'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4">
+                            {a.outreach_program_id ? (
+                              <Link href={`/client-admin/outreach`} className="text-xs text-primary hover:underline font-medium max-w-[120px] truncate block">
+                                {a.outreach_program_title ?? 'View Program'}
+                              </Link>
+                            ) : <span className="text-sm text-muted-foreground">—</span>}
+                          </td>
+                          <td className="px-4 py-4 text-sm font-medium text-foreground">
+                            {a.payment_amount != null
+                              ? a.payment_amount === 0 ? 'Free' : `₱${a.payment_amount.toLocaleString()}`
+                              : '—'}
+                          </td>
+                          <td className="px-4 py-4">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
+                              a.payment_status === 'paid' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300' :
+                              a.payment_status === 'waived' ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300' :
+                              'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300'
+                            }`}>
+                              {a.payment_status ?? 'unpaid'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
+                              a.appointment_status === 'confirmed' || a.appointment_status === 'completed'
+                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
+                                : a.appointment_status === 'pending'
+                                ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-300'
+                                : a.appointment_status === 'no_show'
+                                ? 'bg-muted text-muted-foreground'
+                                : 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300'
+                            }`}>{a.appointment_status}</span>
+                          </td>
+                          <td className="px-4 py-4 text-right">
+                            <ActionsDropdown items={[
+                              { label: '👁  View Details', href: `/client-admin/appointments/${a.id}` },
+                              { label: '👤  View Client', href: `/client-admin/clients/${a.client_id}` },
+                            ]} />
                           </td>
                         </tr>
                       ))}

@@ -9,7 +9,7 @@ import { ThemeToggle } from './theme-toggle';
 import {
   LayoutDashboard, Calendar, PawPrint, Wallet, HandPlatter,
   Settings, ShoppingBasket, X, LogOut,
-  Bell, Check, Info,
+  Bell, Check, Info, Heart,
   Database, Clock, CreditCard, AlertTriangle, HelpCircle,
 } from "lucide-react";
 

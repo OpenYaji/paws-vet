@@ -1,118 +1,92 @@
 'use client';
 
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Suspense } from 'react';
+import { Suspense, useState, useEffect } from 'react';
+import { supabase } from '@/lib/auth-client';
 import ClientThemeProvider from '@/components/client/theme-provider';
-import {
-  Users,
-  PawPrint,
-  Calendar,
-} from 'lucide-react';
-
-// REMOVED: LayoutDashboard icon — no dashboard tab
+import { PawPrint, Settings } from 'lucide-react';
 
 function ClientAdminNav() {
-  const pathname = usePathname();
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const [displayName, setDisplayName] = useState<string | null>(null);
 
-  const currentTab = searchParams.get('tab') || 'clients';
-  const isMainPage = /\/client-admin\/?$/.test(pathname);
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
 
-  const handleTabClick = (tab: string) => {
-    router.push(`/client-admin?tab=${tab}`);
-  };
+        // Try admin_profiles first, then veterinarian_profiles
+        const { data: admin } = await supabase
+          .from('admin_profiles')
+          .select('first_name, last_name')
+          .eq('user_id', user.id)
+          .maybeSingle();
 
-  // REMOVED: Dashboard nav item — CMS-only interface
-  const navItems = [
-    {
-      name: 'Clients',
-      value: 'clients',
-      icon: Users,
-      active: currentTab === 'clients' && isMainPage,
-    },
-    {
-      name: 'Pets',
-      value: 'pets',
-      icon: PawPrint,
-      active: currentTab === 'pets' && isMainPage,
-    },
-    {
-      name: 'Appointments',
-      value: 'appointments',
-      icon: Calendar,
-      active: currentTab === 'appointments' && isMainPage,
-    },
-  ];
+        if (admin) {
+          setDisplayName(`${admin.first_name} ${admin.last_name}`);
+          return;
+        }
+
+        const { data: vet } = await supabase
+          .from('veterinarian_profiles')
+          .select('first_name, last_name')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (vet) {
+          setDisplayName(`${vet.first_name} ${vet.last_name}`);
+          return;
+        }
+
+        // Fallback to email
+        setDisplayName(user.email ?? null);
+      } catch {
+        // silently fail — name is cosmetic
+      }
+    })();
+  }, []);
 
   return (
-    <>
-      {/* Desktop + main nav bar */}
-      <header className="bg-slate-900 border-b border-slate-700 sticky top-0 z-50">
-        <div className="max-w-[1400px] mx-auto px-6">
-          <div className="flex items-center justify-between h-[60px]">
-            <div className="flex items-center gap-8">
-              <Link href="/client-admin" className="flex items-center gap-2.5 no-underline">
-                <div className="w-[34px] h-[34px] bg-primary rounded-md flex items-center justify-center text-primary-foreground flex-shrink-0">
-                  <PawPrint size={18} />
-                </div>
-                <span className="text-white text-[17px] font-bold tracking-tight">
-                  PawsVet <span className="text-teal-400 font-medium text-sm ml-0.5">CMS</span>
-                </span>
-              </Link>
-
-              {isMainPage && (
-                <nav className="hidden md:flex items-center gap-1">
-                  {navItems.map((item) => {
-                    const Icon = item.icon;
-                    return (
-                      <button
-                        key={item.value}
-                        onClick={() => handleTabClick(item.value)}
-                        className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-sm font-medium transition-all duration-150 ${
-                          item.active
-                            ? 'bg-teal-900/50 text-teal-300'
-                            : 'text-slate-400 hover:bg-slate-700 hover:text-white'
-                        }`}
-                      >
-                        <Icon size={15} />
-                        {item.name}
-                      </button>
-                    );
-                  })}
-                </nav>
-              )}
+    <header className="bg-slate-900 border-b border-slate-700 sticky top-0 z-50">
+      <div className="max-w-[1400px] mx-auto px-6">
+        <div className="flex items-center justify-between h-[60px]">
+          {/* Logo */}
+          <Link href="/client-admin" className="flex items-center gap-2.5 no-underline">
+            <div className="w-[34px] h-[34px] bg-primary rounded-md flex items-center justify-center text-primary-foreground flex-shrink-0">
+              <PawPrint size={18} />
             </div>
+            <span className="text-white text-[17px] font-bold tracking-tight">
+              PawsVet <span className="text-teal-400 font-medium text-sm ml-0.5">CMS</span>
+            </span>
+          </Link>
+
+          {/* Right side */}
+          <div className="flex items-center gap-3">
+            {/* Live status dot */}
+            <div className="hidden sm:flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-emerald-400 text-xs font-medium">Online</span>
+            </div>
+
+            {/* Admin name */}
+            {displayName && (
+              <span className="hidden sm:block text-slate-300 text-sm font-medium max-w-[180px] truncate">
+                {displayName}
+              </span>
+            )}
+
+            {/* Settings */}
+            <Link
+              href="/client-admin/settings"
+              className="w-[34px] h-[34px] flex items-center justify-center rounded-md bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white transition-all duration-150"
+              aria-label="Settings"
+            >
+              <Settings size={16} />
+            </Link>
           </div>
         </div>
-      </header>
-
-      {/* Mobile bottom nav */}
-      {isMainPage && (
-        <div className="bg-slate-800 border-b border-slate-700 md:hidden">
-          <nav className="max-w-[1400px] mx-auto px-4 py-2 flex gap-1 overflow-x-auto">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.value}
-                  onClick={() => handleTabClick(item.value)}
-                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-[13px] font-medium whitespace-nowrap transition-all duration-150 ${
-                    item.active
-                      ? 'bg-teal-900/50 text-teal-300'
-                      : 'text-slate-400 hover:bg-slate-700 hover:text-white'
-                  }`}
-                >
-                  <Icon size={15} />
-                  <span>{item.name}</span>
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-      )}
-    </>
+      </div>
+    </header>
   );
 }
 
