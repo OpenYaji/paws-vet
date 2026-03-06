@@ -99,9 +99,11 @@ export default function QuarantinePage() {
     notes: '',
   });
 
+  // FIXED: Added an explicit check to exclude 'released' records from the active list
   const filteredRecords = safeRecords.filter((r: any) =>
-    r.pets?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    r.reason?.toLowerCase().includes(searchTerm.toLowerCase())
+    r.status !== 'released' && 
+    (r.pets?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    r.reason?.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const handleAddQuarantine = async (e: React.FormEvent) => {
@@ -135,18 +137,31 @@ export default function QuarantinePage() {
   };
 
   const handleRelease = async (recordId: string) => {
+    // Optimistic UI update: immediately mark as released
+    mutate('/api/quarantine', safeRecords.map(r => r.id === recordId ? { ...r, status: 'released' } : r), false);
+    setSelectedRecord(null);
     try {
-      const { error } = await supabase
-        .from('quarantine_records')
-        .update({ status: 'released' })
-        .eq('id', recordId);
+      const response = await fetch('/api/quarantine', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: recordId,
+          status: 'released',
+          end_date: new Date().toISOString()
+        })
+      });
 
-      if (error) throw error;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to release from quarantine');
+      }
 
+      // Final revalidation from the server
       mutate('/api/quarantine');
-      setSelectedRecord(null);
     } catch (error: any) {
       alert('Error releasing from quarantine: ' + error.message);
+      // Revert optimistic update on error
+      mutate('/api/quarantine');
     }
   };
 

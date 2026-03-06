@@ -118,7 +118,7 @@ export async function GET(request: NextRequest) {
  *   notes: string | null,
  *   start_date: string,
  *   expected_end_date: string,
- *   status: 'active'
+ *   quarantine_status: 'active'
  * }
  */
 export async function POST(request: NextRequest) {
