@@ -1,12 +1,23 @@
 import { NextResponse } from "next/server";
 
-/** Centralized Supabase error handler — import and call in every API route catch block. */
 export function handleError(error: any, context?: string) {
-  // Include route context in the log so every error is traceable to its source
-  console.error(`[DB Error]${context ? ` [${context}]` : ""}:`, error);
+  // Destructure the error so the console shows all hidden properties
+  console.error(`[DB Error]${context ? ` [${context}]` : ""}:`, {
+    name: error?.name,
+    message: error?.message,
+    code: error?.code,
+    details: error?.details,
+    hint: error?.hint,
+  });
 
-  // Pagination out of bounds (return empty array instead of crashing)
-  if (error?.code === 'PGRST103') {
+  const errorMessage = String(error?.message || "");
+
+  // HTTP 416: Requested Range Not Satisfiable (e.g., invalid pagination parameters)
+  if (
+    error?.code === 'PGRST103' || 
+    errorMessage === '{"' || 
+    errorMessage.includes('Requested range not satisfiable')
+  ) {
     return NextResponse.json({ data: [], total: 0 }, { status: 200 });
   }
 
@@ -27,7 +38,7 @@ export function handleError(error: any, context?: string) {
 
   // Default fallback for any other unexpected errors
   return NextResponse.json(
-    { error: error?.message || "An unexpected database error occurred." }, 
+    { error: errorMessage || "An unexpected database error occurred." }, 
     { status: 500 }
   );
 }
