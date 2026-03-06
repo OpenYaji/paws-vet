@@ -123,7 +123,7 @@ export default function NeuterContent() {
         variant: "destructive"
       });
     } finally {
-      setIsSaving(false);
+      setIsSaving(false); 
     }
   };
 
