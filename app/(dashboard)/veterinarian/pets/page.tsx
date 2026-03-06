@@ -49,8 +49,12 @@ import AddNewPet from "@/components/veterinarian/pets/add-new-pet";
 import useSWR, { mutate } from "swr";
 import { supabase } from "@/lib/auth-client";
 
-const ITEMS_LIST = 5;
+const ITEMS_LIST = 10;  // changed from 5 per user request
 const ITEMS_TABLE = 10;
+
+// Maximum records fetched in a single API call.
+// Pagination beyond this is handled entirely client-side — no re-fetch on page click.
+const FETCH_LIMIT = 200;
 
 // Fetcher function for SWR to handle API requests and errors uniformly
 const fetcher = async (url: string) => {
@@ -102,12 +106,16 @@ export default function PatientsPage() {
   const [speciesFilter, setSpeciesFilter] = useState("all");
   const [sortBy, setSortBy] = useState("name");
   const [viewMode, setViewMode] = useState<"list" | "table">("list");
-  const [page, setPage] = useState(1); // For pagination, if needed in the future when API supports it
-  const limit = 20; // Limit to 20 pets per page for pagination
+  const [page, setPage] = useState(1); // display-only page counter — does NOT affect the API URL
+  const limit = 20; // For pagination, if needed in the future when API supports it
   const [recordFilter, setRecordFilter] = useState<"active" | "archived">("active");
 
-  // API endpoint with filters
-  const swrKey = `/api/pets?page=${page}&limit=${limit}&${recordFilter === "archived" ? "&archived=true" : ""}`;
+  // SWR key: page is intentionally NOT included here.
+  // Putting `page` in the URL causes a new API call every time the user clicks
+  // "next page", which (a) wastes server resources and (b) triggers an
+  // out-of-bounds Supabase range query → HTTP 500 when the batch doesn't exist.
+  // Instead, we fetch one full batch up front and slice it client-side.
+  const swrKey = `/api/pets?limit=${FETCH_LIMIT}${recordFilter === "archived" ? "&archived=true" : ""}`;
 
   const { data: apiResponse, isLoading } = useSWR(swrKey, fetcher, {
     revalidateOnFocus: false,

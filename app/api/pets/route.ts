@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createCookieClient } from "@/lib/supabase-server";
+import { handleError } from "@/utils/error-handler";
 
 // Helper function to get the user and role cleanly
 async function getAuthUser(request: NextRequest) {
@@ -62,19 +63,12 @@ export async function GET(request: NextRequest) {
 
     const { data, error, count } = await query;
 
-    if (error) {
-      if (error.code === 'PGRST103') {
-        return NextResponse.json({ data: [], total: count || 0, page });
-      }
-      throw error;
-    }
+    if(error) return handleError(error, "GET /api/pets");
 
     return NextResponse.json({ data, total: count, page });
   } catch (error: any) {
-    return NextResponse.json(
-      { error: "Server error: " + error.message },
-      { status: 500 },
-    );
+    // Unexpected JS error — centralized handler
+    return handleError(error, "GET /api/pets");
   }
 }
 
@@ -129,14 +123,13 @@ export async function POST(request: NextRequest) {
       .select(`*, client_profiles ( id, first_name, last_name, phone, email )`)
       .single();
 
-    if (error) throw error;
+    // Delegate insert error to centralized handler
+    if(error) return handleError(error, "POST /api/pets");
 
     return NextResponse.json(data, { status: 201 });
   } catch (error: any) {
-    return NextResponse.json(
-      { error: "Server error: " + error.message },
-      { status: 500 },
-    );
+    // Unexpected JS error — centralized handler
+    return handleError(error, "POST /api/pets");
   }
 }
 
@@ -169,14 +162,13 @@ export async function PATCH(request: NextRequest) {
 
     const { data, error } = await query.select().single();
 
-    if (error) throw error;
+    // Delegate update error to centralized handler
+    if (error) return handleError(error, "PATCH /api/pets");
 
     return NextResponse.json(data, { status: 200 });
   } catch (error: any) {
-    return NextResponse.json(
-      { error: "Server error: " + error.message },
-      { status: 500 },
-    );
+    // Unexpected JS error — centralized handler
+    return handleError(error, "PATCH /api/pets");
   }
 }
 
@@ -209,16 +201,15 @@ export async function DELETE(request: NextRequest) {
 
     const { error } = await query;
 
-    if (error) throw error;
+    // Delegate archive error to centralized handler
+    if (error) return handleError(error, "DELETE /api/pets");
 
     return NextResponse.json(
       { message: "Pet archived successfully" },
       { status: 200 },
     );
   } catch (error: any) {
-    return NextResponse.json(
-      { error: "Server error: " + error.message },
-      { status: 500 },
-    );
+    // Unexpected JS error — centralized handler
+    return handleError(error, "DELETE /api/pets");
   }
 }
