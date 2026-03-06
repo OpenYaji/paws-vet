@@ -52,17 +52,9 @@ import { supabase } from "@/lib/auth-client";
 const ITEMS_LIST = 5;
 const ITEMS_TABLE = 10;
 
+// Fetcher function for SWR to handle API requests and errors uniformly
 const fetcher = async (url: string) => {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${session?.access_token || ""}`,
-      "Content-Type": "application/json",
-    },
-  });
+  const res = await fetch(url);
 
   if (!res.ok) {
     const error = await res.json();
@@ -106,8 +98,16 @@ function getSpeciesEmoji(species: string): string {
 }
 
 export default function PatientsPage() {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [speciesFilter, setSpeciesFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("name");
+  const [viewMode, setViewMode] = useState<"list" | "table">("list");
+  const [page, setPage] = useState(1); // For pagination, if needed in the future when API supports it
+  const limit = 20; // Limit to 20 pets per page for pagination
   const [recordFilter, setRecordFilter] = useState<"active" | "archived">("active");
-  const swrKey = `/api/pets?page=1&limit=1000${recordFilter === "archived" ? "&archived=true" : ""}`;
+
+  // API endpoint with filters
+  const swrKey = `/api/pets?page=${page}&limit=${limit}&${recordFilter === "archived" ? "&archived=true" : ""}`;
 
   const { data: apiResponse, isLoading } = useSWR(swrKey, fetcher, {
     revalidateOnFocus: false,
@@ -117,12 +117,6 @@ export default function PatientsPage() {
     () => (Array.isArray(apiResponse?.data) ? apiResponse.data : []),
     [apiResponse],
   );
-
-  const [searchTerm, setSearchTerm] = useState("");
-  const [speciesFilter, setSpeciesFilter] = useState("all");
-  const [sortBy, setSortBy] = useState("name");
-  const [viewMode, setViewMode] = useState<"list" | "table">("list");
-  const [page, setPage] = useState(1);
 
   // Archive confirm modal
   const [archiveTarget, setArchiveTarget] = useState<Pet | null>(null);

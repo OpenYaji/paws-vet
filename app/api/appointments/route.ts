@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
+import { handleError } from "@/utils/error-handler";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -57,11 +58,11 @@ function requireRole(
 }
 
 export async function GET(request: NextRequest) {
-  // Create cookie client + 2. Get user (auth)
+  // 1. Create cookie client + 2. Get user (auth)
   const { user, response: authError } = await requireUser(request);
-  if (authError) return authError;
+  if (authError) return authError; // auth failed — response is already a 401
 
-  // Authorize — any authenticated role may read appointments
+  // 3. Authorize — any authenticated role may read appointments
   //    (narrow by ownership/vet inside the query when needed)
 
   try {
@@ -136,13 +137,10 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await query;
 
-    if (error) {
-      // Log errors server-side with context
-      console.error("[GET /api/appointments] Supabase query error:", error);
-      return jsonError(error.message, 400, error.details ?? "Query failed");
-    }
+    // Delegate Supabase DB error to centralized handler
+    if (error) return handleError(error, "GET /api/appointments");
 
-    // Return consistent JSON + correct status
+    // 6. Return consistent JSON + correct status
     const transformedData = (data || []).map((appointment: any) => ({
       ...appointment,
       client: appointment.pet?.client || null,
@@ -157,15 +155,15 @@ export async function GET(request: NextRequest) {
     console.log("[GET /api/appointments] Fetched:", transformedData.length, "records");
     return NextResponse.json(transformedData, { status: 200 });
   } catch (error: any) {
-    console.error("[GET /api/appointments] Unexpected error:", error);
-    return jsonError("Internal server error", 500, error.message);
+    // Unexpected JS/network error — centralized handler
+    return handleError(error, "GET /api/appointments");
   }
 }
 
 export async function POST(request: NextRequest) {
   // 1. Create cookie client + 2. Get user (auth)
   const { user, response: authError } = await requireUser(request);
-  if (authError) return authError;
+  if (authError) return authError; // auth failed — response is already a 401
 
   // 3. Authorize — any authenticated role may book an appointment
 
@@ -237,11 +235,8 @@ export async function POST(request: NextRequest) {
         veterinarian:veterinarian_profiles(id, first_name, last_name)
       `);
 
-    // 6 + 7. Return consistent JSON / log errors
-    if (error) {
-      console.error("[POST /api/appointments] DB insert error:", error);
-      return jsonError(error.message, 400, error.details ?? "Database constraint violation");
-    }
+    // 6. Delegate insert DB error to centralized handler
+    if (error) return handleError(error, "POST /api/appointments");
 
     if (!data || data.length === 0) {
       console.error("[POST /api/appointments] No data returned after insert");
@@ -251,8 +246,8 @@ export async function POST(request: NextRequest) {
     console.log("[POST /api/appointments] Created:", data[0].id);
     return NextResponse.json(data[0], { status: 201 });
   } catch (error: any) {
-    console.error("[POST /api/appointments] Unexpected error:", error);
-    return jsonError("Internal server error", 500, error.message);
+    // Unexpected JS/network error — centralized handler
+    return handleError(error, "POST /api/appointments");
   }
 }
 
@@ -282,13 +277,13 @@ async function getDefaultVeterinarian(supabase: any): Promise<string> {
 }
 
 export async function PATCH(request: NextRequest) {
-  // Create cookie client + 2. Get user (auth)
+  // 1. Create cookie client + 2. Get user (auth)
   const { user, response: authError } = await requireUser(request);
-  if (authError) return authError;
+  if (authError) return authError; // auth failed — response is already a 401
 
-  // Authorize — only veterinarians and admins may update appointments
+  // 3. Authorize — only veterinarians and admins may update appointments
   const roleError = requireRole(user!, ["veterinarian", "admin"]);
-  if (roleError) return roleError;
+  if (roleError) return roleError; // role check failed — response is already a 403
 
   try {
     const supabase = await createClient();
@@ -316,11 +311,8 @@ export async function PATCH(request: NextRequest) {
       .eq("id", id)
       .select();
 
-    // Return consistent JSON / log errors
-    if (error) {
-      console.error("[PATCH /api/appointments] Update error:", error);
-      return jsonError(error.message, 400, error.details ?? "Update failed");
-    }
+    // Delegate update DB error to centralized handler
+    if (error) return handleError(error, "PATCH /api/appointments");
 
     if (!data || data.length === 0) {
       console.error("[PATCH /api/appointments] Appointment not found:", id);
@@ -333,7 +325,7 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json(data[0], { status: 200 });
   } catch (error: any) {
-    console.error("[PATCH /api/appointments] Unexpected error:", error);
-    return jsonError("Internal server error", 500, error.message);
+    // Unexpected JS/network error — centralized handler
+    return handleError(error, "PATCH /api/appointments");
   }
 }

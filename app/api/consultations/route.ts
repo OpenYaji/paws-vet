@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/auth-helpers-nextjs';
+import { handleError } from '@/utils/error-handler';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || '',
@@ -181,9 +182,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error('Consultation save error:', error);
-    return NextResponse.json({ 
-      error: error.message || 'Failed to save consultation' 
-    }, { status: 500 });
+    // Unexpected JS/DB error — centralized handler
+    return handleError(error, 'POST /api/consultations');
   }
 }

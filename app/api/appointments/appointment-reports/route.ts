@@ -1,6 +1,7 @@
 import { createCookieClient } from "@/lib/supabase-server";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin-server";
+import { handleError } from "@/utils/error-handler";
 
 export const dynamic = "force-dynamic";
 
@@ -57,13 +58,8 @@ export async function GET(request: NextRequest) {
       .gte("scheduled_start", startOfWeek.toISOString())
       .lt("scheduled_start", startOfNextWeek.toISOString());
 
-    if (error) {
-      console.error("Error fetching appointments for report:", error);
-      return NextResponse.json({
-        error: "Failed to fetch appointment data",
-        details: error.message
-      }, { status: 500 });
-    }
+    // Delegate fetch error to centralized handler
+    if (error) return handleError(error, "appointment-reports");
 
     console.log(`Found ${appointments?.length || 0} appointments in date range`);
     
@@ -138,13 +134,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(report);
 
   } catch (error: any) {
-    console.error("Server error generating report:", error);
-    return NextResponse.json(
-      {
-        error: "Internal server error",
-        details: error.message || "Unknown error occurred",
-      },
-      { status: 500 },
-    );
+    // Unexpected JS/network error — centralized handler
+    return handleError(error, "appointment-reports");
   }
 }

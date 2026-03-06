@@ -1,6 +1,7 @@
 import { createCookieClient } from "@/lib/supabase-server";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin-server";
+import { handleError } from "@/utils/error-handler";
 
 // Force dynamic rendering to ensure fresh data on each request
 export const dynamic = "force-dynamic";
@@ -85,33 +86,14 @@ export async function GET(request: NextRequest) {
         */
 
     // Handle database query errors with detailed logging for debugging
-    if (error) {
-      console.error("Error fetching quarantine records (Admin Client):", error);
-      console.error("Error details:", {
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code,
-      });
-      return NextResponse.json(
-        {
-          error: "Failed to fetch quarantine records",
-          debug:
-            process.env.NODE_ENV === "development" ? error.message : undefined,
-        },
-        { status: 500 },
-      );
-    }
+    // Delegate DB error to centralized handler (logs internally)
+    if (error) return handleError(error, "GET /api/quarantine");
 
     // Return successful response with quarantine data (empty array if no records)
     return NextResponse.json(quarantineRecords || []);
   } catch (error) {
-    // Handle unexpected errors (network, parsing, etc.)
-    console.error("Error fetching quarantine records:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch quarantine records" },
-      { status: 500 },
-    );
+    // Unexpected error — centralized handler
+    return handleError(error, "GET /api/quarantine");
   }
 }
 
@@ -188,33 +170,14 @@ export async function POST(request: NextRequest) {
       .single(); // Expect exactly one record to be returned
 
     // Handle database insertion errors with detailed logging
-    if (error) {
-      console.error("Error inserting quarantine record (Admin Client):", error);
-      console.error("Error details:", {
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code,
-      });
-      return NextResponse.json(
-        {
-          error: "Failed to create quarantine record",
-          debug:
-            process.env.NODE_ENV === "development" ? error.message : undefined,
-        },
-        { status: 500 },
-      );
-    }
+    // Delegate DB error to centralized handler (logs internally)
+    if (error) return handleError(error, "POST /api/quarantine");
 
     // Return successful response with created quarantine record
     return NextResponse.json(data, { status: 201 });
   } catch (error) {
-    // Handle unexpected errors (JSON parsing, network issues, etc.)
-    console.error("Error creating quarantine record:", error);
-    return NextResponse.json(
-      { error: "Failed to create quarantine record" },
-      { status: 500 },
-    );
+    // Unexpected error — centralized handler
+    return handleError(error, "POST /api/quarantine");
   }
 }
 
@@ -252,20 +215,12 @@ export async function PATCH(request: NextRequest) {
       .select()
       .single();
 
-    if (error) {
-      console.error("Error updating quarantine record:", error);
-      return NextResponse.json(
-        { error: "Failed to update quarantine record", details: error.message },
-        { status: 500 },
-      );
-    }
+    // Delegate update error to centralized handler
+    if (error) return handleError(error, "PATCH /api/quarantine");
 
     return NextResponse.json(data, { status: 200 });
   } catch (error) {
-    console.error("Error updating quarantine record:", error);
-    return NextResponse.json(
-      { error: "Failed to update quarantine record" },
-      { status: 500 },
-    );
+    // Unexpected error — centralized handler
+    return handleError(error, "PATCH /api/quarantine");
   }
 }

@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin-server";
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/auth-helpers-nextjs";
+import { handleError } from "@/utils/error-handler";
 
 export const dynamic = "force-dynamic";
 
@@ -235,10 +236,7 @@ export async function POST(request: NextRequest) {
       triage_id: triageData.id,
     });
   } catch (error: any) {
-    console.error("Triage save error:", error);
-    return NextResponse.json(
-      { error: error.message || "Failed to save triage" },
-      { status: 500 },
-    );
+    // Unexpected JS/DB error — centralized handler
+    return handleError(error, "POST /api/triage");
   }
 }

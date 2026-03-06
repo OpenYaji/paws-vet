@@ -4,7 +4,7 @@ import { createCookieClient } from "@/lib/supabase-server";
 // Helper function to get the user and role cleanly
 async function getAuthUser(request: NextRequest) {
   const supabase = await createCookieClient();
-  
+
   // Check for manual token in headers (for fetcher)
   const authHeader = request.headers.get("Authorization");
   const token = authHeader ? authHeader.replace("Bearer ", "").trim() : null;
@@ -12,29 +12,30 @@ async function getAuthUser(request: NextRequest) {
   const {
     data: { user },
     error,
-  } = token 
-    ? await supabase.auth.getUser(token) 
+  } = token
+    ? await supabase.auth.getUser(token)
     : await supabase.auth.getUser();
 
   if (error || !user) return { user: null, role: null, supabase };
 
-  const role = user?.user_metadata?.role?.toLowerCase() || user?.app_metadata?.role?.toLowerCase() || "client";
-  
+  const role =
+    user?.user_metadata?.role?.toLowerCase() ||
+    user?.app_metadata?.role?.toLowerCase() ||
+    "client";
+
   return { user, role, supabase };
 }
 
 export async function GET(request: NextRequest) {
+  const { user, role, supabase } = await getAuthUser(request);
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   try {
-    const { user, role, supabase } = await getAuthUser(request);
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const url = new URL(request.url);
-    const page = parseInt(url.searchParams.get("page") || "1");
-    const limit = parseInt(url.searchParams.get("limit") || "20");
-    const showArchived = url.searchParams.get("archived") === "true";
+    const { searchParams } = new URL(request.url);
+    const page = parseInt(searchParams.get("page") || "1", 10);
+    const limit = parseInt(searchParams.get("limit") || "20", 10);
+    const showArchived = searchParams.get("archived") === "true";
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
@@ -61,11 +62,19 @@ export async function GET(request: NextRequest) {
 
     const { data, error, count } = await query;
 
-    if (error) throw error;
+    if (error) {
+      if (error.code === 'PGRST103') {
+        return NextResponse.json({ data: [], total: count || 0, page });
+      }
+      throw error;
+    }
 
     return NextResponse.json({ data, total: count, page });
   } catch (error: any) {
-    return NextResponse.json({ error: "Server error: " + error.message }, { status: 500 });
+    return NextResponse.json(
+      { error: "Server error: " + error.message },
+      { status: 500 },
+    );
   }
 }
 
@@ -80,35 +89,43 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
 
     if (!body.name || !body.species || !body.date_of_birth) {
-      return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Missing required fields." },
+        { status: 400 },
+      );
     }
 
     if (new Date(body.date_of_birth) > new Date()) {
-      return NextResponse.json({ error: "Date of birth cannot be in the future." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Date of birth cannot be in the future." },
+        { status: 400 },
+      );
     }
 
     // Force the owner_id to be the logged-in client if they are not staff
-    const assignedOwnerId = role === "client" ? user.id : (body.owner_id || null);
+    const assignedOwnerId = role === "client" ? user.id : body.owner_id || null;
 
     const { data, error } = await supabase
       .from("pets")
-      .insert([{
-        owner_id: assignedOwnerId,
-        name: body.name,
-        species: body.species,
-        breed: body.breed || null,
-        date_of_birth: body.date_of_birth,
-        gender: body.gender,
-        color: body.color || null,
-        weight: parseFloat(body.weight) || 0,
-        microchip_number: body.microchip_number || null,
-        is_spayed_neutered: body.is_spayed_neutered || false,
-        behavioral_notes: body.behavioral_notes || null,
-        special_needs: body.special_needs || null,
-        current_medical_status: body.current_medical_status || null,
-        photo_url: body.photo_url || null,
-        is_active: true,
-      }])
+      .insert([
+        {
+          owner_id: assignedOwnerId,
+          name: body.name,
+          species: body.species,
+          breed: body.breed || null,
+          date_of_birth: body.date_of_birth,
+          gender: body.gender,
+          color: body.color || null,
+          weight: parseFloat(body.weight) || 0,
+          microchip_number: body.microchip_number || null,
+          is_spayed_neutered: body.is_spayed_neutered || false,
+          behavioral_notes: body.behavioral_notes || null,
+          special_needs: body.special_needs || null,
+          current_medical_status: body.current_medical_status || null,
+          photo_url: body.photo_url || null,
+          is_active: true,
+        },
+      ])
       .select(`*, client_profiles ( id, first_name, last_name, phone, email )`)
       .single();
 
@@ -116,7 +133,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(data, { status: 201 });
   } catch (error: any) {
-    return NextResponse.json({ error: "Server error: " + error.message }, { status: 500 });
+    return NextResponse.json(
+      { error: "Server error: " + error.message },
+      { status: 500 },
+    );
   }
 }
 
@@ -132,7 +152,11 @@ export async function PATCH(request: NextRequest) {
     const searchParams = new URL(request.url).searchParams;
     const id = searchParams.get("id") || body.id;
 
-    if (!id) return NextResponse.json({ error: "Pet ID is required" }, { status: 400 });
+    if (!id)
+      return NextResponse.json(
+        { error: "Pet ID is required" },
+        { status: 400 },
+      );
 
     const { id: _, ...updates } = body;
 
@@ -146,10 +170,13 @@ export async function PATCH(request: NextRequest) {
     const { data, error } = await query.select().single();
 
     if (error) throw error;
-    
+
     return NextResponse.json(data, { status: 200 });
   } catch (error: any) {
-    return NextResponse.json({ error: "Server error: " + error.message }, { status: 500 });
+    return NextResponse.json(
+      { error: "Server error: " + error.message },
+      { status: 500 },
+    );
   }
 }
 
@@ -164,9 +191,16 @@ export async function DELETE(request: NextRequest) {
     const searchParams = new URL(request.url).searchParams;
     const id = searchParams.get("id");
 
-    if (!id) return NextResponse.json({ error: "Pet ID is required" }, { status: 400 });
+    if (!id)
+      return NextResponse.json(
+        { error: "Pet ID is required" },
+        { status: 400 },
+      );
 
-    let query = supabase.from("pets").update({ is_archived: true }).eq("id", id);
+    let query = supabase
+      .from("pets")
+      .update({ is_archived: true })
+      .eq("id", id);
 
     // Clients can only archive their own pets
     if (role === "client") {
@@ -176,9 +210,15 @@ export async function DELETE(request: NextRequest) {
     const { error } = await query;
 
     if (error) throw error;
-    
-    return NextResponse.json({ message: "Pet archived successfully" }, { status: 200 });
+
+    return NextResponse.json(
+      { message: "Pet archived successfully" },
+      { status: 200 },
+    );
   } catch (error: any) {
-    return NextResponse.json({ error: "Server error: " + error.message }, { status: 500 });
+    return NextResponse.json(
+      { error: "Server error: " + error.message },
+      { status: 500 },
+    );
   }
 }

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-// Use the exact path to your server client file
-import { createClient } from '@/utils/supabase/server'; 
+import { createClient } from '@/utils/supabase/server';
+import { handleError } from '@/utils/error-handler';
 
 export const dynamic = 'force-dynamic';
 
@@ -55,6 +55,7 @@ export async function GET() {
     });
     
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    // Unexpected JS/DB error — centralized handler
+    return handleError(error, 'GET /api/vet-dashboard');
   }
 }

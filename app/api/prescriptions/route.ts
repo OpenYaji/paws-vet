@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/auth-helpers-nextjs";
-import { se } from "date-fns/locale";
+import { handleError } from "@/utils/error-handler";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || "",
@@ -70,13 +70,8 @@ export async function GET(request: NextRequest) {
 
     const { data: prescriptionsData, error: prescriptionsError } = await query;
 
-    if (prescriptionsError) {
-      console.error("Prescriptions fetch error:", prescriptionsError);
-      return NextResponse.json(
-        { error: prescriptionsError.message },
-        { status: 400 },
-      );
-    }
+    // Delegate fetch error to centralized handler
+    if (prescriptionsError) return handleError(prescriptionsError, "GET /api/prescriptions");
 
     // Fetch pet data for each prescription
     const prescriptionsWithPets = await Promise.all(
@@ -109,10 +104,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(prescriptionsWithPets, { status: 200 });
   } catch (error) {
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
-    );
+    // Unexpected JS/DB error — centralized handler
+    return handleError(error, "GET /api/prescriptions");
   }
 }
 
@@ -203,19 +196,13 @@ export async function POST(request: NextRequest) {
       .select()
       .single();
 
-    if (prescriptionError) {
-      return NextResponse.json(
-        { error: prescriptionError.message },
-        { status: 400 },
-      );
-    }
+    // Delegate insert error to centralized handler
+    if (prescriptionError) return handleError(prescriptionError, "POST /api/prescriptions");
 
     return NextResponse.json(prescriptionData, { status: 201 });
   } catch (error) {
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
-    );
+    // Unexpected JS/DB error — centralized handler
+    return handleError(error, "POST /api/prescriptions");
   }
 }
 
@@ -277,16 +264,13 @@ export async function PUT(request: NextRequest) {
       .insert([body])
       .select();
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
+    // Delegate insert error to centralized handler
+    if (error) return handleError(error, "PUT /api/prescriptions");
 
     return NextResponse.json(data, { status: 201 });
   } catch (error) {
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
-    );
+    // Unexpected JS/DB error — centralized handler
+    return handleError(error, "PUT /api/prescriptions");
   }
 }
 
@@ -318,19 +302,16 @@ export async function DELETE(request: NextRequest) {
       .delete()
       .eq("id", id);
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
+    // Delegate delete error to centralized handler
+    if (error) return handleError(error, "DELETE /api/prescriptions");
 
     return NextResponse.json(
       { message: "Prescription deleted successfully" },
       { status: 200 },
     );
   } catch (err) {
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
-    );
+    // Unexpected JS/DB error — centralized handler
+    return handleError(err, "DELETE /api/prescriptions");
   }
 }
 
