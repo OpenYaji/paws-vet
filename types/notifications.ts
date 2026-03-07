@@ -10,6 +10,7 @@ export interface Notification {
   subject: string | null;
   content: string;
   sent_at: string;
+  is_read: boolean;
   delivery_status: NotificationStatus;
   delivery_attempted_at: string | null;
   delivered_at: string | null;

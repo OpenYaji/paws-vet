@@ -15,7 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { NotificationBell } from '@/components/notifications';
+import { VetNotificationBell } from '@/components/veterinarian/notifications/vet-notification-bell';
 
 export default function VetHeader() {
   const [currentTime, setCurrentTime] = useState<string>('');
@@ -94,8 +94,8 @@ export default function VetHeader() {
           {isDark ? <Sun size={20} /> : <Moon size={20} />}
         </button>
 
-        {/* Notifications - Uses mock data in development mode */}
-        <NotificationBell userId={userId} enableMockSimulation={true} />
+        {/* Notification Bell */}
+        <VetNotificationBell userId={userId} />
 
         {/* USER DROPDOWN */}
         <DropdownMenu>
