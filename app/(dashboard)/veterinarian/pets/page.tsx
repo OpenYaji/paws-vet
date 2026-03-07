@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -43,7 +43,17 @@ import {
   ChevronRight,
   Archive,
   AlertTriangle,
+  Pencil,
+  Loader2,
 } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import {
+  Select as UISelect,
+  SelectContent as UISelectContent,
+  SelectItem as UISelectItem,
+  SelectTrigger as UISelectTrigger,
+  SelectValue as UISelectValue,
+} from "@/components/ui/select";
 import Link from "next/link";
 import AddNewPet from "@/components/veterinarian/pets/add-new-pet";
 import useSWR, { mutate } from "swr";
@@ -126,6 +136,17 @@ export default function PatientsPage() {
     [apiResponse],
   );
 
+  // View details modal
+  const [viewTarget, setViewTarget] = useState<Pet | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editForm, setEditForm] = useState({ name: "", species: "", breed: "", color: "", weight: "", microchip_number: "" });
+  const [isSavingPet, setIsSavingPet] = useState(false);
+
+  // Medical records modal
+  const [medicalTarget, setMedicalTarget] = useState<Pet | null>(null);
+  const [medicalRecords, setMedicalRecords] = useState<any[]>([]);
+  const [isLoadingMedical, setIsLoadingMedical] = useState(false);
+
   // Archive confirm modal
   const [archiveTarget, setArchiveTarget] = useState<Pet | null>(null);
   const [isArchiving, setIsArchiving] = useState(false);
@@ -202,6 +223,56 @@ export default function PatientsPage() {
 
   const refreshData = () => mutate(swrKey);
 
+  // Populate edit form when entering edit mode
+  const openEditMode = () => {
+    if (!viewTarget) return;
+    setEditForm({
+      name: viewTarget.name || "",
+      species: viewTarget.species || "",
+      breed: viewTarget.breed || "",
+      color: viewTarget.color || "",
+      weight: viewTarget.weight || "",
+      microchip_number: viewTarget.microchip_number || "",
+    });
+    setIsEditMode(true);
+  };
+
+  const handleSavePet = async () => {
+    if (!viewTarget) return;
+    setIsSavingPet(true);
+    try {
+      const res = await fetch(`/api/pets/${viewTarget.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editForm),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.error || "Failed to save");
+        return;
+      }
+      // Update local view target so modal reflects new values immediately
+      setViewTarget({ ...viewTarget, ...editForm });
+      setIsEditMode(false);
+      mutate(swrKey); // refresh list
+    } catch {
+      alert("Error saving pet.");
+    } finally {
+      setIsSavingPet(false);
+    }
+  };
+
+  // Fetch medical records when a medical target is set
+  useEffect(() => {
+    if (!medicalTarget) { setMedicalRecords([]); return; }
+    setIsLoadingMedical(true);
+    fetch(`/api/medical-records?pet_id=${medicalTarget.id}`)
+      .then((r) => r.json())
+      .then((d) => setMedicalRecords(Array.isArray(d) ? d : []))
+      .catch(() => setMedicalRecords([]))
+      .finally(() => setIsLoadingMedical(false));
+  }, [medicalTarget]);
+
   const PetAvatar = ({ pet, size = "sm" }: { pet: Pet; size?: "sm" | "md" }) => {
     const dim = size === "sm" ? "w-8 h-8 text-base" : "w-14 h-14 text-3xl";
     return (
@@ -221,11 +292,9 @@ export default function PatientsPage() {
     <div className="flex gap-1">
       <Tooltip>
         <TooltipTrigger asChild>
-          <Link href={`/veterinarian/pets/${pet.id}`}>
-            <Button variant="outline" size="icon" className="h-8 w-8">
-              <Eye className="h-3.5 w-3.5" />
-            </Button>
-          </Link>
+          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setViewTarget(pet)}>
+            <Eye className="h-3.5 w-3.5" />
+          </Button>
         </TooltipTrigger>
         <TooltipContent>View Details</TooltipContent>
       </Tooltip>
@@ -236,7 +305,7 @@ export default function PatientsPage() {
             variant="outline"
             size="icon"
             className="h-8 w-8"
-            onClick={() => console.log("View history:", pet.id)}
+            onClick={() => setMedicalTarget(pet)}
           >
             <FileText className="h-3.5 w-3.5" />
           </Button>
@@ -604,6 +673,202 @@ export default function PatientsPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* ── VIEW DETAILS MODAL ── */}
+      <Dialog open={!!viewTarget} onOpenChange={(open) => { if (!open) { setViewTarget(null); setIsEditMode(false); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{isEditMode ? "Edit Pet" : "Pet Details"}</DialogTitle>
+          </DialogHeader>
+          {viewTarget && (
+            isEditMode ? (
+              /* ── EDIT MODE ── */
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label>Name</Label>
+                    <Input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Species</Label>
+                    <UISelect value={editForm.species} onValueChange={(v) => setEditForm({ ...editForm, species: v })}>
+                      <UISelectTrigger><UISelectValue /></UISelectTrigger>
+                      <UISelectContent>
+                        {["Dog","Cat","Bird","Rabbit","Hamster","Fish","Reptile","Other"].map((s) => (
+                          <UISelectItem key={s} value={s}>{s}</UISelectItem>
+                        ))}
+                      </UISelectContent>
+                    </UISelect>
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Breed</Label>
+                    <Input value={editForm.breed} onChange={(e) => setEditForm({ ...editForm, breed: e.target.value })} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Color</Label>
+                    <Input value={editForm.color} onChange={(e) => setEditForm({ ...editForm, color: e.target.value })} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Weight</Label>
+                    <Input value={editForm.weight} onChange={(e) => setEditForm({ ...editForm, weight: e.target.value })} placeholder="e.g. 5kg" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Microchip No.</Label>
+                    <Input value={editForm.microchip_number} onChange={(e) => setEditForm({ ...editForm, microchip_number: e.target.value })} className="font-mono" />
+                  </div>
+                </div>
+                <DialogFooter className="pt-2">
+                  <Button variant="outline" onClick={() => setIsEditMode(false)} disabled={isSavingPet}>Cancel</Button>
+                  <Button onClick={handleSavePet} disabled={isSavingPet}>
+                    {isSavingPet ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : "Save Changes"}
+                  </Button>
+                </DialogFooter>
+              </div>
+            ) : (
+              /* ── VIEW MODE ── */
+              <div className="space-y-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden border border-border shrink-0 text-4xl">
+                    {viewTarget.photo_url ? (
+                      <img src={viewTarget.photo_url} alt={viewTarget.name} className="w-full h-full object-cover" />
+                    ) : (
+                      getSpeciesEmoji(viewTarget.species)
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <h2 className="text-xl font-bold">{viewTarget.name}</h2>
+                    <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-primary/10 text-primary capitalize">
+                      {viewTarget.species}
+                    </span>
+                  </div>
+                  <Button variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={openEditMode}>
+                    <Pencil className="h-3.5 w-3.5" /> Edit
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="space-y-0.5">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Breed</p>
+                    <p className="font-medium">{viewTarget.breed || "—"}</p>
+                  </div>
+                  <div className="space-y-0.5">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Color</p>
+                    <p className="font-medium">{viewTarget.color || "—"}</p>
+                  </div>
+                  <div className="space-y-0.5">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Age</p>
+                    <p className="font-medium">{viewTarget.age != null ? `${viewTarget.age} yr${viewTarget.age !== 1 ? "s" : ""}` : "—"}</p>
+                  </div>
+                  <div className="space-y-0.5">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Weight</p>
+                    <p className="font-medium">{viewTarget.weight || "—"}</p>
+                  </div>
+                  <div className="space-y-0.5 col-span-2">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Microchip No.</p>
+                    <p className="font-mono font-medium">{viewTarget.microchip_number || "—"}</p>
+                  </div>
+                </div>
+
+                <div className="border-t pt-3">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Owner</p>
+                  {viewTarget.client_profiles ? (
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div className="space-y-0.5">
+                        <p className="text-xs text-muted-foreground">Name</p>
+                        <p className="font-medium">{viewTarget.client_profiles.first_name} {viewTarget.client_profiles.last_name}</p>
+                      </div>
+                      <div className="space-y-0.5">
+                        <p className="text-xs text-muted-foreground">Phone</p>
+                        <p className="font-medium">{viewTarget.client_profiles.phone || "—"}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No owner information</p>
+                  )}
+                </div>
+
+                <div className="border-t pt-3 text-xs text-muted-foreground">
+                  Registered on{" "}
+                  <span className="text-foreground font-medium">
+                    {new Date(viewTarget.created_at).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
+                  </span>
+                </div>
+
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setViewTarget(null)}>Close</Button>
+                </DialogFooter>
+              </div>
+            )
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── MEDICAL RECORDS MODAL ── */}
+      <Dialog open={!!medicalTarget} onOpenChange={(open) => { if (!open) setMedicalTarget(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              Medical Records{medicalTarget ? ` — ${medicalTarget.name}` : ""}
+            </DialogTitle>
+          </DialogHeader>
+          {isLoadingMedical ? (
+            <div className="flex items-center justify-center py-10">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : medicalRecords.length === 0 ? (
+            <div className="py-10 text-center">
+              <div className="text-4xl mb-3 opacity-30">📋</div>
+              <p className="text-sm text-muted-foreground">No medical records found for this pet.</p>
+            </div>
+          ) : (
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+              {medicalRecords.map((record: any) => (
+                <div key={record.id} className="border border-border rounded-lg p-3 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-semibold text-sm">
+                        {record.visit_date
+                          ? new Date(record.visit_date).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+                          : "—"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{record.record_number}</p>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-primary/10 text-primary shrink-0 capitalize">
+                      {record.record_type || "Visit"}
+                    </span>
+                  </div>
+                  {record.chief_complaint && (
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Chief Complaint</p>
+                      <p className="text-sm">{record.chief_complaint}</p>
+                    </div>
+                  )}
+                  {record.diagnosis && (
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Diagnosis</p>
+                      <p className="text-sm">{record.diagnosis}</p>
+                    </div>
+                  )}
+                  {record.treatment && (
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Treatment</p>
+                      <p className="text-sm">{record.treatment}</p>
+                    </div>
+                  )}
+                  {record.veterinarian && (
+                    <p className="text-xs text-muted-foreground border-t pt-2">
+                      Attending: Dr. {record.veterinarian.first_name} {record.veterinarian.last_name}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMedicalTarget(null)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── ARCHIVE CONFIRM MODAL ── */}
       <Dialog open={!!archiveTarget} onOpenChange={(open) => { if (!open) setArchiveTarget(null); }}>
