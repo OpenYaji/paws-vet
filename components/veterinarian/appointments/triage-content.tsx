@@ -67,13 +67,28 @@ export default function TriageContent() {
     }
 
     setIsSaving(true);
+    
+    const apptToProcess = selectedAppt;
+
+    mutate(
+      '/api/triage', 
+      safeQueue.filter((a: any) => a.id !== apptToProcess.id), 
+      false
+    );
+
+    setSelectedAppt(null);
+    setVitals({
+      weight: '', temperature: '', heart_rate: '', respiratory_rate: '',
+      mucous_membrane: 'Pink', triage_level: 'Non-Urgent', chief_complaint: '',
+    });
+
     try {
       const response = await fetch('/api/triage', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          appointment_id: selectedAppt.id,
-          pet_id: selectedAppt.pets.id,
+          appointment_id: apptToProcess.id,
+          pet_id: apptToProcess.pets.id,
           ...vitals,
         }),
       });
@@ -83,22 +98,22 @@ export default function TriageContent() {
 
       toast({
         title: 'Triage Completed',
-        description: `${selectedAppt.pets.name} is ready for consultation.`,
+        description: `${apptToProcess.pets.name} is ready for consultation.`,
       });
 
-      await mutate('/api/triage');
-      await mutate('/api/appointments');
-      setSelectedAppt(null);
-      setVitals({
-        weight: '', temperature: '', heart_rate: '', respiratory_rate: '',
-        mucous_membrane: 'Pink', triage_level: 'Non-Urgent', chief_complaint: '',
-      });
+      mutate('/api/triage');
+      mutate('/api/consultations');
+      mutate('surgery-queue');
+      mutate('/api/appointments');  
+
     } catch (err: any) {
       toast({
         title: 'Error',
         description: err.message || 'Failed to save triage assessment',
         variant: 'destructive',
       });
+
+      mutate('/api/triage');
     } finally {
       setIsSaving(false);
     }
