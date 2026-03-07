@@ -8,7 +8,7 @@ import { supabase } from '@/lib/auth-client';
 import { ThemeToggle } from './theme-toggle';
 import {
   LayoutDashboard, Calendar, PawPrint, Wallet, HandPlatter, 
-  Settings, ShoppingBasket, Menu, X, LogOut
+  Settings, ShoppingBasket, Menu, X, LogOut, Heart
 } from "lucide-react";
 
 // 1. Updated Interface to include profile
@@ -37,9 +37,10 @@ export default function ClientAdminSidebar({ collapsed, setCollapsed, mobileOpen
   };
 
   const menuItems: MenuItem[] = [
-    { name: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/client-admin' },
-    { name: 'Client Management', icon: <LayoutDashboard size={20} />, path: '/client-admin/client-management' },
-    { name: 'Settings', icon: <Settings size={20} />, path: '/client-admin/settings' },
+    { name: 'Dashboard',          icon: <LayoutDashboard size={20} />, path: '/client-admin' },
+    { name: 'Client Management',  icon: <LayoutDashboard size={20} />, path: '/client-admin/client-management' },
+    { name: 'Outreach Programs',  icon: <Heart size={20} />,          path: '/client-admin/outreach' },
+    { name: 'Settings',           icon: <Settings size={20} />,       path: '/client-admin/settings' },
   ];
 
   // Internal NavLink Component

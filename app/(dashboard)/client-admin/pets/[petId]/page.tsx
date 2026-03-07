@@ -289,7 +289,7 @@ export default function PetDetailPage() {
 
       {/* Archived warning */}
       {pet.deleted_at && (
-        <div className="bg-yellow-50 text-yellow-800 border border-yellow-200 rounded-xl p-4 flex items-start gap-3 mb-5">
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800 rounded-xl p-4 flex items-start gap-3 mb-5">
           <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
           This pet is archived. Archived on {new Date(pet.deleted_at).toLocaleDateString()}.
         </div>
@@ -318,7 +318,7 @@ export default function PetDetailPage() {
                     label: 'Status',
                     value: (
                       <span className={pet.is_active
-                        ? 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700'
+                        ? 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
                         : 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-muted text-muted-foreground'}>
                         {pet.is_active ? 'Active' : 'Inactive'}
                       </span>

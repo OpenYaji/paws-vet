@@ -89,6 +89,7 @@ export default function AppointmentHistoryPage() {
           )
         `)
         .in('pet_id', petIds)
+        .in('appointment_status', ['completed', 'cancelled', 'no_show'])
         .order('scheduled_start', { ascending: false });
 
       if (apptError) {
@@ -210,7 +211,7 @@ export default function AppointmentHistoryPage() {
         <div className="bg-card rounded-2xl border border-border shadow-sm border-l-4 border-l-primary p-5 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
           <p className="text-xs font-bold tracking-widest uppercase text-muted-foreground mb-1">Total</p>
           <p className="text-4xl font-bold text-primary">{appointments.length}</p>
-          <p className="text-xs text-muted-foreground mt-1">All appointments</p>
+          <p className="text-xs text-muted-foreground mt-1">Past appointments</p>
         </div>
         <div className="bg-card rounded-2xl border border-border shadow-sm border-l-4 border-l-primary p-5 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
           <p className="text-xs font-bold tracking-widest uppercase text-muted-foreground mb-1">Completed</p>
@@ -218,9 +219,9 @@ export default function AppointmentHistoryPage() {
           <p className="text-xs text-muted-foreground mt-1">Successfully done</p>
         </div>
         <div className="bg-card rounded-2xl border border-border shadow-sm border-l-4 border-l-primary p-5 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
-          <p className="text-xs font-bold tracking-widest uppercase text-muted-foreground mb-1">Confirmed</p>
-          <p className="text-4xl font-bold text-primary">{appointments.filter(a => a.appointment_status === 'confirmed').length}</p>
-          <p className="text-xs text-muted-foreground mt-1">Upcoming visits</p>
+          <p className="text-xs font-bold tracking-widest uppercase text-muted-foreground mb-1">Cancelled</p>
+          <p className="text-4xl font-bold text-primary">{appointments.filter(a => a.appointment_status === 'cancelled').length}</p>
+          <p className="text-xs text-muted-foreground mt-1">Cancelled visits</p>
         </div>
       </div>
 
@@ -247,9 +248,7 @@ export default function AppointmentHistoryPage() {
               onChange={e => setStatusFilter(e.target.value)}
             >
               <option value="all">All Statuses</option>
-              <option value="confirmed">Confirmed</option>
               <option value="completed">Completed</option>
-              <option value="pending">Pending</option>
               <option value="cancelled">Cancelled</option>
               <option value="no_show">No Show</option>
             </select>
@@ -275,7 +274,7 @@ export default function AppointmentHistoryPage() {
           <p className="text-sm text-muted-foreground max-w-xs mx-auto">
             {searchTerm || statusFilter !== 'all'
               ? 'Try adjusting your search or filters to find appointments'
-              : 'You have no appointment history yet. Your appointments will appear here once scheduled.'}
+              : 'No past appointments yet. Completed or cancelled appointments will appear here.'}
           </p>
         </div>
       ) : (
