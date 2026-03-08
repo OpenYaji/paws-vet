@@ -183,6 +183,6 @@ export async function POST(request: NextRequest) {
 
   } catch (error: any) {
     // Unexpected JS/DB error — centralized handler
-    return handleError(error, 'POST /api/consultations');
+    return handleError(error, 'POST /api/veterinarian/consultations');
   }
 }
