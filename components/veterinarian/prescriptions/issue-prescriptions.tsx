@@ -30,17 +30,23 @@ interface IssuePrescriptionProps {
 export default function IssuePrescription({
   onPrescriptionIssued,
 }: IssuePrescriptionProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  // --- UI States ---
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  const [petsList, setPetsList] = useState<any[]>([]);
-  const [isLoadingPets, setIsLoadingPets] = useState(false);
+  // --- Search States ---
+  const [searchTerm, setSearchTerm] = useState("");
+  const [results, setResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [selectedPet, setSelectedPet] = useState<any | null>(null);
 
-  const [selectedPet, setSelectedPet] = useState<any>(null);
+  // --- Medical Record States ---
   const [selectedMedicalRecord, setSelectedMedicalRecord] = useState<any>(null);
   const [medicalRecords, setMedicalRecords] = useState<any[]>([]);
   const [loadingRecords, setLoadingRecords] = useState(false);
 
+  // --- Form State ---
   const [formData, setFormData] = useState({
     medication_name: "",
     dosage: "",
@@ -49,25 +55,46 @@ export default function IssuePrescription({
     notes: "",
   });
 
-  // Fetch all pets when dialog opens
+  // 1. The Debounce Effect for Pet Search
   useEffect(() => {
-    if (!isOpen) return;
-    const fetchPets = async () => {
-      setIsLoadingPets(true);
-      try {
-        const res = await fetch("/api/veterinarian/pets?page=1&limit=1000");
-        const data = await res.json();
-        setPetsList(Array.isArray(data.data) ? data.data : []);
-      } catch (error) {
-        console.error("Failed to fetch pets", error);
-      } finally {
-        setIsLoadingPets(false);
-      }
-    };
-    fetchPets();
-  }, [isOpen]);
+    if (!searchTerm.trim()) {
+      setResults([]);
+      setIsSearchDropdownOpen(false);
+      return;
+    }
 
-  // Fetch medical records when pet is selected
+    const delayDebounceFn = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const res = await fetch(
+          `/api/veterinarian/pets/search?q=${encodeURIComponent(searchTerm)}`
+        );
+        const data = await res.json();
+
+        // FIX: Ensure 'data' is an array before setting it to results
+        if (Array.isArray(data)) {
+          setResults(data);
+        } else if (data && Array.isArray(data.data)) {
+          // Just in case your API returns { data: [...] }
+          setResults(data.data);
+        } else {
+          // If it's an error object, fallback to an empty array
+          setResults([]);
+          console.error("API returned a non-array:", data);
+        }
+        
+        setIsSearchDropdownOpen(true);
+      } catch (error) {
+        console.error("Failed to search pets:", error);
+        setResults([]); // Fallback on catch
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchTerm]);
+
+  // 2. Fetch medical records when pet is selected
   useEffect(() => {
     const fetchMedicalRecords = async () => {
       if (!selectedPet) {
@@ -79,14 +106,12 @@ export default function IssuePrescription({
       setLoadingRecords(true);
       try {
         const res = await fetch(
-          `/api/veterinarian/medical-records?pet_id=${selectedPet.id}`,
+          `/api/veterinarian/medical-records?pet_id=${selectedPet.id}`
         );
         const data = await res.json();
 
         if (Array.isArray(data)) {
           setMedicalRecords(data);
-
-          // Auto-select if only one medical record exists
           if (data.length === 1) {
             setSelectedMedicalRecord(data[0]);
           }
@@ -100,6 +125,13 @@ export default function IssuePrescription({
 
     fetchMedicalRecords();
   }, [selectedPet]);
+
+  // 3. Handle selecting a pet from the search dropdown
+  const handleSelectPet = (pet: any) => {
+    setSelectedPet(pet);
+    setSearchTerm(pet.name); // Fill input with the selected pet's name
+    setIsSearchDropdownOpen(false); // Close the search dropdown
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -125,13 +157,11 @@ export default function IssuePrescription({
 
       if (!res.ok) {
         const errorData = await res.json();
-        alert(
-          errorData.error || "Failed to issue prescription. Please try again.",
-        );
+        alert(errorData.error || "Failed to issue prescription. Please try again.");
         return;
       }
 
-      setIsOpen(false);
+      setIsModalOpen(false);
       resetForm();
       onPrescriptionIssued();
     } catch (error) {
@@ -144,9 +174,11 @@ export default function IssuePrescription({
 
   const resetForm = () => {
     setSelectedPet(null);
+    setSearchTerm("");
+    setResults([]);
+    setIsSearchDropdownOpen(false);
     setSelectedMedicalRecord(null);
     setMedicalRecords([]);
-    setPetsList([]);
     setFormData({
       medication_name: "",
       dosage: "",
@@ -158,9 +190,9 @@ export default function IssuePrescription({
 
   return (
     <Dialog
-      open={isOpen}
+      open={isModalOpen}
       onOpenChange={(val) => {
-        setIsOpen(val);
+        setIsModalOpen(val);
         if (!val) resetForm();
       }}
     >
@@ -169,41 +201,56 @@ export default function IssuePrescription({
           <Plus size={18} /> Issue Prescription
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-125">
+      
+      {/* Increased height so dropdown doesn't get cut off easily */}
+      <DialogContent className="sm:max-w-[500px]"> 
         <DialogHeader>
           <DialogTitle>Issue New Prescription</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 py-4">
-          {/* --- Pet Selection --- */}
-          <div className="space-y-2">
+          
+          {/* --- Pet Search Field --- */}
+          <div className="relative space-y-2">
             <Label>Select Patient</Label>
-            <Select
-              onValueChange={(val) => {
-                const pet = petsList.find((p) => p.id === val);
-                setSelectedPet(pet || null);
-                setSelectedMedicalRecord(null);
-                setMedicalRecords([]);
+            <Input
+              type="text"
+              placeholder="Search pet by name..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                if (selectedPet) setSelectedPet(null);
               }}
-            >
-              <SelectTrigger disabled={isLoadingPets}>
-                <SelectValue
-                  placeholder={
-                    isLoadingPets ? "Loading pets..." : "Select a patient..."
-                  }
-                />
-              </SelectTrigger>
-              <SelectContent className="max-h-50">
-                {petsList.map((pet) => (
-                  <SelectItem key={pet.id} value={pet.id}>
-                    {pet.name} ({pet.species}) —{" "}
-                    {pet.client_profiles?.last_name || "N/A"}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+              onFocus={() => {
+                if (results.length > 0) setIsSearchDropdownOpen(true);
+              }}
+            />
 
+            {/* --- The Search Results Dropdown --- */}
+            {isSearchDropdownOpen && (
+              <div className="absolute top-full left-0 z-50 w-full mt-1 bg-background border rounded-md shadow-lg max-h-60 overflow-auto">
+                {isSearching ? (
+                  <div className="p-3 text-sm text-muted-foreground text-center">Searching...</div>
+                ) : !Array.isArray(results) || results.length === 0 ? ( // FIX: Added Array check here
+                  <div className="p-3 text-sm text-muted-foreground text-center">No pets found.</div>
+                ) : (
+                  results.map((pet) => (
+                    <div
+                      key={pet.id}
+                      onClick={() => handleSelectPet(pet)}
+                      className="p-3 text-sm cursor-pointer hover:bg-muted border-b last:border-0"
+                    >
+                      <div className="font-medium text-foreground">{pet.name}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {pet.species} • {pet.breed} | Owner: {pet.client_profiles?.first_name}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+          
           {/* --- Medical Record Selection --- */}
           {selectedPet && (
             <div className="space-y-2">
@@ -219,8 +266,7 @@ export default function IssuePrescription({
                 <div className="p-4 border border-dashed rounded-md bg-amber-500/10 border-amber-500/30">
                   <p className="text-sm text-amber-600">
                     No medical records found for this patient. Prescriptions
-                    must be linked to a completed consultation with a medical
-                    record.
+                    must be linked to a completed consultation with a medical record.
                   </p>
                 </div>
               ) : (
@@ -239,14 +285,14 @@ export default function IssuePrescription({
                   <SelectContent>
                     {medicalRecords.map((record) => (
                       <SelectItem key={record.id} value={record.id.toString()}>
-                        <div className="flex flex-col">
+                        <div className="flex flex-col text-left">
                           <span className="font-medium">
                             {format(
                               new Date(record.visit_date || record.created_at),
                               "MMM dd, yyyy",
                             )}
                           </span>
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-xs text-muted-foreground mt-0.5">
                             {record.chief_complaint || "General Consultation"} •{" "}
                             {record.record_number}
                           </span>
@@ -299,9 +345,7 @@ export default function IssuePrescription({
                 <SelectContent>
                   <SelectItem value="Once daily">Once daily (SID)</SelectItem>
                   <SelectItem value="Twice daily">Twice daily (BID)</SelectItem>
-                  <SelectItem value="Thrice daily">
-                    Thrice daily (TID)
-                  </SelectItem>
+                  <SelectItem value="Thrice daily">Thrice daily (TID)</SelectItem>
                   <SelectItem value="As needed">As needed (PRN)</SelectItem>
                 </SelectContent>
               </Select>
@@ -334,7 +378,7 @@ export default function IssuePrescription({
             <Button
               type="button"
               variant="outline"
-              onClick={() => setIsOpen(false)}
+              onClick={() => setIsModalOpen(false)}
             >
               Cancel
             </Button>
