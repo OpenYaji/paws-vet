@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/auth-client';
 import useSWR, { mutate } from 'swr';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,7 +13,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import {
-  ShieldAlert, Search, Clock, AlertTriangle, CheckCircle2, Plus
+  ShieldAlert, Search, Clock, AlertTriangle, CheckCircle2, Plus,
+  ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Fetcher } from '@/lib/fetcher';
@@ -87,6 +88,7 @@ export default function QuarantinePage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [allPets, setAllPets] = useState<any[]>([]);
+  const [page, setPage] = useState(1);
 
   const safeRecords = Array.isArray(quarantineRecords) ? quarantineRecords : [];
 
@@ -99,11 +101,23 @@ export default function QuarantinePage() {
     notes: '',
   });
 
-  // FIXED: Added an explicit check to exclude 'released' records from the active list
-  const filteredRecords = safeRecords.filter((r: any) =>
-    r.status !== 'released' && 
-    (r.pets?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    r.reason?.toLowerCase().includes(searchTerm.toLowerCase()))
+  // filter out released + apply search
+  const filteredRecords = useMemo(() =>
+    safeRecords.filter((r: any) =>
+      r.status !== 'released' &&
+      (r.pets?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+       r.reason?.toLowerCase().includes(searchTerm.toLowerCase()))
+    ),
+    [safeRecords, searchTerm]
+  );
+
+  // pagination
+  const itemsPerPage = 20;
+  const totalPages = Math.max(1, Math.ceil(filteredRecords.length / itemsPerPage));
+  const safePage = Math.min(page, totalPages);
+  const paginatedRecords = filteredRecords.slice(
+    (safePage - 1) * itemsPerPage,
+    safePage * itemsPerPage,
   );
 
   const handleAddQuarantine = async (e: React.FormEvent) => {
@@ -192,7 +206,7 @@ export default function QuarantinePage() {
             <Input
               placeholder="Search patients..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
               className="pl-9"
             />
           </div>
@@ -201,6 +215,24 @@ export default function QuarantinePage() {
             <ShieldAlert size={18} className="text-destructive" /> Active ({filteredRecords.length})
           </h2>
 
+          {/* pagination controls */}
+          {filteredRecords.length > itemsPerPage && (
+            <div className="flex items-center justify-between pt-2 border-t">
+              <p className="text-xs text-muted-foreground">
+                {(safePage - 1) * itemsPerPage + 1}–{Math.min(safePage * itemsPerPage, filteredRecords.length)} of {filteredRecords.length}
+              </p>
+              <div className="flex items-center gap-1">
+                <Button variant="outline" size="icon" className="h-7 w-7" disabled={safePage === 1} onClick={() => setPage(p => p - 1)}>
+                  <ChevronLeft className="h-3 w-3" />
+                </Button>
+                <span className="text-xs font-medium px-1">{safePage}/{totalPages}</span>
+                <Button variant="outline" size="icon" className="h-7 w-7" disabled={safePage >= totalPages} onClick={() => setPage(p => p + 1)}>
+                  <ChevronRight className="h-3 w-3" />
+                </Button>
+              </div>
+            </div>
+          )}
+
           {isLoading ? (
             <div className="text-sm text-muted-foreground">Loading records...</div>
           ) : filteredRecords.length === 0 ? (
@@ -208,7 +240,7 @@ export default function QuarantinePage() {
               No quarantined patients.
             </div>
           ) : (
-            filteredRecords.map((record: any) => (
+            paginatedRecords.map((record: any) => (
               <div
                 key={record.id}
                 onClick={() => { setSelectedRecord(record); setShowAddForm(false); }}

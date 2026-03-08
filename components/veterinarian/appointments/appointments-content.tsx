@@ -13,7 +13,7 @@ import {
 import { Separator } from '@/components/ui/separator';
 import {
   Clock, Calendar as CalendarIcon, User, FileText, FileBarChart,
-  Stethoscope, AlertTriangle, Phone, PawPrint,
+  Stethoscope, AlertTriangle, Phone, PawPrint, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { format, isSameDay, parseISO } from 'date-fns';
 import { AppointmentWithRelations } from '@/types/appointments';
@@ -40,12 +40,25 @@ export default function AppointmentsContent() {
   const [showReport, setShowReport] = useState(false);
   const [selectedAppt, setSelectedAppt] = useState<any | null>(null);
   const [isSending, setIsSending] = useState(false);
+  const [apptPage, setApptPage] = useState(1);
 
   const appointmentDates = appointments.map((app) => parseISO(app.scheduled_start));
 
   const selectedDateAppointments = appointments.filter((app) =>
     date && isSameDay(parseISO(app.scheduled_start), date)
   );
+
+  // paginate the day's appointments
+  const apptPerPage = 20;
+  const apptTotalPages = Math.max(1, Math.ceil(selectedDateAppointments.length / apptPerPage));
+  const apptSafePage = Math.min(apptPage, apptTotalPages);
+  const paginatedDayAppts = selectedDateAppointments.slice(
+    (apptSafePage - 1) * apptPerPage,
+    apptSafePage * apptPerPage,
+  );
+
+  // reset page when the user picks a new date
+  const handleDateSelect = (d: Date | undefined) => { setDate(d); setApptPage(1); };
 
   // API field is `pet` (aliased in query), type definition uses `pets`
   // Handle both for safety
@@ -108,7 +121,7 @@ export default function AppointmentsContent() {
               <Calendar
                 mode="single"
                 selected={date}
-                onSelect={setDate}
+                onSelect={handleDateSelect}
                 className="rounded-md border shadow-sm"
                 classNames={{ today: 'border-2 border-green-500 text-green-700 font-bold hover:bg-green-50' }}
                 modifiers={{ hasAppointment: appointmentDates }}
@@ -158,8 +171,9 @@ export default function AppointmentsContent() {
               <p className="text-gray-500 font-medium">No appointments scheduled.</p>
             </div>
           ) : (
+            <>
             <div className="grid gap-4">
-              {selectedDateAppointments.map((app: any) => {
+              {paginatedDayAppts.map((app: any) => {
                 const pet = getPet(app);
                 const owner = getOwner(app);
                 const ownerName = owner
@@ -229,8 +243,27 @@ export default function AppointmentsContent() {
                 );
               })}
             </div>
+
+            {/* pagination controls for day's appointments */}
+            {selectedDateAppointments.length > apptPerPage && (
+              <div className="flex items-center justify-between pt-3 border-t">
+                <p className="text-sm text-muted-foreground">
+                  Showing {(apptSafePage - 1) * apptPerPage + 1}–{Math.min(apptSafePage * apptPerPage, selectedDateAppointments.length)} of {selectedDateAppointments.length}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="icon" disabled={apptSafePage === 1} onClick={() => setApptPage(p => p - 1)}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="text-sm font-medium px-2">{apptSafePage} / {apptTotalPages}</span>
+                  <Button variant="outline" size="icon" disabled={apptSafePage >= apptTotalPages} onClick={() => setApptPage(p => p + 1)}>
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+            </>
           )}
-        </div>
+      </div>
       </div>
 
       {/* ── Patient Action Dialog ── */}

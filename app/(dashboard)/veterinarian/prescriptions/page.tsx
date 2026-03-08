@@ -32,8 +32,9 @@ import {
 import IssuePrescription from '@/components/veterinarian/prescriptions/issue-prescriptions';
 import PrintPrescription from '@/components/veterinarian/prescriptions/print-prescription';
 
-const ITEMS_LIST = 5;
-const ITEMS_TABLE = 10;
+// items shown per page per view mode
+const itemsList = 20;
+const itemsTable = 20;
 
 const fetcher = (url: string) => fetch(url).then(res => res.json());
 
@@ -59,7 +60,7 @@ export default function PrescriptionsPage() {
   const [selectedRx, setSelectedRx] = useState<any>(null);
 
   const resetPage = () => setPage(1);
-  const itemsPerPage = viewMode === 'list' ? ITEMS_LIST : ITEMS_TABLE;
+  const itemsPerPage = viewMode === 'list' ? itemsList : itemsTable;
 
   const filteredList = useMemo(() => {
     if (!Array.isArray(prescriptions)) return [];

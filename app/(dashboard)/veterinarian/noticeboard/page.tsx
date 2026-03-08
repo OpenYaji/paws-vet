@@ -19,7 +19,7 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Megaphone, AlertCircle, Info, Trash2, Edit, Eye } from "lucide-react";
+import { Megaphone, AlertCircle, Info, Trash2, Edit, Eye, ChevronLeft, ChevronRight } from "lucide-react";
 import { format } from "date-fns";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
@@ -41,6 +41,16 @@ export default function NoticeboardPage() {
   const [editContent, setEditContent] = useState("");
   const [editPriority, setEditPriority] = useState("normal");
   const [isUpdating, setIsUpdating] = useState(false);
+
+  // 20 notices per page
+  const itemsPerPage = 20;
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(notices.length / itemsPerPage));
+  const safePage = Math.min(page, totalPages);
+  const paginatedNotices = notices.slice(
+    (safePage - 1) * itemsPerPage,
+    safePage * itemsPerPage,
+  );
 
   const handlePostNotice = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -166,7 +176,7 @@ export default function NoticeboardPage() {
             No announcements yet.
           </p>
         ) : (
-          notices.map((notice: any) => (
+          paginatedNotices.map((notice: any) => (
             <Card
               key={notice.id}
               className={
@@ -233,6 +243,24 @@ export default function NoticeboardPage() {
               </CardFooter>
             </Card>
           ))
+        )}
+
+        {/* pagination controls */}
+        {notices.length > itemsPerPage && (
+          <div className="flex items-center justify-between pt-3 border-t">
+            <p className="text-sm text-muted-foreground">
+              Showing {(safePage - 1) * itemsPerPage + 1}–{Math.min(safePage * itemsPerPage, notices.length)} of {notices.length}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="icon" disabled={safePage === 1} onClick={() => setPage(p => p - 1)}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-sm font-medium px-2">{safePage} / {totalPages}</span>
+              <Button variant="outline" size="icon" disabled={safePage >= totalPages} onClick={() => setPage(p => p + 1)}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
         )}
       </div>
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/auth-client';
 import useSWR, { mutate } from 'swr';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,9 +15,8 @@ import {
 import { 
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue 
 } from "@/components/ui/select";
-import { Syringe, Calendar, ShieldCheck, Search, AlertCircle, Check } from 'lucide-react';
+import { Syringe, Calendar, ShieldCheck, Search, AlertCircle, Check, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format, addYears, addMonths } from 'date-fns';
-import { create } from 'domain';
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -29,6 +28,23 @@ export default function VaccinationsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [page, setPage] = useState(1);
+
+  // filtered history by search, then paginated
+  const itemsPerPage = 20;
+  const filteredHistory = useMemo(() =>
+    history.filter((rec: any) =>
+      rec.pets?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      rec.vaccine_name?.toLowerCase().includes(searchTerm.toLowerCase())
+    ),
+    [history, searchTerm]
+  );
+  const totalPages = Math.max(1, Math.ceil(filteredHistory.length / itemsPerPage));
+  const safePage = Math.min(page, totalPages);
+  const paginatedHistory = filteredHistory.slice(
+    (safePage - 1) * itemsPerPage,
+    safePage * itemsPerPage,
+  );
 
   // Form State
   const [formData, setFormData] = useState({
@@ -198,7 +214,7 @@ export default function VaccinationsPage() {
                   placeholder="Search pet or vaccine..." 
                   className="pl-8"
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
                 />
               </div>
             </CardHeader>
@@ -211,6 +227,7 @@ export default function VaccinationsPage() {
                   No vaccination records found.
                 </div>
               ) : (
+                <>
                 <div className="rounded-md border">
                   <div className="grid grid-cols-12 gap-4 p-4 font-medium text-sm bg-muted/40 border-b text-muted-foreground">
                     <div className="col-span-3">Patient</div>
@@ -218,7 +235,7 @@ export default function VaccinationsPage() {
                     <div className="col-span-3">Date Given</div>
                     <div className="col-span-3">Next Due</div>
                   </div>
-                  {history.map((rec: any) => (
+                  {paginatedHistory.map((rec: any) => (
                     <div key={rec.id} className="grid grid-cols-12 gap-4 p-4 text-sm items-center hover:bg-muted/40 border-b last:border-0 transition-colors">
                       <div className="col-span-3">
                         <div className="font-bold text-foreground">{rec.pets?.name}</div>
@@ -247,6 +264,24 @@ export default function VaccinationsPage() {
                     </div>
                   ))}
                 </div>
+                {/* pagination controls */}
+                {filteredHistory.length > itemsPerPage && (
+                  <div className="flex items-center justify-between pt-3 border-t mt-2">
+                    <p className="text-sm text-muted-foreground">
+                      Showing {(safePage - 1) * itemsPerPage + 1}–{Math.min(safePage * itemsPerPage, filteredHistory.length)} of {filteredHistory.length}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="icon" disabled={safePage === 1} onClick={() => setPage(p => p - 1)}>
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <span className="text-sm font-medium px-2">{safePage} / {totalPages}</span>
+                      <Button variant="outline" size="icon" disabled={safePage >= totalPages} onClick={() => setPage(p => p + 1)}>
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                </>
               )}
             </CardContent>
           </Card>
