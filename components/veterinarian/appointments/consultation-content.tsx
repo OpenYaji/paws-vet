@@ -16,7 +16,7 @@ import { format } from 'date-fns';
 import { Fetcher } from '@/lib/fetcher'
 
 export default function ConsultationContent() {
-  const { data: queue = [] } = useSWR<any[]>('/api/consultations', Fetcher);
+  const { data: queue = [] } = useSWR<any[]>('/api/veterinarian/consultations', Fetcher);
   const isLoading = false;
   const [selectedAppt, setSelectedAppt] = useState<any | null>(null);
   const [isSaving, setIsSaving] = useState(false);

@@ -93,7 +93,7 @@ export default function NeuterContent() {
     const load = async () => {
       setIsLoadingBloodTest(true);
       try {
-        const res = await fetch(`/api/medical-test-results?appointment_id=${selectedAppt.id}`);
+        const res = await fetch(`/api/veterinarian/medical-test-results?appointment_id=${selectedAppt.id}`);
         const data = await res.json();
         setBloodTestStatus(data);
       } catch {
@@ -133,7 +133,7 @@ export default function NeuterContent() {
 
     setIsSavingBloodTest(true);
     try {
-      const res = await fetch('/api/medical-test-results', {
+      const res = await fetch('/api/veterinarian/medical-test-results', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -150,7 +150,7 @@ export default function NeuterContent() {
       toast({ title: 'Blood Test Recorded', description: 'Blood test results have been saved.' });
 
       // Refresh blood test status
-      const refreshed = await fetch(`/api/medical-test-results?appointment_id=${selectedAppt.id}`);
+      const refreshed = await fetch(`/api/veterinarian/medical-test-results?appointment_id=${selectedAppt.id}`);
       setBloodTestStatus(await refreshed.json());
       
     } catch (err: any) {
@@ -225,7 +225,7 @@ export default function NeuterContent() {
     setProcedure({ operation_type: '', operation_cost: '', notes: '' });
 
     try {
-      const response = await fetch('/api/neuter', {
+      const response = await fetch('/api/veterinarian/neuter', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

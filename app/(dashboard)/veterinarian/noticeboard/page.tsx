@@ -25,7 +25,7 @@ import { format } from "date-fns";
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export default function NoticeboardPage() {
-  const { data: notices = [], isLoading } = useSWR("/api/noticeboard", fetcher);
+  const { data: notices = [], isLoading } = useSWR("/api/veterinarian/noticeboard", fetcher);
 
   // Post states
   const [isPosting, setIsPosting] = useState(false);
@@ -46,7 +46,7 @@ export default function NoticeboardPage() {
     e.preventDefault();
     setIsPosting(true);
     try {
-      const res = await fetch("/api/noticeboard", {
+      const res = await fetch("/api/veterinarian/noticeboard", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title, content, priority }),
@@ -55,7 +55,7 @@ export default function NoticeboardPage() {
         setTitle("");
         setContent("");
         setPriority("normal");
-        mutate("/api/noticeboard");
+        mutate("/api/veterinarian/noticeboard");
       }
     } catch (error) {
       console.error(error);
@@ -67,8 +67,8 @@ export default function NoticeboardPage() {
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this notice?")) return;
     try {
-      const res = await fetch(`/api/noticeboard?id=${id}`, { method: "DELETE" });
-      if (res.ok) mutate("/api/noticeboard");
+      const res = await fetch(`/api/veterinarian/noticeboard?id=${id}`, { method: "DELETE" });
+      if (res.ok) mutate("/api/veterinarian/noticeboard");
     } catch (error) {
       console.error(error);
     }
@@ -85,7 +85,7 @@ export default function NoticeboardPage() {
     e.preventDefault();
     setIsUpdating(true);
     try {
-      const res = await fetch("/api/notices", {
+      const res = await fetch("/api/veterinarian/noticeboard", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -97,7 +97,7 @@ export default function NoticeboardPage() {
       });
       if (res.ok) {
         setEditNotice(null);
-        mutate("/api/notices");
+        mutate("/api/veterinarian/noticeboard");
       }
     } catch (error) {
       console.error(error);

@@ -125,7 +125,7 @@ export default function PatientsPage() {
   // "next page", which (a) wastes server resources and (b) triggers an
   // out-of-bounds Supabase range query → HTTP 500 when the batch doesn't exist.
   // Instead, we fetch one full batch up front and slice it client-side.
-  const swrKey = `/api/pets?limit=${FETCH_LIMIT}${recordFilter === "archived" ? "&archived=true" : ""}`;
+  const swrKey = `/api/veterinarian/pets?limit=${FETCH_LIMIT}${recordFilter === "archived" ? "&archived=true" : ""}`;
 
   const { data: apiResponse, isLoading } = useSWR(swrKey, fetcher, {
     revalidateOnFocus: false,
@@ -206,7 +206,7 @@ export default function PatientsPage() {
       false,
     );
     try {
-      const res = await fetch(`/api/pets/${archiveTarget.id}`, {
+      const res = await fetch(`/api/veterinarian/pets/${archiveTarget.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ is_archived: true }),
@@ -241,7 +241,7 @@ export default function PatientsPage() {
     if (!viewTarget) return;
     setIsSavingPet(true);
     try {
-      const res = await fetch(`/api/pets/${viewTarget.id}`, {
+      const res = await fetch(`/api/veterinarian/pets/${viewTarget.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(editForm),
@@ -266,7 +266,7 @@ export default function PatientsPage() {
   useEffect(() => {
     if (!medicalTarget) { setMedicalRecords([]); return; }
     setIsLoadingMedical(true);
-    fetch(`/api/medical-records?pet_id=${medicalTarget.id}`)
+    fetch(`/api/veterinarian/medical-records?pet_id=${medicalTarget.id}`)
       .then((r) => r.json())
       .then((d) => setMedicalRecords(Array.isArray(d) ? d : []))
       .catch(() => setMedicalRecords([]))

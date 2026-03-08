@@ -31,7 +31,7 @@ const TRIAGE_BADGE: Record<string, string> = {
 };
 
 export default function TriageContent() {
-  const { data: queue = [], isLoading, error } = useSWR('/api/triage', fetcher);
+  const { data: queue = [], isLoading, error } = useSWR('/api/veterinarian/triage', fetcher);
   const safeQueue = Array.isArray(queue) ? queue : [];
 
   const [selectedAppt, setSelectedAppt] = useState<any | null>(null);
@@ -71,7 +71,7 @@ export default function TriageContent() {
     const apptToProcess = selectedAppt;
 
     mutate(
-      '/api/triage', 
+      '/api/veterinarian/triage', 
       safeQueue.filter((a: any) => a.id !== apptToProcess.id), 
       false
     );
@@ -83,7 +83,7 @@ export default function TriageContent() {
     });
 
     try {
-      const response = await fetch('/api/triage', {
+      const response = await fetch('/api/veterinarian/triage', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -101,10 +101,10 @@ export default function TriageContent() {
         description: `${apptToProcess.pets.name} is ready for consultation.`,
       });
 
-      mutate('/api/triage');
-      mutate('/api/consultations');
+      mutate('/api/veterinarian/triage');
+      mutate('/api/veterinarian/consultations');
       mutate('surgery-queue');
-      mutate('/api/appointments');  
+      mutate('/api/veterinarian/appointments');  
 
     } catch (err: any) {
       toast({
@@ -113,7 +113,7 @@ export default function TriageContent() {
         variant: 'destructive',
       });
 
-      mutate('/api/triage');
+      mutate('/api/veterinarian/triage');
     } finally {
       setIsSaving(false);
     }

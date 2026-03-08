@@ -55,7 +55,7 @@ export default function IssuePrescription({
     const fetchPets = async () => {
       setIsLoadingPets(true);
       try {
-        const res = await fetch("/api/pets?page=1&limit=1000");
+        const res = await fetch("/api/veterinarian/pets?page=1&limit=1000");
         const data = await res.json();
         setPetsList(Array.isArray(data.data) ? data.data : []);
       } catch (error) {
@@ -79,7 +79,7 @@ export default function IssuePrescription({
       setLoadingRecords(true);
       try {
         const res = await fetch(
-          `/api/medical-records?pet_id=${selectedPet.id}`,
+          `/api/veterinarian/medical-records?pet_id=${selectedPet.id}`,
         );
         const data = await res.json();
 
@@ -117,7 +117,7 @@ export default function IssuePrescription({
         instructions: formData.notes,
       };
 
-      const res = await fetch("/api/prescriptions", {
+      const res = await fetch("/api/veterinarian/prescriptions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

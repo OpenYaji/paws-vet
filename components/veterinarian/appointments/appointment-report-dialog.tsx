@@ -66,7 +66,7 @@ export default function AppointmentReportDialog({ open, onOpenChange }: Appointm
     setError(null);
     try {
       const res = await fetch(
-        `/api/appointments/appointment-reports?date=${format(weekAnchor, 'yyyy-MM-dd')}`
+        `/api/veterinarian/appointments/appointment-reports?date=${format(weekAnchor, 'yyyy-MM-dd')}`
       );
       if (!res.ok) {
         const err = await res.json();

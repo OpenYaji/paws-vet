@@ -48,7 +48,7 @@ interface QuarantineRecord {
 export default function QuarantinePage() {
   // Fetch quarantined pets
   const { data: quarantineRecords = [], error, isLoading } = useSWR<QuarantineRecord[]>(
-    '/api/quarantine',
+    '/api/veterinarian/quarantine',
     Fetcher
   );
 
@@ -112,7 +112,7 @@ export default function QuarantinePage() {
     setIsSaving(true);
 
     try {
-      const response = await fetch('/api/quarantine', {
+      const response = await fetch('/api/veterinarian/quarantine', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
@@ -123,7 +123,7 @@ export default function QuarantinePage() {
         throw new Error(errorData.error || 'Failed to add quarantine record');
       }
 
-      mutate('/api/quarantine');
+      mutate('/api/veterinarian/quarantine');
       setShowAddForm(false);
       setForm({
         pet_id: '', reason: '', start_date: new Date().toISOString().split('T')[0],
@@ -138,10 +138,10 @@ export default function QuarantinePage() {
 
   const handleRelease = async (recordId: string) => {
     // Optimistic UI update: immediately mark as released
-    mutate('/api/quarantine', safeRecords.map(r => r.id === recordId ? { ...r, status: 'released' } : r), false);
+    mutate('/api/veterinarian/quarantine', safeRecords.map(r => r.id === recordId ? { ...r, status: 'released' } : r), false);
     setSelectedRecord(null);
     try {
-      const response = await fetch('/api/quarantine', {
+      const response = await fetch('/api/veterinarian/quarantine', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -157,11 +157,11 @@ export default function QuarantinePage() {
       }
 
       // Final revalidation from the server
-      mutate('/api/quarantine');
+      mutate('/api/veterinarian/quarantine');
     } catch (error: any) {
       alert('Error releasing from quarantine: ' + error.message);
       // Revert optimistic update on error
-      mutate('/api/quarantine');
+      mutate('/api/veterinarian/quarantine');
     }
   };
 

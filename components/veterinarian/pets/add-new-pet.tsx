@@ -100,7 +100,7 @@ export default function AddNewPet({ onPetAdded }: AddNewPetProps) {
         uploadedImageUrl = urlData.publicUrl;
       }
 
-      const response = await fetch("/api/pets", {
+      const response = await fetch("/api/veterinarian/pets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -148,7 +148,7 @@ export default function AddNewPet({ onPetAdded }: AddNewPetProps) {
       });
       setSelectedImageFile(null);
       setImagePreviewUrl(null);
-      mutate('/api/pets'); // Refresh pet list after adding
+      mutate('/api/veterinarian/pets'); // Refresh pet list after adding
     } catch (error: any) {
       alert("Error adding pet: " + error.message);
     } finally {

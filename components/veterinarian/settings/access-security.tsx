@@ -42,7 +42,7 @@ export default function AccessSecurity() {
         return
       }
 
-      const res = await fetch("/api/settings/change-password", {
+      const res = await fetch("/api/veterinarian/settings/change-password", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -22,7 +22,7 @@ import { create } from 'domain';
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export default function VaccinationsPage() {
-  const { data = {}, isLoading } = useSWR('/api/vaccinations', fetcher);
+  const { data = {}, isLoading } = useSWR('/api/veterinarian/vaccinations', fetcher);
 
   const history = data?.history || [];
   const petsList = data?.pets || [];
@@ -47,7 +47,7 @@ export default function VaccinationsPage() {
     setIsSaving(true);
 
     try {
-      const response = await fetch('/api/vaccinations', {
+      const response = await fetch('/api/veterinarian/vaccinations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -67,7 +67,7 @@ export default function VaccinationsPage() {
       alert("Error: " + error.message);
     } finally {
       setIsSaving(false);
-      mutate('api/vaccinations');
+      mutate('/api/veterinarian/vaccinations');
     }
   };
   return (

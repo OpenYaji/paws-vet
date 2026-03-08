@@ -50,7 +50,7 @@ function StatusBadge({ dispensedDate }: { dispensedDate: string | null }) {
 
 export default function PrescriptionsPage() {
   const { data: prescriptions = [], isLoading } = useSWR(
-    "/api/prescriptions",
+    "/api/veterinarian/prescriptions",
     fetcher,
   );
   const [searchTerm, setSearchTerm] = useState('');

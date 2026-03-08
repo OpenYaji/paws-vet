@@ -15,7 +15,7 @@ interface DashboardData {
 }
 
 export default function VeterinarianDashboardPage() {
-  const { data, error, isLoading } = useSWR<DashboardData>('/api/vet-dashboard', Fetcher);
+  const { data, error, isLoading } = useSWR<DashboardData>('/api/veterinarian/vet-dashboard', Fetcher);
 
   if (isLoading) {
     return (
