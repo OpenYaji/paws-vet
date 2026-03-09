@@ -4,10 +4,13 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/auth-client';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { sendAppointmentNotification } from '@/lib/notifications';
+import { checkAndUpdateSlotStatus, toManilaDateString } from '@/lib/booking-engine';
 import {
   ArrowLeft, Calendar, Clock, User, PawPrint,
   FileText, CheckCircle, XCircle, AlertCircle,
-  Save, AlertTriangle, RefreshCw,
+  Save, AlertTriangle, RefreshCw, CreditCard, BadgeDollarSign,
+  ShieldCheck, Undo2,
 } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -28,6 +31,15 @@ interface Appointment {
   cancellation_reason?: string;
   cancelled_at?: string;
   actual_end?: string;
+  // Payment fields
+  appointment_type_detail?: string;
+  outreach_program_id?: string | null;
+  payment_amount?: number | null;
+  payment_status?: string | null;
+  payment_method?: string | null;
+  payment_reference?: string | null;
+  paid_at?: string | null;
+  is_aspin_puspin?: boolean;
 }
 
 interface Client {
@@ -46,16 +58,35 @@ interface Pet {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+function formatDisplayTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString('en-PH', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Asia/Manila',
+  });
+}
 
+function formatDisplayDateTime(iso: string): string {
+  return new Date(iso).toLocaleString('en-PH', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Asia/Manila',
+  });
+}
 function statusClass(s: string) {
+  const base = 'rounded-full px-2.5 py-0.5 text-xs font-semibold';
   const m: Record<string, string> = {
-    confirmed: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700',
-    completed: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-blue-100 text-blue-700',
-    pending: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-yellow-100 text-yellow-800',
-    cancelled: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-red-100 text-red-700',
-    no_show: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-muted text-muted-foreground',
+    confirmed: `${base} bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300`,
+    completed: `${base} bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300`,
+    pending:   `${base} bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300`,
+    cancelled: `${base} bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300`,
+    no_show:   `${base} bg-muted text-muted-foreground`,
   };
-  return m[s] ?? 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-muted text-muted-foreground';
+  return m[s] ?? `${base} bg-muted text-muted-foreground`;
 }
 
 function StatusIcon({ status }: { status: string }) {
@@ -84,6 +115,11 @@ export default function AppointmentDetailPage() {
   const [cancellationReason, setCancellationReason] = useState('');
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [showReschedule, setShowReschedule] = useState(false);
+  const [rescheduleStart, setRescheduleStart] = useState('');
+  const [rescheduleEnd, setRescheduleEnd] = useState('');
+  const [rescheduling, setRescheduling] = useState(false);
 
   const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
     setToast({ msg, type });
@@ -158,6 +194,43 @@ export default function AppointmentDetailPage() {
       return;
     }
 
+    // Re-open slot / outreach program when appointment is cancelled
+    if (selectedStatus === 'cancelled') {
+      const dateStr = toManilaDateString(appointment.scheduled_start);
+      const apptType = appointment.appointment_type_detail ?? 'regular';
+      if (apptType === 'outreach' && appointment.outreach_program_id) {
+        const { count } = await supabase
+          .from('appointments')
+          .select('id', { count: 'exact', head: true })
+          .eq('outreach_program_id', appointment.outreach_program_id)
+          .neq('appointment_status', 'cancelled');
+        await supabase
+          .from('outreach_programs')
+          .update({ current_bookings: count ?? 0, is_full: false, is_open: true })
+          .eq('id', appointment.outreach_program_id);
+      }
+      await checkAndUpdateSlotStatus(dateStr, apptType);
+    }
+
+    // Send notification to client for confirmed / cancelled
+    if (client?.user_id && appointment.appointment_number) {
+      if (selectedStatus === 'confirmed') {
+        sendAppointmentNotification({
+          clientUserId: client.user_id,
+          appointmentId,
+          appointmentNumber: appointment.appointment_number,
+          type: 'confirmed',
+        }).catch(console.error);
+      } else if (selectedStatus === 'cancelled') {
+        sendAppointmentNotification({
+          clientUserId: client.user_id,
+          appointmentId,
+          appointmentNumber: appointment.appointment_number,
+          type: 'cancelled',
+        }).catch(console.error);
+      }
+    }
+
     showToast('Appointment status updated');
     setCancellationReason('');
     await fetchAppointmentData();
@@ -170,6 +243,103 @@ export default function AppointmentDetailPage() {
 
   const handleCancel = async () => {
     setSelectedStatus('cancelled');
+  };
+
+  const handleQuickConfirm = async () => {
+    if (!appointment || appointment.appointment_status === 'confirmed') return;
+    setSelectedStatus('confirmed');
+    // Directly call PATCH without waiting for dropdown save
+    setUpdating(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const res = await fetch(`/api/client-admin/appointments/${appointmentId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appointment_status: 'confirmed', cancelled_by: user?.id ?? null }),
+      });
+      if (!res.ok) { showToast('Failed to confirm appointment', 'error'); return; }
+      if (client?.user_id && appointment.appointment_number) {
+        sendAppointmentNotification({
+          clientUserId: client.user_id,
+          appointmentId,
+          appointmentNumber: appointment.appointment_number,
+          type: 'confirmed',
+        }).catch(console.error);
+      }
+      showToast('Appointment confirmed — client notified');
+      await fetchAppointmentData();
+    } catch { showToast('Failed to confirm appointment', 'error'); }
+    finally { setUpdating(false); }
+  };
+
+  const handleReschedule = async () => {
+    if (!appointment || !rescheduleStart || !rescheduleEnd) {
+      showToast('Please select both start and end times', 'error'); return;
+    }
+    const start = new Date(rescheduleStart);
+    const end = new Date(rescheduleEnd);
+    if (end <= start) { showToast('End time must be after start time', 'error'); return; }
+    setRescheduling(true);
+    try {
+      const res = await fetch(`/api/client-admin/appointments/${appointmentId}/reschedule`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ new_scheduled_start: start.toISOString(), new_scheduled_end: end.toISOString() }),
+      });
+      const json = await res.json();
+      if (!res.ok) { showToast(json.error || 'Failed to reschedule', 'error'); return; }
+      // Update slot statuses for old and new dates (fire-and-forget)
+      const oldDateStr = appointment.scheduled_start.slice(0, 10);
+      const newDateStr = rescheduleStart.slice(0, 10);
+      const apptType = (appointment as any).appointment_type_detail ?? 'regular';
+      if (oldDateStr !== newDateStr) {
+        checkAndUpdateSlotStatus(oldDateStr, apptType).catch(console.error);
+      }
+      checkAndUpdateSlotStatus(newDateStr, apptType).catch(console.error);
+      // Notify client
+      if (client?.user_id && appointment.appointment_number) {
+        sendAppointmentNotification({
+          clientUserId: client.user_id,
+          appointmentId,
+          appointmentNumber: appointment.appointment_number,
+          type: 'rescheduled',
+        }).catch(console.error);
+      }
+      showToast('Appointment rescheduled — client notified');
+      setShowReschedule(false);
+      await fetchAppointmentData();
+    } catch { showToast('Failed to reschedule appointment', 'error'); }
+    finally { setRescheduling(false); }
+  };
+
+  const handlePaymentAction = async (action: 'verify' | 'waive' | 'refund') => {
+    if (!appointment) return;
+    const label = action === 'verify' ? 'verify this payment' : action === 'waive' ? 'waive this payment' : 'mark this as refunded';
+    if (!confirm(`Are you sure you want to ${label}?`)) return;
+    setPaymentLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const res = await fetch(`/api/client-admin/appointments/${appointmentId}/payment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, admin_user_id: user?.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        showToast(json.error || 'Payment action failed', 'error');
+        return;
+      }
+      showToast(
+        action === 'verify' ? 'Payment verified — client notified' :
+        action === 'waive'  ? 'Payment waived — client notified' :
+        'Refund recorded — client notified'
+      );
+      await fetchAppointmentData();
+    } catch {
+      showToast('Failed to process payment action', 'error');
+    } finally {
+      setPaymentLoading(false);
+    }
   };
 
   if (loading) {
@@ -250,7 +420,7 @@ export default function AppointmentDetailPage() {
 
       {/* Emergency banner */}
       {appointment.is_emergency && (
-        <div className="flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm font-semibold mb-5">
+        <div className="flex items-center gap-2 px-4 py-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-red-700 dark:text-red-400 text-sm font-semibold mb-5">
           <AlertTriangle size={16} />
           🚨 Emergency Appointment — Priority handling required
         </div>
@@ -267,19 +437,13 @@ export default function AppointmentDetailPage() {
             <div className="flex flex-col gap-0.5">
               <span className="text-xs text-muted-foreground font-medium">Start Time</span>
               <span className="text-base font-bold">
-                {new Date(appointment.scheduled_start).toLocaleString('en-US', {
-                  weekday: 'long', month: 'long', day: 'numeric',
-                  year: 'numeric', hour: '2-digit', minute: '2-digit',
-                })}
+                {formatDisplayDateTime(appointment.scheduled_start)}
               </span>
             </div>
             <div className="flex flex-col gap-0.5">
               <span className="text-xs text-muted-foreground font-medium">End Time</span>
               <span className="text-base font-bold">
-                {new Date(appointment.scheduled_end).toLocaleString('en-US', {
-                  weekday: 'long', month: 'long', day: 'numeric',
-                  year: 'numeric', hour: '2-digit', minute: '2-digit',
-                })}
+                {formatDisplayDateTime(appointment.scheduled_end)}
               </span>
             </div>
           </div>
@@ -377,15 +541,108 @@ export default function AppointmentDetailPage() {
             <div className="grid grid-cols-2 gap-5">
               <div className="flex flex-col gap-0.5">
                 <span className="text-xs text-muted-foreground font-medium">Created</span>
-                <span className="text-sm font-medium">{new Date(appointment.created_at).toLocaleString()}</span>
+                <span className="text-sm font-medium">{new Date(appointment.created_at).toLocaleString('en-PH', { timeZone: 'Asia/Manila' })}</span>
               </div>
               <div className="flex flex-col gap-0.5">
                 <span className="text-xs text-muted-foreground font-medium">Last Updated</span>
-                <span className="text-sm font-medium">{new Date(appointment.updated_at).toLocaleString()}</span>
+                <span className="text-sm font-medium">{new Date(appointment.updated_at).toLocaleString('en-PH', { timeZone: 'Asia/Manila' })}</span>
               </div>
             </div>
           </div>
         </div>
+
+        {/* Payment */}
+        {(appointment.payment_amount != null || appointment.payment_method) && (
+          <div className="bg-card rounded-2xl border border-border shadow-sm">
+            <div className="px-6 py-4 border-b border-border flex items-center gap-2">
+              <CreditCard size={18} className="text-primary" />
+              <h2 className="text-[17px] font-bold">Payment</h2>
+              {appointment.payment_status && (
+                <span className={[
+                  'ml-auto rounded-full px-2.5 py-0.5 text-xs font-semibold',
+                  appointment.payment_status === 'paid'    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' :
+                  appointment.payment_status === 'waived'  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' :
+                  appointment.payment_status === 'refunded'? 'bg-muted text-muted-foreground' :
+                  'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+                ].join(' ')}>
+                  {appointment.payment_status.replace('_', ' ')}
+                </span>
+              )}
+            </div>
+            <div className="p-6 flex flex-col gap-5">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs text-muted-foreground font-medium">Amount</span>
+                  <span className="text-sm font-bold">
+                    {appointment.payment_amount != null
+                      ? appointment.payment_amount === 0 ? 'Free / ₱0' : `₱${appointment.payment_amount.toLocaleString()}`
+                      : '—'}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs text-muted-foreground font-medium">Method</span>
+                  <span className="text-sm font-medium capitalize">{appointment.payment_method ?? '—'}</span>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs text-muted-foreground font-medium">Reference</span>
+                  <span className="text-sm font-mono font-medium">{appointment.payment_reference ?? '—'}</span>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs text-muted-foreground font-medium">Paid At</span>
+                  <span className="text-sm font-medium">
+                    {appointment.paid_at ? new Date(appointment.paid_at).toLocaleString('en-PH', { timeZone: 'Asia/Manila' }) : '—'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Pending reference notice */}
+              {appointment.payment_status !== 'paid' &&
+               appointment.payment_status !== 'waived' &&
+               appointment.payment_reference &&
+               ['gcash', 'maya'].includes(appointment.payment_method ?? '') && (
+                <div className="flex items-start gap-2 px-4 py-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl text-amber-800 dark:text-amber-300 text-sm">
+                  <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
+                  <span>Client submitted reference <strong>{appointment.payment_reference}</strong> — awaiting verification.</span>
+                </div>
+              )}
+
+              {/* Action buttons */}
+              {!['waived', 'refunded'].includes(appointment.payment_status ?? '') && (
+                <div className="flex flex-wrap gap-2.5 pt-1">
+                  {appointment.payment_status !== 'paid' && (
+                    <button
+                      onClick={() => handlePaymentAction('verify')}
+                      disabled={paymentLoading}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold bg-primary text-primary-foreground hover:opacity-90 active:scale-95 transition-all duration-150 disabled:opacity-55 disabled:cursor-not-allowed"
+                    >
+                      {paymentLoading
+                        ? <><div className="w-3.5 h-3.5 rounded-full border-2 border-primary-foreground border-t-transparent animate-spin" />Processing…</>
+                        : <><ShieldCheck size={15} />Verify Payment</>}
+                    </button>
+                  )}
+                  {appointment.payment_amount !== 0 && appointment.payment_status !== 'paid' && (
+                    <button
+                      onClick={() => handlePaymentAction('waive')}
+                      disabled={paymentLoading}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold border border-border bg-card hover:bg-accent text-foreground transition-all duration-150 disabled:opacity-55"
+                    >
+                      <BadgeDollarSign size={15} /> Waive Payment
+                    </button>
+                  )}
+                  {appointment.payment_status === 'paid' && (
+                    <button
+                      onClick={() => handlePaymentAction('refund')}
+                      disabled={paymentLoading}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all duration-150 disabled:opacity-55"
+                    >
+                      <Undo2 size={14} /> Refund
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Status Management */}
         <div className="bg-card rounded-2xl border border-border shadow-sm">
@@ -393,6 +650,32 @@ export default function AppointmentDetailPage() {
             <h2 className="text-[17px] font-bold">Manage Status</h2>
           </div>
           <div className="p-6 flex flex-col gap-4">
+            {/* Quick actions */}
+            {!['cancelled', 'completed'].includes(appointment.appointment_status) && (
+              <div className="flex flex-wrap gap-2 pb-2 border-b border-border">
+                <span className="text-xs font-semibold text-muted-foreground self-center mr-1">Quick actions:</span>
+                {appointment.appointment_status !== 'confirmed' && (
+                  <button
+                    onClick={handleQuickConfirm}
+                    disabled={updating}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-500 active:scale-95 transition-all duration-150 disabled:opacity-55"
+                  >
+                    <CheckCircle size={14} /> Confirm Appointment
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    setRescheduleStart(appointment.scheduled_start.slice(0, 16));
+                    setRescheduleEnd(appointment.scheduled_end.slice(0, 16));
+                    setShowReschedule(true);
+                  }}
+                  disabled={updating}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold border border-border bg-card hover:bg-accent text-foreground transition-all duration-150 disabled:opacity-55"
+                >
+                  <Clock size={14} /> Reschedule
+                </button>
+              </div>
+            )}
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-semibold">Change Status</label>
               <select
@@ -450,7 +733,7 @@ export default function AppointmentDetailPage() {
                 <button
                   onClick={() => setSelectedStatus('cancelled')}
                   disabled={updating}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold border border-red-200 text-red-600 hover:bg-red-50 transition-all duration-150 disabled:opacity-55"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all duration-150 disabled:opacity-55"
                 >
                   <XCircle size={14} /> Cancel Appointment
                 </button>
@@ -459,6 +742,60 @@ export default function AppointmentDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Reschedule Modal */}
+      {showReschedule && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50" onClick={() => !rescheduling && setShowReschedule(false)} />
+          <div className="relative z-10 bg-card rounded-2xl border border-border shadow-2xl w-full max-w-md">
+            <div className="px-6 py-5 border-b border-border flex items-center justify-between">
+              <h2 className="text-lg font-bold">Reschedule Appointment</h2>
+              <button onClick={() => setShowReschedule(false)} className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground transition-all duration-150">
+                <XCircle size={16} />
+              </button>
+            </div>
+            <div className="p-6 flex flex-col gap-4">
+              <p className="text-sm text-muted-foreground">Select the new date and time for this appointment. The client will be notified automatically.</p>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-semibold">New Start Time <span className="text-destructive">*</span></label>
+                <input
+                  type="datetime-local"
+                  className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-background text-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
+                  value={rescheduleStart}
+                  onChange={e => setRescheduleStart(e.target.value)}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-semibold">New End Time <span className="text-destructive">*</span></label>
+                <input
+                  type="datetime-local"
+                  className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-background text-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
+                  value={rescheduleEnd}
+                  onChange={e => setRescheduleEnd(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-border flex justify-end gap-2">
+              <button
+                onClick={() => setShowReschedule(false)}
+                disabled={rescheduling}
+                className="px-4 py-2 rounded-lg text-sm font-semibold border border-border bg-card hover:bg-accent text-foreground transition-all duration-150 disabled:opacity-55"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleReschedule}
+                disabled={rescheduling || !rescheduleStart || !rescheduleEnd}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold bg-primary text-primary-foreground hover:opacity-90 active:scale-95 transition-all duration-150 disabled:opacity-55"
+              >
+                {rescheduling
+                  ? <><div className="w-3.5 h-3.5 rounded-full border-2 border-primary-foreground border-t-transparent animate-spin" />Rescheduling…</>
+                  : <><Calendar size={14} />Confirm Reschedule</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

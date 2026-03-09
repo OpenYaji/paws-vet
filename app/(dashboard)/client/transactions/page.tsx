@@ -1,412 +1,368 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/auth-client';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Receipt, Download, Eye, DollarSign, Calendar } from 'lucide-react';
+  Receipt,
+  PawPrint,
+  CalendarDays,
+  CreditCard,
+  AlertCircle,
+  Loader2,
+  RefreshCw,
+} from 'lucide-react';
 import { format } from 'date-fns';
+import { Button } from '@/components/ui/button';
 
-interface InvoiceLineItem {
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Types
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+type AppointmentPaymentStatus = 'unpaid' | 'paid' | 'waived' | 'refunded';
+type AppointmentPaymentMethod = 'gcash' | 'maya' | 'cash' | 'card' | 'other' | null;
+
+interface PaymentRecord {
   id: string;
-  description: string;
-  quantity: number;
-  unit_price: number;
-  line_total: number;
-  item_type: 'service' | 'product';
+  appointment_number: string;
+  appointment_type_detail: string | null;
+  scheduled_start: string;
+  appointment_status: string;
+  payment_amount: number;
+  payment_status: AppointmentPaymentStatus;
+  payment_method: AppointmentPaymentMethod;
+  payment_reference: string | null;
+  paid_at: string | null;
+  is_aspin_puspin: boolean;
+  pet: {
+    name: string;
+    species: string;
+    breed: string | null;
+  } | null;
 }
 
-interface Invoice {
-  id: string;
-  invoice_number: string;
-  issue_date: string;
-  subtotal: number;
-  tax_amount: number;
-  discount_amount: number;
-  total_amount: number;
-  amount_paid: number;
-  payment_status: string;
-  notes?: string;
-  line_items?: InvoiceLineItem[];
-  payments?: Array<{
-    payment_number: string;
-    payment_date: string;
-    amount_paid: number;
-    payment_method: string;
-  }>;
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Helpers
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+const BADGE: Record<AppointmentPaymentStatus, { label: string; cls: string }> = {
+  unpaid:   { label: 'Awaiting Payment', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
+  paid:     { label: 'Paid',             cls: 'bg-primary/10 text-primary' },
+  waived:   { label: 'Free / Waived',   cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
+  refunded: { label: 'Refunded',         cls: 'bg-muted text-muted-foreground' },
+};
+
+const METHOD_LABEL: Record<string, string> = {
+  gcash: 'GCash',
+  maya:  'Maya',
+  cash:  'Cash',
+  card:  'Card',
+  other: 'Other',
+};
+
+function StatusBadge({ status }: { status: AppointmentPaymentStatus }) {
+  const b = BADGE[status] ?? BADGE.unpaid;
+  return (
+    <span className={`rounded-full px-3 py-0.5 text-xs font-semibold ${b.cls}`}>
+      {b.label}
+    </span>
+  );
 }
 
-export default function ClientReceiptsPage() {
-  const [isLoading, setIsLoading] = useState(true);
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
-  const [showReceiptDialog, setShowReceiptDialog] = useState(false);
-  const [totalSpent, setTotalSpent] = useState(0);
+function TypeBadge({ type }: { type: string | null }) {
+  const isOutreach = type === 'outreach';
+  return (
+    <span
+      className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+        isOutreach
+          ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400'
+          : 'bg-accent text-primary'
+      }`}
+    >
+      {isOutreach ? 'Outreach' : 'Regular'}
+    </span>
+  );
+}
 
-  useEffect(() => {
-    loadReceipts();
-  }, []);
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Component
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-  async function loadReceipts() {
+export default function ClientTransactionsPage() {
+  const [records, setRecords]     = useState<PaymentRecord[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState<string | null>(null);
+  const [totalPaid, setTotalPaid] = useState(0);
+
+  useEffect(() => { load(); }, []);
+
+  async function load() {
+    setLoading(true);
+    setError(null);
+
     try {
-      setIsLoading(true);
+      const { data: { user }, error: authErr } = await supabase.auth.getUser();
+      if (authErr || !user) throw new Error('Session expired. Please log in again.');
 
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
-      // Get client profile
-      const { data: clientProfile } = await supabase
-        .from('client_profiles')
-        .select('id')
-        .eq('user_id', user.id)
-        .single();
-
-      if (!clientProfile) throw new Error('Client profile not found');
-
-      // Get all invoices for this client
-      const { data: invoicesData, error } = await supabase
-        .from('invoices')
+      const { data, error: qErr } = await supabase
+        .from('appointments')
         .select(`
-          *,
-          invoice_line_items(
-            id,
-            description,
-            quantity,
-            unit_price,
-            line_total,
-            item_type
-          ),
-          payments(
-            payment_number,
-            payment_date,
-            amount_paid,
-            payment_method
+          id,
+          appointment_number,
+          appointment_type_detail,
+          scheduled_start,
+          appointment_status,
+          payment_amount,
+          payment_status,
+          payment_method,
+          payment_reference,
+          paid_at,
+          is_aspin_puspin,
+          pets!appointments_pet_id_fkey (
+            name,
+            species,
+            breed
           )
         `)
-        .eq('client_id', clientProfile.id)
-        .order('issue_date', { ascending: false });
+        .eq('booked_by', user.id)
+        .order('scheduled_start', { ascending: false });
 
-      if (error) throw error;
+      if (qErr) throw qErr;
 
-      setInvoices(invoicesData || []);
-      
-      // Calculate total spent
-      const total = (invoicesData || []).reduce((sum, inv) => sum + inv.total_amount, 0);
-      setTotalSpent(total);
-    } catch (error) {
-      console.error('Error loading receipts:', error);
-      alert('Failed to load receipts');
+      const rows = (data ?? []).map((row: any) => ({
+        id:                      row.id,
+        appointment_number:      row.appointment_number,
+        appointment_type_detail: row.appointment_type_detail,
+        scheduled_start:         row.scheduled_start,
+        appointment_status:      row.appointment_status,
+        payment_amount:          row.payment_amount ?? 0,
+        payment_status:          (row.payment_status ?? 'unpaid') as AppointmentPaymentStatus,
+        payment_method:          row.payment_method as AppointmentPaymentMethod,
+        payment_reference:       row.payment_reference ?? null,
+        paid_at:                 row.paid_at ?? null,
+        is_aspin_puspin:         row.is_aspin_puspin ?? false,
+        pet: Array.isArray(row.pets) ? (row.pets[0] ?? null) : (row.pets ?? null),
+      })) as PaymentRecord[];
+
+      setRecords(rows);
+      setTotalPaid(
+        rows.filter(r => r.payment_status === 'paid').reduce((s, r) => s + r.payment_amount, 0),
+      );
+    } catch (e: any) {
+      setError(e.message ?? 'Failed to load payment history.');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   }
 
-  async function downloadReceipt(invoice: Invoice) {
-    // Generate a simple text receipt
-    const receiptText = `
-RECEIPT
-========================================
-Invoice #: ${invoice.invoice_number}
-Date: ${format(new Date(invoice.issue_date), 'PPP')}
-
-ITEMS:
-----------------------------------------
-${invoice.line_items?.map(item => 
-  `${item.description}\n  Qty: ${item.quantity} x ₱${item.unit_price.toFixed(2)} = ₱${item.line_total.toFixed(2)}`
-).join('\n')}
-
-----------------------------------------
-Subtotal:        ₱${invoice.subtotal.toFixed(2)}
-Discount:       -₱${invoice.discount_amount.toFixed(2)}
-Tax:            +₱${invoice.tax_amount.toFixed(2)}
-========================================
-TOTAL:           ₱${invoice.total_amount.toFixed(2)}
-Amount Paid:     ₱${invoice.amount_paid.toFixed(2)}
-========================================
-
-Payment Method: ${invoice.payments?.[0]?.payment_method || 'N/A'}
-Payment Date: ${invoice.payments?.[0]?.payment_date ? format(new Date(invoice.payments[0].payment_date), 'PPP') : 'N/A'}
-
-Thank you for your business!
-    `;
-
-    // Create blob and download
-    const blob = new Blob([receiptText], { type: 'text/plain' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `receipt-${invoice.invoice_number}.txt`;
-    a.click();
-    window.URL.revokeObjectURL(url);
-  }
-
-  if (isLoading) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center space-y-3">
-          <div className="w-10 h-10 rounded-full border-4 border-primary border-t-transparent animate-spin mx-auto" />
-          <p className="text-sm text-muted-foreground">Loading receipts…</p>
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <Loader2 size={36} className="animate-spin text-primary" />
+          <p className="text-sm font-medium">Loading payment historyâ€¦</p>
         </div>
       </div>
     );
   }
 
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px] p-6">
+        <div className="bg-card border border-border rounded-2xl p-8 text-center max-w-sm w-full">
+          <AlertCircle size={36} className="text-destructive mx-auto mb-4" />
+          <p className="font-semibold text-destructive mb-2">Unable to load</p>
+          <p className="text-sm text-muted-foreground mb-4">{error}</p>
+          <Button variant="outline" onClick={load} className="gap-2">
+            <RefreshCw size={14} /> Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const paidCount    = records.filter(r => r.payment_status === 'paid').length;
+  const pendingCount = records.filter(r => r.payment_status === 'unpaid').length;
+
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-6">
-      {/* Header */}
+    <div className="max-w-4xl mx-auto p-4 sm:p-6 space-y-6">
+
       <div className="pt-2">
-        <h1 className="text-3xl font-bold">My Receipts</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">View your transaction history and download receipts</p>
+        <h1 className="text-3xl font-bold">My Transactions</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Track payment status for all your appointments
+        </p>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-card rounded-2xl border border-border shadow-sm border-l-4 border-l-primary p-5 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-bold tracking-widest uppercase text-muted-foreground">Total Spent</p>
-            <div className="w-9 h-9 rounded-xl bg-accent flex items-center justify-center flex-shrink-0">
-              <DollarSign className="h-4 w-4 text-primary" />
+      {/* Summary strip */}
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          {
+            label: 'Total Paid',
+            value: `â‚±${totalPaid.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`,
+            icon: <CreditCard size={16} className="text-primary" />,
+          },
+          {
+            label: 'Confirmed',
+            value: String(paidCount),
+            icon: <Receipt size={16} className="text-primary" />,
+          },
+          {
+            label: 'Pending',
+            value: String(pendingCount),
+            icon: <CalendarDays size={16} className="text-primary" />,
+          },
+        ].map((stat) => (
+          <div
+            key={stat.label}
+            className="bg-card rounded-2xl border border-border shadow-sm p-4 flex flex-col gap-1"
+          >
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                {stat.label}
+              </p>
+              <div className="w-7 h-7 rounded-lg bg-accent flex items-center justify-center">
+                {stat.icon}
+              </div>
             </div>
+            <p className="text-xl sm:text-2xl font-bold text-primary">{stat.value}</p>
           </div>
-          <p className="text-3xl font-bold text-primary">₱{totalSpent.toFixed(2)}</p>
-          <p className="text-xs text-muted-foreground mt-1">All time</p>
-        </div>
+        ))}
+      </div>
 
-        <div className="bg-card rounded-2xl border border-border shadow-sm border-l-4 border-l-primary p-5 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-bold tracking-widest uppercase text-muted-foreground">Transactions</p>
-            <div className="w-9 h-9 rounded-xl bg-accent flex items-center justify-center flex-shrink-0">
-              <Receipt className="h-4 w-4 text-primary" />
-            </div>
-          </div>
-          <p className="text-3xl font-bold text-primary">{invoices.length}</p>
-          <p className="text-xs text-muted-foreground mt-1">Receipts available</p>
-        </div>
-
-        <div className="bg-card rounded-2xl border border-border shadow-sm border-l-4 border-l-primary p-5 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-bold tracking-widest uppercase text-muted-foreground">Last Transaction</p>
-            <div className="w-9 h-9 rounded-xl bg-accent flex items-center justify-center flex-shrink-0">
-              <Calendar className="h-4 w-4 text-primary" />
-            </div>
-          </div>
-          <p className="text-3xl font-bold text-primary">
-            {invoices.length > 0
-              ? format(new Date(invoices[0].issue_date), 'MMM dd')
-              : 'N/A'}
+      {/* List */}
+      {records.length === 0 ? (
+        <div className="bg-card border border-dashed border-border rounded-2xl p-16 text-center">
+          <div className="text-5xl mb-4">ðŸ¾</div>
+          <p className="font-semibold text-foreground">No transactions yet</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            Your appointment payment records will appear here.
           </p>
-          <p className="text-xs text-muted-foreground mt-1">Most recent</p>
         </div>
-      </div>
+      ) : (
+        <div className="space-y-3">
+          {records.map((rec) => {
+            const referenceSubmitted =
+              rec.payment_status === 'unpaid' &&
+              (rec.payment_method === 'gcash' || rec.payment_method === 'maya') &&
+              !!rec.payment_reference;
 
-      {/* Receipts Table */}
-      <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-border">
-          <h2 className="font-semibold text-foreground">Transaction History</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">All your receipts and invoices</p>
-        </div>
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-background sticky top-0">
-                <TableHead className="text-xs font-bold tracking-widest uppercase text-muted-foreground">Receipt #</TableHead>
-                <TableHead className="text-xs font-bold tracking-widest uppercase text-muted-foreground">Date</TableHead>
-                <TableHead className="text-xs font-bold tracking-widest uppercase text-muted-foreground">Items</TableHead>
-                <TableHead className="text-xs font-bold tracking-widest uppercase text-muted-foreground">Amount</TableHead>
-                <TableHead className="text-xs font-bold tracking-widest uppercase text-muted-foreground">Status</TableHead>
-                <TableHead className="text-right text-xs font-bold tracking-widest uppercase text-muted-foreground">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {invoices.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="py-16">
-                    <div className="flex flex-col items-center text-center gap-3">
-                      <div className="w-14 h-14 bg-accent rounded-2xl flex items-center justify-center">
-                        <Receipt className="w-7 h-7 text-muted-foreground" />
-                      </div>
-                      <p className="font-semibold text-foreground">No receipts found</p>
-                      <p className="text-xs text-muted-foreground">Your transaction receipts will appear here</p>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                invoices.map(invoice => (
-                  <TableRow key={invoice.id} className="hover:bg-accent/50 transition-colors duration-150">
-                    <TableCell className="font-mono text-sm font-semibold">{invoice.invoice_number}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{format(new Date(invoice.issue_date), 'PPP')}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{invoice.line_items?.length || 0} items</TableCell>
-                    <TableCell className="font-semibold">₱{invoice.total_amount.toFixed(2)}</TableCell>
-                    <TableCell>
-                      <span className={`rounded-full px-3 py-0.5 text-xs font-semibold capitalize ${
-                        invoice.payment_status === 'paid'
-                          ? 'bg-emerald-100 text-emerald-700'
-                          : invoice.payment_status === 'pending'
-                          ? 'bg-yellow-100 text-yellow-700'
-                          : 'bg-muted text-muted-foreground'
-                      }`}>
-                        {invoice.payment_status}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <button
-                          onClick={() => {
-                            setSelectedInvoice(invoice);
-                            setShowReceiptDialog(true);
-                          }}
-                          className="p-2 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-150"
-                          title="View receipt"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => downloadReceipt(invoice)}
-                          className="p-2 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-150"
-                          title="Download receipt"
-                        >
-                          <Download className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
-
-      {/* Receipt Details Dialog */}
-      <Dialog open={showReceiptDialog} onOpenChange={setShowReceiptDialog}>
-        <DialogContent className="max-w-2xl rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold">Receipt Details</DialogTitle>
-          </DialogHeader>
-          {selectedInvoice && (
-            <div className="space-y-5">
-              {/* Header */}
-              <div className="text-center border-b border-border pb-4">
-                <div className="w-12 h-12 bg-accent rounded-2xl flex items-center justify-center mx-auto mb-3">
-                  <Receipt className="w-6 h-6 text-primary" />
-                </div>
-                <h2 className="text-lg font-bold">RECEIPT</h2>
-                <p className="text-sm text-muted-foreground">Invoice #: {selectedInvoice.invoice_number}</p>
-                <p className="text-xs text-muted-foreground">
-                  {format(new Date(selectedInvoice.issue_date), 'PPP')}
-                </p>
-              </div>
-
-              {/* Line Items */}
-              <div>
-                <h3 className="font-semibold mb-3 text-sm uppercase tracking-widest text-muted-foreground">Items</h3>
-                <div className="rounded-xl border border-border overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-background">
-                        <TableHead className="text-xs font-bold tracking-widest uppercase text-muted-foreground">Description</TableHead>
-                        <TableHead className="text-xs font-bold tracking-widest uppercase text-muted-foreground">Type</TableHead>
-                        <TableHead className="text-right text-xs font-bold tracking-widest uppercase text-muted-foreground">Qty</TableHead>
-                        <TableHead className="text-right text-xs font-bold tracking-widest uppercase text-muted-foreground">Price</TableHead>
-                        <TableHead className="text-right text-xs font-bold tracking-widest uppercase text-muted-foreground">Total</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {selectedInvoice.line_items?.map(item => (
-                        <TableRow key={item.id} className="hover:bg-accent/50 transition-colors">
-                          <TableCell className="text-sm">{item.description}</TableCell>
-                          <TableCell>
-                            <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${item.item_type === 'service' ? 'bg-accent text-primary' : 'bg-muted text-muted-foreground'}`}>
-                              {item.item_type}
-                            </span>
-                          </TableCell>
-                          <TableCell className="text-right text-sm">{item.quantity}</TableCell>
-                          <TableCell className="text-right text-sm">₱{item.unit_price.toFixed(2)}</TableCell>
-                          <TableCell className="text-right font-semibold text-sm">
-                            ₱{item.line_total.toFixed(2)}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
-
-              {/* Totals */}
-              <div className="space-y-2 pt-2 border-t border-border">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Subtotal</span>
-                  <span>₱{selectedInvoice.subtotal.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Discount</span>
-                  <span className="text-destructive">-₱{selectedInvoice.discount_amount.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Tax</span>
-                  <span>₱{selectedInvoice.tax_amount.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between font-bold pt-2 border-t border-border">
-                  <span>Total</span>
-                  <span className="text-primary">₱{selectedInvoice.total_amount.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-sm text-emerald-600 font-medium">
-                  <span>Amount Paid</span>
-                  <span>₱{selectedInvoice.amount_paid.toFixed(2)}</span>
-                </div>
-              </div>
-
-              {/* Payment Info */}
-              {selectedInvoice.payments && selectedInvoice.payments.length > 0 && (
-                <div className="bg-accent/30 rounded-xl p-4 border border-border">
-                  <h3 className="text-xs font-bold tracking-widest uppercase text-muted-foreground mb-2">Payment Information</h3>
-                  <div className="space-y-1 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Method</span>
-                      <span className="font-semibold capitalize">{selectedInvoice.payments[0].payment_method}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Date</span>
-                      <span className="font-semibold">{format(new Date(selectedInvoice.payments[0].payment_date), 'PPP')}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Ref #</span>
-                      <span className="font-mono font-semibold">{selectedInvoice.payments[0].payment_number}</span>
-                    </div>
+            return (
+              <div
+                key={rec.id}
+                className="bg-card rounded-2xl border border-border shadow-sm p-5 space-y-4"
+              >
+                {/* Top row */}
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-mono text-sm font-bold text-foreground">
+                      #{rec.appointment_number}
+                    </span>
+                    <TypeBadge type={rec.appointment_type_detail} />
                   </div>
+                  <StatusBadge status={rec.payment_status} />
                 </div>
-              )}
 
-              {/* Actions */}
-              <div className="flex justify-end gap-2 pt-2 border-t border-border">
-                <Button variant="outline" size="sm" onClick={() => setShowReceiptDialog(false)} className="rounded-lg">
-                  Close
-                </Button>
-                <Button size="sm" onClick={() => downloadReceipt(selectedInvoice)} className="bg-primary hover:bg-primary/90 rounded-lg active:scale-95 transition-all">
-                  <Download className="w-4 h-4 mr-1.5" />
-                  Download
-                </Button>
+                {/* Pet + date */}
+                <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                  {rec.pet && (
+                    <span className="flex items-center gap-1.5">
+                      <PawPrint size={13} className="text-primary" />
+                      <span className="font-medium text-foreground">{rec.pet.name}</span>
+                      <span className="capitalize">
+                        ({rec.pet.species}{rec.pet.breed ? `, ${rec.pet.breed}` : ''})
+                      </span>
+                    </span>
+                  )}
+                  <span className="flex items-center gap-1.5">
+                    <CalendarDays size={13} />
+                    {format(new Date(rec.scheduled_start), 'PPP')}
+                  </span>
+                </div>
+
+                {/* Payment cells */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                  <PayCell
+                    label="Amount"
+                    value={
+                      rec.payment_amount === 0
+                        ? 'Free'
+                        : `â‚±${rec.payment_amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
+                    }
+                    highlight={rec.payment_amount > 0}
+                  />
+                  <PayCell
+                    label="Method"
+                    value={rec.payment_method ? METHOD_LABEL[rec.payment_method] : 'â€”'}
+                  />
+                  <PayCell
+                    label="Reference"
+                    value={rec.payment_reference ?? 'â€”'}
+                    mono
+                  />
+                  <PayCell
+                    label="Paid on"
+                    value={rec.paid_at ? format(new Date(rec.paid_at), 'PPP') : 'â€”'}
+                  />
+                </div>
+
+                {/* Pending verification notice */}
+                {referenceSubmitted && (
+                  <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-2.5 text-xs text-amber-700 dark:text-amber-400">
+                    <AlertCircle size={13} className="flex-shrink-0 mt-0.5" />
+                    <span>
+                      Reference submitted â€”{' '}
+                      <strong>awaiting verification by the PAWS team</strong>. Your booking will be
+                      confirmed once payment is verified.
+                    </span>
+                  </div>
+                )}
               </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="flex justify-end pb-2">
+        <button
+          onClick={load}
+          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <RefreshCw size={12} /> Refresh
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Sub-component
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+function PayCell({
+  label,
+  value,
+  highlight,
+  mono,
+}: {
+  label: string;
+  value: string;
+  highlight?: boolean;
+  mono?: boolean;
+}) {
+  return (
+    <div className="bg-accent/50 rounded-xl p-3 space-y-0.5">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+        {label}
+      </p>
+      <p
+        className={[
+          'text-sm font-semibold truncate',
+          highlight ? 'text-primary' : 'text-foreground',
+          mono ? 'font-mono' : '',
+        ].join(' ')}
+      >
+        {value}
+      </p>
     </div>
   );
 }

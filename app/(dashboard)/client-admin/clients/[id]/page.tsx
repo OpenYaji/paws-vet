@@ -74,17 +74,18 @@ function fmtDate(d?: string): string {
 }
 
 function statusBadge(s: string): string {
+  const base = 'rounded-full px-2.5 py-0.5 text-xs font-semibold';
   const m: Record<string, string> = {
-    active: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700',
-    confirmed: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700',
-    completed: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-blue-100 text-blue-700',
-    pending: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-yellow-100 text-yellow-800',
-    cancelled: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-red-100 text-red-700',
-    inactive: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-muted text-muted-foreground',
-    suspended: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-red-100 text-red-700',
-    no_show: 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-muted text-muted-foreground',
+    active:    `${base} bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300`,
+    confirmed: `${base} bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300`,
+    completed: `${base} bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300`,
+    pending:   `${base} bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300`,
+    cancelled: `${base} bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300`,
+    inactive:  `${base} bg-muted text-muted-foreground`,
+    suspended: `${base} bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300`,
+    no_show:   `${base} bg-muted text-muted-foreground`,
   };
-  return m[s] ?? 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-muted text-muted-foreground';
+  return m[s] ?? `${base} bg-muted text-muted-foreground`;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -344,8 +345,8 @@ export default function ClientDetailPage() {
                 <p className="text-3xl font-bold">{pets.length}</p>
                 <p className="text-xs text-muted-foreground mt-1">{pets.filter(p => p.is_active).length} active</p>
               </div>
-              <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center flex-shrink-0">
-                <PawPrint size={24} className="text-emerald-600" />
+              <div className="w-12 h-12 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0">
+                <PawPrint size={24} className="text-emerald-600 dark:text-emerald-400" />
               </div>
             </div>
             <div className="bg-card rounded-2xl border border-border border-l-4 border-l-primary shadow-sm p-6 flex items-center justify-between">
@@ -356,8 +357,8 @@ export default function ClientDetailPage() {
                   {appointments.filter(a => a.appointment_status === 'confirmed').length} upcoming
                 </p>
               </div>
-              <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
-                <Calendar size={24} className="text-blue-600" />
+              <div className="w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
+                <Calendar size={24} className="text-blue-600 dark:text-blue-400" />
               </div>
             </div>
           </div>
@@ -384,7 +385,7 @@ export default function ClientDetailPage() {
                       <div className="flex items-center gap-2.5 mb-3">
                         <span className="text-base font-bold">{pet.name}</span>
                         <span className={pet.is_active
-                          ? 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700'
+                          ? 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
                           : 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-muted text-muted-foreground'}>
                           {pet.is_active ? 'Active' : 'Inactive'}
                         </span>
