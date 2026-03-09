@@ -102,6 +102,13 @@ export default function ClientDetailPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview' | 'pets' | 'appointments'>('overview');
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    confirmVariant?: 'danger' | 'primary';
+    onConfirm: () => void;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
@@ -152,24 +159,32 @@ export default function ClientDetailPage() {
     if (clientId) fetchClientDetails();
   }, [clientId, fetchClientDetails]);
 
-  const handleArchiveClient = async () => {
-    if (!client || !confirm(`Archive ${client.first_name} ${client.last_name}? They will lose access.`)) return;
-    try {
-      const { data: { user: cu } } = await supabase.auth.getUser();
-      const { error } = await supabase
-        .from('users')
-        .update({
-          deleted_at: new Date().toISOString(),
-          deleted_by: cu?.id,
-          account_status: 'inactive',
-        })
-        .eq('id', client.user_id);
-      if (error) { showToast('Failed to archive client', 'error'); return; }
-      showToast('Client archived successfully');
-      router.push('/client-admin');
-    } catch {
-      showToast('Failed to archive client', 'error');
-    }
+  const handleArchiveClient = () => {
+    if (!client) return;
+    setConfirmModal({
+      title: 'Archive Client',
+      message: `Archive ${client.first_name} ${client.last_name}? They will lose access to the system.`,
+      confirmLabel: 'Archive',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        try {
+          const { data: { user: cu } } = await supabase.auth.getUser();
+          const { error } = await supabase
+            .from('users')
+            .update({
+              deleted_at: new Date().toISOString(),
+              deleted_by: cu?.id,
+              account_status: 'inactive',
+            })
+            .eq('id', client.user_id);
+          if (error) { showToast('Failed to archive client', 'error'); return; }
+          showToast('Client archived successfully');
+          router.push('/client-admin');
+        } catch {
+          showToast('Failed to archive client', 'error');
+        }
+      },
+    });
   };
 
   if (loading) {
@@ -220,9 +235,15 @@ export default function ClientDetailPage() {
           >
             <ArrowLeft size={16} />
           </button>
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/10 text-primary text-xl font-bold flex items-center justify-center flex-shrink-0">
+            {client.first_name[0]}{client.last_name[0]}
+          </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">{client.first_name} {client.last_name}</h1>
-            <span className="text-xs text-muted-foreground font-mono">{client.id}</span>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h1 className="text-3xl font-bold tracking-tight">{client.first_name} {client.last_name}</h1>
+              <span className={statusBadge(userData?.account_status || 'unknown')}>{userData?.account_status}</span>
+            </div>
+            <span className="text-xs text-muted-foreground font-mono">{client.id.slice(0, 12)}…</span>
           </div>
         </div>
         <div className="flex gap-2.5">
@@ -250,7 +271,7 @@ export default function ClientDetailPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-border mb-6">
+      <div className="flex bg-card rounded-2xl border border-border p-1 mb-6 gap-1">
         {([
           { key: 'overview', label: 'Overview', icon: <User size={15} />, count: null },
           { key: 'pets', label: 'Pets', icon: <PawPrint size={15} />, count: pets.length },
@@ -259,17 +280,17 @@ export default function ClientDetailPage() {
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            className={`flex items-center gap-1.5 px-5 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors duration-150 ${
+            className={`flex items-center gap-1.5 px-5 py-2 text-sm font-semibold rounded-xl transition-colors duration-150 ${
               activeTab === tab.key
-                ? 'text-primary border-primary'
-                : 'text-muted-foreground border-transparent hover:text-foreground'
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-muted-foreground hover:bg-accent hover:text-foreground'
             }`}
           >
             {tab.icon}
             {tab.label}
             {tab.count !== null && (
               <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full border ${
-                activeTab === tab.key ? 'bg-accent text-primary border-primary/30' : 'bg-muted text-muted-foreground border-border'
+                activeTab === tab.key ? 'bg-primary-foreground/20 text-primary-foreground border-primary-foreground/30' : 'bg-muted text-muted-foreground border-border'
               }`}>{tab.count}</span>
             )}
           </button>
@@ -285,21 +306,21 @@ export default function ClientDetailPage() {
               <h2 className="text-[17px] font-bold">Account Information</h2>
             </div>
             <div className="p-6 flex flex-col gap-5">
-              <div className="flex gap-3 items-start">
+              <div className="flex gap-3 items-start bg-accent/40 rounded-xl p-3">
                 <Mail size={18} className="text-muted-foreground mt-0.5 flex-shrink-0" />
                 <div className="flex flex-col gap-0.5">
                   <span className="text-xs text-muted-foreground font-medium">Email</span>
                   <span className="text-sm font-medium">{userData?.email || '—'}</span>
                 </div>
               </div>
-              <div className="flex gap-3 items-start">
+              <div className="flex gap-3 items-start bg-accent/40 rounded-xl p-3">
                 <Phone size={18} className="text-muted-foreground mt-0.5 flex-shrink-0" />
                 <div className="flex flex-col gap-0.5">
                   <span className="text-xs text-muted-foreground font-medium">Phone</span>
                   <span className="text-sm font-medium">{client.phone}</span>
                 </div>
               </div>
-              <div className="flex gap-3 items-start">
+              <div className="flex gap-3 items-start bg-accent/40 rounded-xl p-3">
                 <MapPin size={18} className="text-muted-foreground mt-0.5 flex-shrink-0" />
                 <div className="flex flex-col gap-0.5">
                   <span className="text-xs text-muted-foreground font-medium">Address</span>
@@ -339,7 +360,7 @@ export default function ClientDetailPage() {
 
           {/* Stat cards */}
           <div className="flex flex-col gap-4">
-            <div className="bg-card rounded-2xl border border-border border-l-4 border-l-primary shadow-sm p-6 flex items-center justify-between">
+            <div className="bg-card rounded-2xl border border-border border-l-4 border-l-primary shadow-sm p-6 flex items-center justify-between hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
               <div>
                 <p className="text-sm text-muted-foreground mb-1.5">Total Pets</p>
                 <p className="text-3xl font-bold">{pets.length}</p>
@@ -349,7 +370,7 @@ export default function ClientDetailPage() {
                 <PawPrint size={24} className="text-emerald-600 dark:text-emerald-400" />
               </div>
             </div>
-            <div className="bg-card rounded-2xl border border-border border-l-4 border-l-primary shadow-sm p-6 flex items-center justify-between">
+            <div className="bg-card rounded-2xl border border-border border-l-4 border-l-primary shadow-sm p-6 flex items-center justify-between hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
               <div>
                 <p className="text-sm text-muted-foreground mb-1.5">Total Appointments</p>
                 <p className="text-3xl font-bold">{appointments.length}</p>
@@ -379,10 +400,11 @@ export default function ClientDetailPage() {
           ) : (
             <div>
               {pets.map((pet, i) => (
-                <div key={pet.id} className={`p-6 ${i < pets.length - 1 ? 'border-b border-border' : ''}`}>
+                <div key={pet.id} className={`p-6 hover:bg-accent/40 transition-colors ${i < pets.length - 1 ? 'border-b border-border' : ''}`}>
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
                       <div className="flex items-center gap-2.5 mb-3">
+                        <span className="text-xl">{pet.species?.toLowerCase() === 'dog' ? '🐕' : pet.species?.toLowerCase() === 'cat' ? '🐈' : '🐾'}</span>
                         <span className="text-base font-bold">{pet.name}</span>
                         <span className={pet.is_active
                           ? 'rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
@@ -390,7 +412,7 @@ export default function ClientDetailPage() {
                           {pet.is_active ? 'Active' : 'Inactive'}
                         </span>
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="bg-muted/30 rounded-xl p-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
                         {[
                           { label: 'Species', value: pet.species },
                           { label: 'Breed', value: pet.breed || '—' },
@@ -432,7 +454,7 @@ export default function ClientDetailPage() {
           ) : (
             <div>
               {appointments.map((apt: any, i: number) => (
-                <div key={apt.id} className={`p-5 ${i < appointments.length - 1 ? 'border-b border-border' : ''}`}>
+                <div key={apt.id} className={`p-5 hover:bg-accent/40 transition-colors ${i < appointments.length - 1 ? 'border-b border-border' : ''}`}>
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
                       <div className="flex items-center gap-2.5 mb-1.5">
@@ -453,6 +475,7 @@ export default function ClientDetailPage() {
                           ? new Date(apt.scheduled_start).toLocaleString('en-US', {
                               month: 'short', day: 'numeric', year: 'numeric',
                               hour: '2-digit', minute: '2-digit',
+                              timeZone: 'Asia/Manila',
                             })
                           : 'N/A'}
                       </p>
@@ -468,6 +491,36 @@ export default function ClientDetailPage() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {confirmModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setConfirmModal(null)} />
+          <div className="relative z-10 bg-card rounded-2xl border border-border shadow-2xl w-full max-w-sm animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-6">
+              <h3 className="text-lg font-bold text-foreground mb-2">{confirmModal.title}</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">{confirmModal.message}</p>
+            </div>
+            <div className="px-6 pb-6 flex gap-3 justify-end">
+              <button
+                onClick={() => setConfirmModal(null)}
+                className="px-4 py-2 rounded-lg text-sm font-semibold border border-border bg-card hover:bg-accent text-foreground transition-all duration-150"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { confirmModal.onConfirm(); setConfirmModal(null); }}
+                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 active:scale-95 ${
+                  confirmModal.confirmVariant === 'danger'
+                    ? 'bg-red-600 hover:bg-red-500 text-white'
+                    : 'bg-primary hover:opacity-90 text-primary-foreground'
+                }`}
+              >
+                {confirmModal.confirmLabel || 'Confirm'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

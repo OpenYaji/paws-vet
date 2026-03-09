@@ -14,10 +14,6 @@ import {
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// Types
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
 type AppointmentPaymentStatus = 'unpaid' | 'paid' | 'waived' | 'refunded';
 type AppointmentPaymentMethod = 'gcash' | 'maya' | 'cash' | 'card' | 'other' | null;
 
@@ -40,15 +36,13 @@ interface PaymentRecord {
   } | null;
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// Helpers
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
 
 const BADGE: Record<AppointmentPaymentStatus, { label: string; cls: string }> = {
-  unpaid:   { label: 'Awaiting Payment', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
-  paid:     { label: 'Paid',             cls: 'bg-primary/10 text-primary' },
-  waived:   { label: 'Free / Waived',   cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
-  refunded: { label: 'Refunded',         cls: 'bg-muted text-muted-foreground' },
+  unpaid:   { label: 'Awaiting Payment', cls: 'bg-amber-700 text-white dark:bg-amber-500 dark:text-white' },
+  paid:     { label: 'Paid',             cls: 'bg-emerald-700 text-white dark:bg-emerald-500 dark:text-white' },
+  waived:   { label: 'Free / Waived',   cls: 'bg-blue-700 text-white dark:bg-blue-500 dark:text-white' },
+  refunded: { label: 'Refunded',         cls: 'bg-slate-700 text-white dark:bg-slate-500 dark:text-white' },
 };
 
 const METHOD_LABEL: Record<string, string> = {
@@ -57,6 +51,13 @@ const METHOD_LABEL: Record<string, string> = {
   cash:  'Cash',
   card:  'Card',
   other: 'Other',
+};
+
+const STATUS_BORDER: Record<AppointmentPaymentStatus, string> = {
+  paid:     'border-l-emerald-500',
+  unpaid:   'border-l-amber-500',
+  waived:   'border-l-blue-500',
+  refunded: 'border-l-muted-foreground',
 };
 
 function StatusBadge({ status }: { status: AppointmentPaymentStatus }) {
@@ -74,8 +75,8 @@ function TypeBadge({ type }: { type: string | null }) {
     <span
       className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
         isOutreach
-          ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400'
-          : 'bg-accent text-primary'
+          ? 'bg-violet-700 text-white dark:bg-violet-500 dark:text-white'
+          : 'bg-blue-700 text-white dark:bg-blue-500 dark:text-white'
       }`}
     >
       {isOutreach ? 'Outreach' : 'Regular'}
@@ -186,11 +187,22 @@ export default function ClientTransactionsPage() {
   return (
     <div className="max-w-4xl mx-auto p-4 sm:p-6 space-y-6">
 
-      <div className="pt-2">
-        <h1 className="text-3xl font-bold">My Transactions</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Track payment status for all your appointments
-        </p>
+      <div className="flex items-center justify-between pt-2">
+        <div>
+          <h1 className="text-3xl font-bold flex items-center gap-2">
+            <Receipt className="w-7 h-7 text-primary" />
+            <span className="bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">My Transactions</span>
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Track payment status for all your appointments
+          </p>
+        </div>
+        <button
+          onClick={load}
+          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <RefreshCw size={12} /> Refresh
+        </button>
       </div>
 
       {/* Summary strip */}
@@ -198,23 +210,26 @@ export default function ClientTransactionsPage() {
         {[
           {
             label: 'Total Paid',
-            value: `â‚±${totalPaid.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`,
+            value: `\u20B1${totalPaid.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`,
             icon: <CreditCard size={16} className="text-primary" />,
+            accent: 'border-l-primary',
           },
           {
             label: 'Confirmed',
             value: String(paidCount),
-            icon: <Receipt size={16} className="text-primary" />,
+            icon: <Receipt size={16} className="text-emerald-500" />,
+            accent: 'border-l-emerald-500',
           },
           {
             label: 'Pending',
             value: String(pendingCount),
-            icon: <CalendarDays size={16} className="text-primary" />,
+            icon: <CalendarDays size={16} className="text-amber-500" />,
+            accent: 'border-l-amber-500',
           },
         ].map((stat) => (
           <div
             key={stat.label}
-            className="bg-card rounded-2xl border border-border shadow-sm p-4 flex flex-col gap-1"
+            className={`bg-card rounded-2xl border border-border border-l-4 ${stat.accent} shadow-sm p-4 flex flex-col gap-1`}
           >
             <div className="flex items-center justify-between">
               <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
@@ -232,7 +247,7 @@ export default function ClientTransactionsPage() {
       {/* List */}
       {records.length === 0 ? (
         <div className="bg-card border border-dashed border-border rounded-2xl p-16 text-center">
-          <div className="text-5xl mb-4">ðŸ¾</div>
+          <Receipt size={48} className="text-muted-foreground mx-auto mb-4" />
           <p className="font-semibold text-foreground">No transactions yet</p>
           <p className="text-sm text-muted-foreground mt-1">
             Your appointment payment records will appear here.
@@ -249,7 +264,7 @@ export default function ClientTransactionsPage() {
             return (
               <div
                 key={rec.id}
-                className="bg-card rounded-2xl border border-border shadow-sm p-5 space-y-4"
+                className={`bg-card rounded-2xl border border-border border-l-4 ${STATUS_BORDER[rec.payment_status]} shadow-sm p-5 space-y-4`}
               >
                 {/* Top row */}
                 <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -266,7 +281,7 @@ export default function ClientTransactionsPage() {
                 <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                   {rec.pet && (
                     <span className="flex items-center gap-1.5">
-                      <PawPrint size={13} className="text-primary" />
+                      <span className="text-sm">{rec.pet.species === 'cat' ? '🐱' : rec.pet.species === 'dog' ? '🐕' : '🐾'}</span>
                       <span className="font-medium text-foreground">{rec.pet.name}</span>
                       <span className="capitalize">
                         ({rec.pet.species}{rec.pet.breed ? `, ${rec.pet.breed}` : ''})
@@ -286,7 +301,7 @@ export default function ClientTransactionsPage() {
                     value={
                       rec.payment_amount === 0
                         ? 'Free'
-                        : `â‚±${rec.payment_amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
+                        : `\u20B1${rec.payment_amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
                     }
                     highlight={rec.payment_amount > 0}
                   />
@@ -321,15 +336,6 @@ export default function ClientTransactionsPage() {
           })}
         </div>
       )}
-
-      <div className="flex justify-end pb-2">
-        <button
-          onClick={load}
-          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <RefreshCw size={12} /> Refresh
-        </button>
-      </div>
     </div>
   );
 }
