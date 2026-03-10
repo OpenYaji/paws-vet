@@ -1,5 +1,5 @@
 // app/api/veterinarian/notifications/route.ts
-import { createCookieClient } from "@/lib/supabase-server";
+import { createClient } from "@/utils/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 
 // Consistent error response helper
@@ -10,13 +10,29 @@ function jsonError(message: any, status: number = 400, details?: any) {
   );
 }
 
-async function requireUser(req: NextRequest) {
-  const supabase = await createCookieClient();
-  const { data, error } = await supabase.auth.getUser();
-  if (error || !data?.user) {
-    return { supabase, user: null, response: jsonError("Unauthorized", 401) };
-  }
-  return { supabase, user: data.user, response: null };
+// get the authenticated user and supabase client
+async function getAuthUser(request: NextRequest) {
+  const supabase = await createClient();
+
+  // check for manual token in headers (for fetcher)
+  const authHeader = request.headers.get("Authorization");
+  const token = authHeader ? authHeader.replace("Bearer ", "").trim() : null;
+
+  const {
+    data: { user },
+    error,
+  } = token
+    ? await supabase.auth.getUser(token)
+    : await supabase.auth.getUser();
+
+  if (error || !user) return { user: null, role: null, supabase };
+
+  const role =
+    user?.user_metadata?.role?.toLowerCase() ||
+    user?.app_metadata?.role?.toLowerCase() ||
+    "client";
+
+  return { user, role, supabase };
 }
 
 // Vet-only guard — admins are excluded to keep this feed isolated
@@ -30,7 +46,7 @@ async function isVet(supabase: any, userId: string): Promise<boolean> {
 }
 
 // Notification types relevant to the veterinarian feed
-const VET_NOTIFICATION_TYPES = [
+const vet_notification_types = [
   "new_appointment",
   "new_pet",
   "emergency",
@@ -63,8 +79,8 @@ const notifSelect = `
 
 // GET: fetch vet-specific notifications with optional unread + pagination filters
 export async function GET(request: NextRequest) {
-  const { supabase, user, response } = await requireUser(request);
-  if (response) return response;
+  const { user, role, supabase } = await getAuthUser(request);
+  if (!user) return jsonError("Unauthorized", 401);
 
   // Only veterinarians may access this endpoint
   const authorized = await isVet(supabase, user!.id);
@@ -80,7 +96,7 @@ export async function GET(request: NextRequest) {
       .from("notification_logs")
       .select(notifSelect)
       .eq("recipient_id", user!.id)
-      .in("notification_type", VET_NOTIFICATION_TYPES)
+      .in("notification_type", vet_notification_types)
       .order("sent_at", { ascending: false })
       .limit(limit);
 
@@ -102,8 +118,8 @@ export async function GET(request: NextRequest) {
 
 // PATCH: mark a notification as read
 export async function PATCH(request: NextRequest) {
-  const { supabase, user, response } = await requireUser(request);
-  if (response) return response;
+  const { user, role, supabase } = await getAuthUser(request);
+  if (!user) return jsonError("Unauthorized", 401);
 
   const authorized = await isVet(supabase, user!.id);
   if (!authorized) return jsonError("Forbidden: veterinarians only", 403);
@@ -119,7 +135,7 @@ export async function PATCH(request: NextRequest) {
         .update({ is_read: true })
         .eq("recipient_id", user!.id)
         .eq("is_read", false)
-        .in("notification_type", VET_NOTIFICATION_TYPES);
+        .in("notification_type", vet_notification_types);
 
       if (error) return jsonError("Failed to update notifications", 500);
       return NextResponse.json({ success: true });

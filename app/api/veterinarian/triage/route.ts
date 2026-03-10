@@ -1,29 +1,42 @@
-import { createCookieClient } from "@/lib/supabase-server";
-import { supabaseAdmin } from "@/lib/supabase-admin-server";
+import { createClient } from "@/utils/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/auth-helpers-nextjs";
 import { handleError } from "@/utils/error-handler";
 
 export const dynamic = "force-dynamic";
+// get the authenticated user and role
+async function getAuthUser(request: NextRequest) {
+  const supabase = await createClient();
 
-const admin = supabaseAdmin(); // Initialize admin client at module level for reuse in both GET and POST
+  // check for manual token in headers (for fetcher)
+  const authHeader = request.headers.get("Authorization");
+  const token = authHeader ? authHeader.replace("Bearer ", "").trim() : null;
+
+  const {
+    data: { user },
+    error,
+  } = token
+    ? await supabase.auth.getUser(token)
+    : await supabase.auth.getUser();
+
+  if (error || !user) return { user: null, role: null, supabase };
+
+  const role =
+    user?.user_metadata?.role?.toLowerCase() ||
+    user?.app_metadata?.role?.toLowerCase() ||
+    "client";
+
+  return { user, role, supabase };
+}
 
 // --- GET: Fetch "Waiting Room" (Patients Ready for Triage) ---
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createCookieClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user || user.user_metadata.role !== "veterinarian") {
+    const { user, role, supabase } = await getAuthUser(request);
+    if (!user || role !== "veterinarian") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     // We want appointments that are 'in_progress' (checked in and awaiting triage)
-    // Fix: Create separate date objects to avoid mutation
     const now = new Date();
     const startOfDay = new Date(
       now.getFullYear(),
@@ -50,7 +63,7 @@ export async function GET(request: NextRequest) {
       serverTime: now.toISOString(),
     });
 
-    const { data, error } = await admin
+    const { data, error } = await supabase
       .from("appointments")
       .select(
         `
@@ -193,8 +206,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const supabase = await createClient();
     // 1. Insert triage record
-    const { data: triageData, error: triageError } = await admin
+    const { data: triageData, error: triageError } = await supabase
       .from("triage_records")
       .insert({
         appointment_id,
@@ -216,7 +230,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Update pet weight
-    const { error: petError } = await admin
+    const { error: petError } = await supabase
       .from("pets")
       .update({ weight: parseFloat(weight) })
       .eq("id", pet_id);

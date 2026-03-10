@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createCookieClient } from "@/lib/supabase-server";
+import { createClient } from "@/utils/supabase/server";
 import { handleError } from "@/utils/error-handler";
 
 // Helper function to get the user and role cleanly
 async function getAuthUser(request: NextRequest) {
-  const supabase = await createCookieClient();
+  const supabase = await createClient();
 
   // Check for manual token in headers (for fetcher)
   const authHeader = request.headers.get("Authorization");

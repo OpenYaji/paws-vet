@@ -1,20 +1,41 @@
-import { createCookieClient } from "@/lib/supabase-server";
+import { createClient } from "@/utils/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase-admin-server";
 import { handleError } from "@/utils/error-handler";
 
 export const dynamic = "force-dynamic";
 
-// Test this API with Postman: /api/appointments/appointment-reports?date=2024-06-01 
+// get the authenticated user and role
+async function getAuthUser(request: NextRequest) {
+  const supabase = await createClient();
+
+  // check for manual token in headers (for fetcher)
+  const authHeader = request.headers.get("Authorization");
+  const token = authHeader ? authHeader.replace("Bearer ", "").trim() : null;
+
+  const {
+    data: { user },
+    error,
+  } = token
+    ? await supabase.auth.getUser(token)
+    : await supabase.auth.getUser();
+
+  if (error || !user) return { user: null, role: null, supabase };
+
+  const role =
+    user?.user_metadata?.role?.toLowerCase() ||
+    user?.app_metadata?.role?.toLowerCase() ||
+    "client";
+
+  return { user, role, supabase };
+}
+
+// GET /api/veterinarian/appointments/appointment-reports?date=2024-06-01
 export async function GET(request: NextRequest) {
+  const { user, role } = await getAuthUser(request);
+  if (!user || role !== "veterinarian") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   try {
-    const supabase = await createCookieClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user || user.user_metadata.role !== "veterinarian") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { searchParams } = new URL(request.url);
     const dateParam = searchParams.get("date");
 
@@ -40,10 +61,10 @@ export async function GET(request: NextRequest) {
     console.log(`Generating report for week: ${startOfWeek.toISOString()} to ${endOfWeek.toISOString()}`);
     console.log(`Query range: ${startOfWeek.toISOString()} to ${startOfNextWeek.toISOString()}`);
 
-    const admin = supabaseAdmin(); // Use admin client to bypass RLS for reporting
+    const supabase = await createClient();
     
     // Fetch appointments with necessary fields and relations
-    const { data: appointments, error } = await admin
+    const { data: appointments, error } = await supabase
       .from("appointments")
       .select(`
         id,
