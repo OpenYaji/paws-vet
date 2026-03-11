@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   Calendar, Clock, PawPrint, FileText, Download,
   Search, ChevronLeft, ChevronRight, AlertCircle,
-  History,
+  History, RefreshCw, ArrowLeft,
 } from 'lucide-react';
 
 interface Appointment {
@@ -17,9 +17,10 @@ interface Appointment {
   appointment_status: string;
   reason_for_visit: string;
   special_instructions?: string;
+  cancellation_reason?: string;
   is_emergency: boolean;
   created_at: string;
-  pets?: {
+  pets?: { name: string; species: string; breed: string } | {
     name: string;
     species: string;
     breed: string;
@@ -117,7 +118,7 @@ export default function AppointmentHistoryPage() {
       const q = searchTerm.toLowerCase();
       filtered = filtered.filter(apt =>
         apt.reason_for_visit.toLowerCase().includes(q) ||
-        apt.pets?.[0]?.name.toLowerCase().includes(q) ||
+        (apt.pets ? (Array.isArray(apt.pets) ? apt.pets[0]?.name : apt.pets.name)?.toLowerCase().includes(q) : false) ||
         apt.appointment_number.toLowerCase().includes(q)
       );
     }
@@ -139,9 +140,9 @@ export default function AppointmentHistoryPage() {
   const exportToCSV = () => {
     const headers = ['Date', 'Time', 'Pet', 'Reason', 'Status', 'Appointment #'];
     const rows = filteredAppointments.map(apt => [
-      new Date(apt.scheduled_start).toLocaleDateString(),
-      new Date(apt.scheduled_start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-      apt.pets?.[0]?.name || 'Unknown',
+      new Date(apt.scheduled_start).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila' }),
+      new Date(apt.scheduled_start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' }),
+      (apt.pets ? (Array.isArray(apt.pets) ? apt.pets[0]?.name : apt.pets.name) : null) || 'Unknown',
       apt.reason_for_visit,
       apt.appointment_status,
       apt.appointment_number,
@@ -186,42 +187,63 @@ export default function AppointmentHistoryPage() {
   return (
     <div className="max-w-5xl mx-auto p-6 space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-2">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 pt-2">
         <div>
+          <Link
+            href="/client/appointments"
+            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-3 group"
+          >
+            <ArrowLeft size={15} className="group-hover:-translate-x-0.5 transition-transform" />
+            Back to Appointments
+          </Link>
           <div className="flex items-center gap-3 mb-1">
             <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center flex-shrink-0">
               <History size={20} className="text-primary-foreground" />
             </div>
             <h1 className="text-3xl font-bold">Appointment History</h1>
           </div>
-          <p className="text-sm text-muted-foreground ml-[52px]">Track and review all your pet's appointments</p>
+          <p className="text-sm text-muted-foreground ml-[52px]">Your completed, cancelled and no-show visits</p>
         </div>
-        {filteredAppointments.length > 0 && (
+        <div className="flex items-center gap-2">
           <button
-            onClick={exportToCSV}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-card hover:bg-accent text-sm font-semibold transition-all duration-150 active:scale-95"
+            onClick={fetchAppointmentHistory}
+            className="p-2 rounded-lg border border-border bg-card hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-150"
+            aria-label="Refresh history"
           >
-            <Download size={14} /> Export CSV
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           </button>
-        )}
+          {filteredAppointments.length > 0 && (
+            <button
+              onClick={exportToCSV}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-card hover:bg-accent text-sm font-semibold transition-all duration-150 active:scale-95"
+            >
+              <Download size={14} /> Export CSV
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="bg-card rounded-2xl border border-border shadow-sm border-l-4 border-l-primary p-5 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
           <p className="text-xs font-bold tracking-widest uppercase text-muted-foreground mb-1">Total</p>
           <p className="text-4xl font-bold text-primary">{appointments.length}</p>
           <p className="text-xs text-muted-foreground mt-1">Past appointments</p>
         </div>
-        <div className="bg-card rounded-2xl border border-border shadow-sm border-l-4 border-l-primary p-5 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
+        <div className="bg-card rounded-2xl border border-border shadow-sm border-l-4 border-l-blue-500 p-5 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
           <p className="text-xs font-bold tracking-widest uppercase text-muted-foreground mb-1">Completed</p>
-          <p className="text-4xl font-bold text-primary">{appointments.filter(a => a.appointment_status === 'completed').length}</p>
+          <p className="text-4xl font-bold text-blue-600 dark:text-blue-400">{appointments.filter(a => a.appointment_status === 'completed').length}</p>
           <p className="text-xs text-muted-foreground mt-1">Successfully done</p>
         </div>
-        <div className="bg-card rounded-2xl border border-border shadow-sm border-l-4 border-l-primary p-5 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
+        <div className="bg-card rounded-2xl border border-border shadow-sm border-l-4 border-l-red-500 p-5 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
           <p className="text-xs font-bold tracking-widest uppercase text-muted-foreground mb-1">Cancelled</p>
-          <p className="text-4xl font-bold text-primary">{appointments.filter(a => a.appointment_status === 'cancelled').length}</p>
+          <p className="text-4xl font-bold text-red-600 dark:text-red-400">{appointments.filter(a => a.appointment_status === 'cancelled').length}</p>
           <p className="text-xs text-muted-foreground mt-1">Cancelled visits</p>
+        </div>
+        <div className="bg-card rounded-2xl border border-border shadow-sm border-l-4 border-l-muted p-5 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
+          <p className="text-xs font-bold tracking-widest uppercase text-muted-foreground mb-1">No Show</p>
+          <p className="text-4xl font-bold text-muted-foreground">{appointments.filter(a => a.appointment_status === 'no_show').length}</p>
+          <p className="text-xs text-muted-foreground mt-1">Missed visits</p>
         </div>
       </div>
 
@@ -283,13 +305,19 @@ export default function AppointmentHistoryPage() {
           <div className="space-y-3">
             {paginatedAppointments.map((apt) => {
               const statusConfig: Record<string, { cardCls: string; badgeCls: string; label: string }> = {
-                completed: { cardCls: 'border-l-blue-500 bg-blue-50/40', badgeCls: 'bg-blue-100 text-blue-700', label: 'Completed' },
-                confirmed: { cardCls: 'border-l-emerald-500 bg-emerald-50/40', badgeCls: 'bg-emerald-100 text-emerald-700', label: 'Confirmed' },
-                pending: { cardCls: 'border-l-yellow-500 bg-yellow-50/40', badgeCls: 'bg-yellow-100 text-yellow-700', label: 'Pending' },
-                cancelled: { cardCls: 'border-l-red-500 bg-red-50/40', badgeCls: 'bg-red-100 text-red-700', label: 'Cancelled' },
-                no_show: { cardCls: 'border-l-border bg-muted/30', badgeCls: 'bg-muted text-muted-foreground', label: 'No Show' },
+                completed: { cardCls: 'border-l-blue-500 bg-blue-50/40 dark:bg-blue-900/10', badgeCls: 'bg-blue-700 text-white dark:bg-blue-500 dark:text-white', label: 'Completed' },
+                confirmed: { cardCls: 'border-l-emerald-500 bg-emerald-50/40 dark:bg-emerald-900/10', badgeCls: 'bg-emerald-700 text-white dark:bg-emerald-500 dark:text-white', label: 'Confirmed' },
+                pending: { cardCls: 'border-l-yellow-500 bg-yellow-50/40 dark:bg-yellow-900/10', badgeCls: 'bg-amber-700 text-white dark:bg-amber-500 dark:text-white', label: 'Pending' },
+                cancelled: { cardCls: 'border-l-red-500 bg-red-50/40 dark:bg-red-900/10', badgeCls: 'bg-red-700 text-white dark:bg-red-500 dark:text-white', label: 'Cancelled' },
+                no_show: { cardCls: 'border-l-border bg-muted/30', badgeCls: 'bg-slate-700 text-white dark:bg-slate-500 dark:text-white', label: 'No Show' },
               };
               const cfg = statusConfig[apt.appointment_status] || statusConfig.pending;
+              const isOutreach = apt.reason_for_visit?.startsWith('Outreach');
+              const typeBadgeCls = isOutreach
+                ? 'bg-violet-700 text-white dark:bg-violet-500 dark:text-white'
+                : 'bg-blue-700 text-white dark:bg-blue-500 dark:text-white';
+              const typeLabel = isOutreach ? 'Outreach' : 'Regular';
+              const pet = apt.pets ? (Array.isArray(apt.pets) ? apt.pets[0] : apt.pets) : null;
 
               return (
                 <div
@@ -305,26 +333,36 @@ export default function AppointmentHistoryPage() {
                         </div>
                         <div>
                           <p className="text-sm font-bold text-foreground">
-                            {new Date(apt.scheduled_start).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                            {new Date(apt.scheduled_start).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Asia/Manila' })}
                           </p>
                           <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                             <Clock size={11} />
-                            {new Date(apt.scheduled_start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                            {new Date(apt.scheduled_start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' })}
                             {' – '}
-                            {new Date(apt.scheduled_end).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                            {new Date(apt.scheduled_end).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' })}
                           </p>
                         </div>
                       </div>
 
                       <p className="font-bold text-foreground">{apt.reason_for_visit}</p>
 
-                      {apt.pets?.[0] && (
-                        <div className="inline-flex items-center gap-2 bg-background/70 border border-border rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground">
+                      {apt.appointment_status === 'cancelled' && apt.cancellation_reason && (
+                        <p className="text-xs text-destructive/70 italic">Reason: {apt.cancellation_reason}</p>
+                      )}
+
+                      {pet && (
+                        <div className="inline-flex items-center gap-2 bg-background/70 border border-border rounded-lg px-3 py-2 text-xs font-medium text-muted-foreground">
                           <PawPrint size={12} className="text-primary" />
-                          <span className="font-semibold text-foreground">{apt.pets[0].name}</span>
-                          <span>•</span>
-                          <span>{apt.pets[0].species}</span>
-                          {apt.pets[0].breed && <><span>•</span><span>{apt.pets[0].breed}</span></>}
+                          <span className="font-bold text-sm text-foreground">
+                            {pet.species === 'dog' ? '🐕' : pet.species === 'cat' ? '🐈' : '🐾'}
+                            {' '}{pet.name}
+                          </span>
+                          {pet.breed && (
+                            <>
+                              <span className="text-muted-foreground">•</span>
+                              <span>{pet.breed}</span>
+                            </>
+                          )}
                         </div>
                       )}
 
@@ -339,6 +377,9 @@ export default function AppointmentHistoryPage() {
                     {/* Right Section */}
                     <div className="flex flex-row sm:flex-col items-start sm:items-end gap-3">
                       <div className="flex flex-wrap gap-2">
+                        <span className={`rounded-full px-3 py-0.5 text-xs font-semibold ${typeBadgeCls}`}>
+                          {typeLabel}
+                        </span>
                         <span className={`rounded-full px-3 py-0.5 text-xs font-semibold capitalize ${cfg.badgeCls}`}>
                           {cfg.label}
                         </span>

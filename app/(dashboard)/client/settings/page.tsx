@@ -22,15 +22,10 @@ import {
   EyeOff,
   AlertCircle,
   CheckCircle2,
-  Home
+  Home,
+  Loader2
 } from 'lucide-react';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { toast } from 'sonner';
 import {
   Select,
   SelectContent,
@@ -40,8 +35,8 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
-import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+
 import { cn } from '@/lib/utils';
 
 // ── Schema matched to DB ──────────────────────────────────────────────────────
@@ -330,7 +325,7 @@ export default function ClientSettingsPage() {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center space-y-4">
-          <SettingsIcon className="w-12 h-12 mx-auto animate-spin text-primary" />
+          <Loader2 className="w-12 h-12 mx-auto animate-spin text-primary" />
           <p className="text-muted-foreground">Loading settings...</p>
         </div>
       </div>
@@ -342,7 +337,7 @@ export default function ClientSettingsPage() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2 flex items-center gap-3">
           <SettingsIcon className="w-8 h-8 text-primary" />
-          Account Settings
+          <span className="bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">Account Settings</span>
         </h1>
         <p className="text-muted-foreground">
           Manage your profile, preferences, and security settings
@@ -352,36 +347,34 @@ export default function ClientSettingsPage() {
       <div className="space-y-6">
 
         {/* ── PROFILE CARD ───────────────────────────────────────────── */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+        <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+          <div className="p-6 pb-0">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
               <User className="w-5 h-5" />
               Profile Information
-            </CardTitle>
-            <CardDescription>
+            </h2>
+            <p className="text-sm text-muted-foreground mt-1">
               Update your personal information and contact details
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+            </p>
+          </div>
+          <div className="p-6">
             <form onSubmit={handleSubmitProfile(onSubmitProfile)} className="space-y-6">
 
               {/* Avatar */}
               <div className="flex items-center gap-6">
-                <Avatar className="w-24 h-24">
+                <Avatar className="w-20 h-20">
                   <AvatarImage src={avatarUrl || undefined} alt={watchProfile('firstName')} />
                   <AvatarFallback className="text-2xl">
                     {watchProfile('firstName')?.[0]}{watchProfile('lastName')?.[0]}
                   </AvatarFallback>
                 </Avatar>
                 <div>
-                  <Label htmlFor="avatar-upload" className="cursor-pointer">
-                    <div className="flex items-center gap-2 text-sm text-primary hover:underline">
-                      <Camera className="w-4 h-4" />
-                      Change Avatar
-                    </div>
+                  <Label htmlFor="avatar-upload" className="cursor-pointer inline-flex items-center gap-2 bg-primary/10 hover:bg-primary/20 text-primary text-sm font-medium px-3 py-1.5 rounded-lg transition-colors">
+                    <Camera className="w-4 h-4" />
+                    Change Avatar
                     <Input id="avatar-upload" type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
                   </Label>
-                  <p className="text-xs text-muted-foreground mt-1">JPG, PNG, GIF or WebP (max. 2MB)</p>
+                  <p className="text-xs text-muted-foreground mt-1.5">JPG, PNG, GIF or WebP (max. 2MB)</p>
                 </div>
               </div>
 
@@ -595,21 +588,21 @@ export default function ClientSettingsPage() {
                 {isProfileSubmitting ? 'Saving...' : 'Save Profile'}
               </Button>
             </form>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        {/* ── COMMUNICATION PREFERENCES ──────────────────────────────── */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+        {/* ── COMMUNICATION PREFERENCES ──────────────────────────────────── */}
+        <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+          <div className="p-6 pb-0">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
               <Bell className="w-5 h-5" />
               Communication Preferences
-            </CardTitle>
-            <CardDescription>
+            </h2>
+            <p className="text-sm text-muted-foreground mt-1">
               Choose how you want to receive notifications and updates
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+            </p>
+          </div>
+          <div className="p-6">
             <form onSubmit={handleSubmitProfile(onSubmitProfile)} className="space-y-6">
               <div className="space-y-2">
                 <Label htmlFor="communicationPreference">Preferred Contact Method</Label>
@@ -637,19 +630,19 @@ export default function ClientSettingsPage() {
                 Save Preferences
               </Button>
             </form>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        {/* ── CHANGE PASSWORD ────────────────────────────────────────── */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+        {/* ── CHANGE PASSWORD ────────────────────────────────────────────── */}
+        <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+          <div className="p-6 pb-0">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
               <Lock className="w-5 h-5" />
               Change Password
-            </CardTitle>
-            <CardDescription>Update your password to keep your account secure</CardDescription>
-          </CardHeader>
-          <CardContent>
+            </h2>
+            <p className="text-sm text-muted-foreground mt-1">Update your password to keep your account secure</p>
+          </div>
+          <div className="p-6">
             <form onSubmit={handleSubmitPassword(onSubmitPassword)} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="currentPassword">Current Password *</Label>
@@ -743,8 +736,8 @@ export default function ClientSettingsPage() {
                 {isPasswordSubmitting ? 'Changing...' : 'Change Password'}
               </Button>
             </form>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     </div>
   );

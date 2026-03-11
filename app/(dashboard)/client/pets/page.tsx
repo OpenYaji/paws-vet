@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Plus, Edit, Upload, X } from 'lucide-react';
+import { Plus, Edit2, Upload, X, PawPrint } from 'lucide-react';
 import { supabase } from '@/lib/auth-client';
 
 interface Pet {
@@ -290,6 +290,12 @@ export default function PetsPage() {
   const [photoPreview, setPhotoPreview] = useState<string>('');
   const [error, setError] = useState<string>('');
   const [formData, setFormData] = useState<FormData>(emptyForm);
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null);
+
+  const showToast = (msg: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3500);
+  };
 
   useEffect(() => {
     fetchClientProfile();
@@ -361,8 +367,8 @@ export default function PetsPage() {
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) { alert('File size must be less than 5MB'); return; }
-      if (!file.type.startsWith('image/')) { alert('File must be an image'); return; }
+      if (file.size > 5 * 1024 * 1024) { showToast('File size must be less than 5MB', 'error'); return; }
+      if (!file.type.startsWith('image/')) { showToast('File must be an image', 'error'); return; }
       setPhotoFile(file);
       const reader = new FileReader();
       reader.onloadend = () => setPhotoPreview(reader.result as string);
@@ -414,13 +420,13 @@ export default function PetsPage() {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    if (!clientId) { alert('Client ID not found. Please refresh and try again.'); return; }
+    if (!clientId) { showToast('Client ID not found. Please refresh.', 'error'); return; }
 
     const selectedDate = new Date(formData.date_of_birth);
-    if (selectedDate > new Date()) { alert('Date of Birth cannot be in the future.'); return; }
+    if (selectedDate > new Date()) { showToast('Date of birth cannot be in the future.', 'error'); return; }
 
     const weightNum = parseFloat(formData.weight);
-    if (isNaN(weightNum) || weightNum <= 0) { alert('Please enter a valid weight greater than 0.'); return; }
+    if (isNaN(weightNum) || weightNum <= 0) { showToast('Please enter a valid weight greater than 0.', 'error'); return; }
 
     try {
       setUploading(true);
@@ -464,9 +470,9 @@ export default function PetsPage() {
 
       handleModalClose();
       fetchPets();
-      alert(`Pet ${isEdit ? 'updated' : 'added'} successfully!`);
+      showToast(`Pet ${isEdit ? 'updated' : 'added'} successfully!`, 'success');
     } catch (error: any) {
-      alert(error.message || 'An error occurred while saving the pet.');
+      showToast(error.message || 'An error occurred while saving the pet.', 'error');
     } finally {
       setUploading(false);
     }
@@ -495,10 +501,30 @@ export default function PetsPage() {
 
   return (
     <main className="max-w-6xl mx-auto p-6 space-y-6">
+      {toast && (
+        <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 rounded-xl shadow-lg text-white text-sm font-semibold animate-in fade-in slide-in-from-bottom-4 duration-200 max-w-sm ${
+          toast.type === 'success'
+            ? 'bg-gradient-to-r from-emerald-500 to-teal-500'
+            : toast.type === 'error'
+            ? 'bg-gradient-to-r from-red-500 to-rose-500'
+            : 'bg-gradient-to-r from-primary to-primary/80'
+        }`}>
+          <span className="flex-1">{toast.msg}</span>
+          <button onClick={() => setToast(null)} className="opacity-80 hover:opacity-100 transition-opacity">✕</button>
+        </div>
+      )}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-2">
         <div>
-          <h1 className="text-3xl font-bold">My Pets</h1>
+          <h1 className="text-3xl font-bold flex items-center gap-2">
+            <PawPrint size={24} className="text-primary" />
+            My Pets
+            {pets.length > 0 && (
+              <span className="ml-2 bg-primary/10 text-primary text-xs font-bold px-2.5 py-0.5 rounded-full">
+                {pets.length} {pets.length === 1 ? 'pet' : 'pets'}
+              </span>
+            )}
+          </h1>
           <p className="text-sm text-muted-foreground mt-0.5">Manage your registered pet profiles</p>
         </div>
         <Button onClick={() => setShowAddModal(true)} className="bg-primary hover:bg-primary/90 active:scale-95 transition-all duration-150 rounded-lg">
@@ -522,8 +548,8 @@ export default function PetsPage() {
         </div>
       ) : pets.length === 0 ? (
         <div className="bg-card rounded-2xl border border-border shadow-sm p-16 text-center">
-          <div className="w-16 h-16 bg-accent rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <span className="text-4xl">🐾</span>
+          <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+            <PawPrint size={32} className="text-primary" />
           </div>
           <h3 className="text-lg font-bold mb-2">No pets registered yet</h3>
           <p className="text-sm text-muted-foreground mb-6 max-w-xs mx-auto">
@@ -539,7 +565,7 @@ export default function PetsPage() {
           {pets.map((pet) => (
             <div
               key={pet.id}
-              className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm hover:-translate-y-0.5 hover:shadow-md transition-all duration-150 group"
+              className={`bg-card border border-border rounded-2xl overflow-hidden shadow-sm hover:-translate-y-0.5 hover:shadow-md transition-all duration-150 group ${pet.species === 'dog' ? 'border-t-4 border-t-amber-400' : pet.species === 'cat' ? 'border-t-4 border-t-purple-400' : 'border-t-4 border-t-primary'}`}
             >
               {pet.photo_url ? (
                 <div className="aspect-video bg-accent/20 relative overflow-hidden">
@@ -554,41 +580,38 @@ export default function PetsPage() {
               )}
 
               <div className="p-5">
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h3 className="text-lg font-bold text-foreground">{pet.name}</h3>
-                    <p className="text-xs text-muted-foreground capitalize mt-0.5">{pet.species}</p>
-                  </div>
-                  <div className="flex gap-1">
-                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${pet.is_spayed_neutered ? 'bg-accent text-primary' : 'bg-muted text-muted-foreground'}`}>
-                      {pet.is_spayed_neutered ? 'Spayed/Neutered' : 'Intact'}
-                    </span>
+                <div className="mb-3">
+                  <h3 className="text-lg font-bold text-foreground">{pet.name}</h3>
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    <span className="capitalize bg-accent text-foreground text-xs rounded-full px-2 py-0.5">{pet.species}</span>
+                    <span className="capitalize bg-accent text-foreground text-xs rounded-full px-2 py-0.5">{pet.gender}</span>
+                    {pet.is_spayed_neutered ? (
+                      <span className="bg-primary/10 text-primary text-xs rounded-full px-2 py-0.5">✓ {pet.gender === 'female' ? 'Spayed' : 'Neutered'}</span>
+                    ) : (
+                      <span className="bg-muted text-muted-foreground text-xs rounded-full px-2 py-0.5">Intact</span>
+                    )}
                   </div>
                 </div>
 
-                <div className="space-y-1.5 text-sm mb-4">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Age</span>
-                    <span className="font-medium">{calculateAge(pet.date_of_birth)}</span>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm mb-4">
+                  <div>
+                    <p className="text-muted-foreground text-xs">Age</p>
+                    <p className="font-semibold text-foreground text-xs">{calculateAge(pet.date_of_birth)}</p>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Breed</span>
-                    <span className="font-medium">{pet.breed || 'Mixed'}</span>
+                  <div>
+                    <p className="text-muted-foreground text-xs">Breed</p>
+                    <p className="font-semibold text-foreground text-xs">{pet.breed || 'Mixed'}</p>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Gender</span>
-                    <span className="font-medium capitalize">{pet.gender}</span>
+                  <div>
+                    <p className="text-muted-foreground text-xs">Weight</p>
+                    <p className="font-semibold text-foreground text-xs">{pet.weight} kg</p>
                   </div>
                   {pet.color && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Color</span>
-                      <span className="font-medium">{pet.color}</span>
+                    <div>
+                      <p className="text-muted-foreground text-xs">Color</p>
+                      <p className="font-semibold text-foreground text-xs">{pet.color}</p>
                     </div>
                   )}
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Weight</span>
-                    <span className="font-medium">{pet.weight} kg</span>
-                  </div>
                 </div>
 
                 {pet.behavioral_notes && (
@@ -601,9 +624,9 @@ export default function PetsPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => handleEditClick(pet)}
-                  className="w-full rounded-lg hover:bg-accent border-border active:scale-95 transition-all duration-150"
+                  className="w-full flex items-center justify-center gap-2 mt-2 rounded-lg hover:bg-accent border-border active:scale-95 transition-all duration-150"
                 >
-                  <Edit className="w-3.5 h-3.5 mr-2" />
+                  <Edit2 className="w-3.5 h-3.5" />
                   Edit Profile
                 </Button>
               </div>
@@ -616,8 +639,8 @@ export default function PetsPage() {
       <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Add New Pet</DialogTitle>
-            <DialogDescription>Register your pet to book appointments</DialogDescription>
+            <DialogTitle className="flex items-center gap-2"><PawPrint size={18} className="text-primary" />Add New Pet</DialogTitle>
+            <DialogDescription>Fill in your pet&apos;s details below. Fields marked * are required.</DialogDescription>
           </DialogHeader>
           <PetForm {...sharedFormProps} />
         </DialogContent>
@@ -627,8 +650,8 @@ export default function PetsPage() {
       <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Edit Pet</DialogTitle>
-            <DialogDescription>Update your pet's information</DialogDescription>
+            <DialogTitle className="flex items-center gap-2"><PawPrint size={18} className="text-primary" />Edit Pet Profile</DialogTitle>
+            <DialogDescription>Fill in your pet&apos;s details below. Fields marked * are required.</DialogDescription>
           </DialogHeader>
           <PetForm {...sharedFormProps} />
         </DialogContent>

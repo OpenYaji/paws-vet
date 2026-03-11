@@ -99,6 +99,7 @@ export default function ClientServicesPage() {
         <section className="py-12 md:py-20 border-b border-border bg-gradient-to-br from-primary/10 via-transparent to-primary/5">
           <div className="container mx-auto px-4 max-w-6xl">
             <div className="space-y-4">
+              <span className="inline-block bg-primary/10 text-primary text-xs font-semibold px-3 py-1 rounded-full">🐾 Our Veterinary Services</span>
               <h1 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">Our Services</h1>
               <p className="text-xl text-muted-foreground max-w-2xl leading-relaxed">
                 Comprehensive veterinary services designed to keep your beloved pets healthy and happy.
@@ -118,7 +119,7 @@ export default function ClientServicesPage() {
                 return (
                   <div
                     key={category}
-                    className="group bg-card rounded-2xl p-8 border border-border hover:shadow-2xl hover:border-primary/50 transition-all duration-300 hover:scale-105 cursor-pointer relative overflow-hidden animate-in fade-in slide-in-from-bottom-4"
+                    className="group bg-card rounded-2xl p-8 border border-border hover:shadow-2xl hover:border-primary/50 transition-all duration-300 hover:-translate-y-1 cursor-pointer relative overflow-hidden animate-in fade-in slide-in-from-bottom-4"
                     style={{ animationDelay: `${idx * 100}ms` }}
                   >
                     <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
@@ -135,7 +136,7 @@ export default function ClientServicesPage() {
                             <span className="text-primary font-bold flex-shrink-0 text-lg group-hover/item:scale-125 transition-transform">✓</span>
                             <div className="flex-1">
                               <p className="font-medium">{service.service_name}</p>
-                              <p className="text-xs text-muted-foreground mt-0.5">${service.base_price.toFixed(2)} • {service.duration_minutes} min</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">₱{service.base_price.toFixed(2)} • {service.duration_minutes} min</p>
                             </div>
                           </div>
                         ))}
@@ -191,7 +192,7 @@ export default function ClientServicesPage() {
               ].map((reason, idx) => (
                 <div 
                   key={idx} 
-                  className="group bg-card rounded-2xl p-8 border border-border hover:shadow-xl hover:border-primary/50 transition-all duration-300 hover:scale-105 text-center relative overflow-hidden"
+                  className="group bg-card rounded-2xl p-8 border border-border hover:shadow-xl hover:border-primary/50 transition-all duration-300 hover:-translate-y-1 text-center relative overflow-hidden"
                 >
                   <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                   <div className="relative z-10">
@@ -223,7 +224,7 @@ export default function ClientServicesPage() {
                     <div key={service.id} className="bg-background/50 hover:bg-background/80 rounded-xl p-4 border border-border/50 hover:border-primary/30 transition-all duration-200 group/price">
                       <h4 className="font-semibold mb-2 group-hover/price:text-primary transition-colors">{service.service_name}</h4>
                       <p className="text-3xl font-bold text-primary">
-                        ${service.base_price.toFixed(2)}
+                        ₱{service.base_price.toFixed(2)}
                         {service.requires_specialist && <span className="text-sm ml-1">+</span>}
                       </p>
                       <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
@@ -255,7 +256,7 @@ export default function ClientServicesPage() {
               </p>
             </div>
             <Button asChild size="lg" variant="secondary" className="font-semibold hover:shadow-xl transition-all">
-              <Link href="/client/appointments">Book Now →</Link>
+              <Link href="/client/appointments">Book an Appointment →</Link>
             </Button>
           </div>
         </section>

@@ -69,6 +69,13 @@ export default function PetDetailPage() {
   const [owner, setOwner] = useState<Owner | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    confirmVariant?: 'danger' | 'primary';
+    onConfirm: () => void;
+  } | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const [name, setName] = useState('');
@@ -191,24 +198,32 @@ export default function PetDetailPage() {
     }
   };
 
-  const handleArchivePet = async () => {
-    if (!pet || !confirm(`Archive ${pet.name}? This marks them as deleted.`)) return;
-    try {
-      const { data: { user: cu } } = await supabase.auth.getUser();
-      const { error } = await supabase
-        .from('pets')
-        .update({
-          deleted_at: new Date().toISOString(),
-          deleted_by: cu?.id,
-          is_active: false,
-        })
-        .eq('id', petId);
-      if (error) { showToast('Failed to archive pet', 'error'); return; }
-      showToast('Pet archived');
-      router.back();
-    } catch {
-      showToast('Failed to archive pet', 'error');
-    }
+  const handleArchivePet = () => {
+    if (!pet) return;
+    setConfirmModal({
+      title: 'Archive Pet',
+      message: `Archive ${pet.name}? This marks them as inactive.`,
+      confirmLabel: 'Archive',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        try {
+          const { data: { user: cu } } = await supabase.auth.getUser();
+          const { error } = await supabase
+            .from('pets')
+            .update({
+              deleted_at: new Date().toISOString(),
+              deleted_by: cu?.id,
+              is_active: false,
+            })
+            .eq('id', petId);
+          if (error) { showToast('Failed to archive pet', 'error'); return; }
+          showToast('Pet archived');
+          router.back();
+        } catch {
+          showToast('Failed to archive pet', 'error');
+        }
+      },
+    });
   };
 
   if (loading) return (
@@ -475,6 +490,36 @@ export default function PetDetailPage() {
             </button>
           </div>
         </form>
+      )}
+
+      {confirmModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setConfirmModal(null)} />
+          <div className="relative z-10 bg-card rounded-2xl border border-border shadow-2xl w-full max-w-sm animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-6">
+              <h3 className="text-lg font-bold text-foreground mb-2">{confirmModal.title}</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">{confirmModal.message}</p>
+            </div>
+            <div className="px-6 pb-6 flex gap-3 justify-end">
+              <button
+                onClick={() => setConfirmModal(null)}
+                className="px-4 py-2 rounded-lg text-sm font-semibold border border-border bg-card hover:bg-accent text-foreground transition-all duration-150"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { confirmModal.onConfirm(); setConfirmModal(null); }}
+                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 active:scale-95 ${
+                  confirmModal.confirmVariant === 'danger'
+                    ? 'bg-red-600 hover:bg-red-500 text-white'
+                    : 'bg-primary hover:opacity-90 text-primary-foreground'
+                }`}
+              >
+                {confirmModal.confirmLabel || 'Confirm'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

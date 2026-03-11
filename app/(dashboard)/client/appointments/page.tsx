@@ -11,6 +11,7 @@ import {
   History,
   ChevronRight,
   Calendar as CalendarIcon,
+  RefreshCw,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -22,7 +23,7 @@ interface CurrentAppointment {
   appointment_status: string;
   reason_for_visit: string;
   is_emergency: boolean;
-  pets?: { name: string; species: string; breed: string }[] | null;
+  pets?: { name: string; species: string; breed: string } | { name: string; species: string; breed: string }[] | null;
 }
 
 export default function ClientAppointmentsPage() {
@@ -159,22 +160,43 @@ export default function ClientAppointmentsPage() {
   return (
     <main className="p-6 space-y-8">
       <div className="pt-2">
-        <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent mb-2">
-          Appointments
-        </h1>
-        <p className="text-lg text-muted-foreground">Manage your pet&apos;s appointments</p>
+        <div className="flex items-center gap-3 mb-2">
+          <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+            <PawPrint size={22} className="text-primary" />
+          </div>
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+            Appointments
+          </h1>
+        </div>
+        <p className="text-lg text-muted-foreground ml-[52px]">Track and manage your pet&apos;s appointments</p>
       </div>
 
       {/* Current / Upcoming Appointments */}
       <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold">Current Appointments</h2>
-          <Link
-            href="/client/appointments/history"
-            className="text-sm text-primary font-semibold hover:underline flex items-center gap-1"
-          >
-            <History size={14} /> View History
-          </Link>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <h2 className="text-2xl font-bold">Current Appointments</h2>
+            {!loadingAppointments && currentAppointments.length > 0 && (
+              <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                {currentAppointments.length} active
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { if (clientId) fetchCurrentAppointments(clientId); checkOutreachAvailability(); }}
+              className="p-2 rounded-lg border border-border bg-card hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-150"
+              aria-label="Refresh appointments"
+            >
+              <RefreshCw size={14} className={loadingAppointments ? 'animate-spin' : ''} />
+            </button>
+            <Link
+              href="/client/appointments/history"
+              className="text-sm text-primary font-semibold hover:underline flex items-center gap-1"
+            >
+              <History size={14} /> View History
+            </Link>
+          </div>
         </div>
 
         {loadingAppointments ? (
@@ -196,9 +218,15 @@ export default function ClientAppointmentsPage() {
                 ? 'border-l-yellow-500 bg-yellow-50/40 dark:bg-yellow-900/10'
                 : 'border-l-emerald-500 bg-emerald-50/40 dark:bg-emerald-900/10';
               const badgeCls = isPending
-                ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400'
-                : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400';
+                ? 'bg-amber-700 text-white dark:bg-amber-500 dark:text-white'
+                : 'bg-emerald-700 text-white dark:bg-emerald-500 dark:text-white';
               const badgeLabel = isPending ? 'Pending' : 'Confirmed';
+              const isOutreach = apt.reason_for_visit?.startsWith('Outreach');
+              const typeBadgeCls = isOutreach
+                ? 'bg-violet-700 text-white dark:bg-violet-500 dark:text-white'
+                : 'bg-blue-700 text-white dark:bg-blue-500 dark:text-white';
+              const typeLabel = isOutreach ? 'Outreach' : 'Regular';
+              const pet = apt.pets ? (Array.isArray(apt.pets) ? apt.pets[0] : apt.pets) : null;
 
               return (
                 <div
@@ -218,6 +246,7 @@ export default function ClientAppointmentsPage() {
                               month: 'short',
                               day: 'numeric',
                               year: 'numeric',
+                              timeZone: 'Asia/Manila',
                             })}
                           </p>
                           <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
@@ -225,11 +254,13 @@ export default function ClientAppointmentsPage() {
                             {new Date(apt.scheduled_start).toLocaleTimeString('en-US', {
                               hour: '2-digit',
                               minute: '2-digit',
+                              timeZone: 'Asia/Manila',
                             })}
                             {' \u2013 '}
                             {new Date(apt.scheduled_end).toLocaleTimeString('en-US', {
                               hour: '2-digit',
                               minute: '2-digit',
+                              timeZone: 'Asia/Manila',
                             })}
                           </p>
                         </div>
@@ -237,16 +268,17 @@ export default function ClientAppointmentsPage() {
 
                       <p className="font-bold text-foreground">{apt.reason_for_visit}</p>
 
-                      {apt.pets?.[0] && (
-                        <div className="inline-flex items-center gap-2 bg-background/70 border border-border rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground">
+                      {pet && (
+                        <div className="inline-flex items-center gap-2 bg-background/70 border border-border rounded-lg px-3 py-2 text-xs font-medium text-muted-foreground">
                           <PawPrint size={12} className="text-primary" />
-                          <span className="font-semibold text-foreground">{apt.pets[0].name}</span>
-                          <span>&bull;</span>
-                          <span>{apt.pets[0].species}</span>
-                          {apt.pets[0].breed && (
+                          <span className="font-bold text-sm text-foreground">
+                            {pet.species === 'dog' ? '🐕' : pet.species === 'cat' ? '🐈' : '🐾'}
+                            {' '}{pet.name}
+                          </span>
+                          {pet.breed && (
                             <>
-                              <span>&bull;</span>
-                              <span>{apt.pets[0].breed}</span>
+                              <span className="text-muted-foreground">&bull;</span>
+                              <span>{pet.breed}</span>
                             </>
                           )}
                         </div>
@@ -255,6 +287,9 @@ export default function ClientAppointmentsPage() {
 
                     <div className="flex flex-row sm:flex-col items-start sm:items-end gap-3">
                       <div className="flex flex-wrap gap-2">
+                        <span className={`rounded-full px-3 py-0.5 text-xs font-semibold ${typeBadgeCls}`}>
+                          {typeLabel}
+                        </span>
                         <span className={`rounded-full px-3 py-0.5 text-xs font-semibold capitalize ${badgeCls}`}>
                           {badgeLabel}
                         </span>
@@ -296,8 +331,11 @@ export default function ClientAppointmentsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Card 1 — Regular Appointment */}
           <div className="bg-card rounded-2xl border border-border shadow-sm p-6 flex flex-col gap-4">
-            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-              <Calendar size={24} className="text-primary" />
+            <div className="flex items-start justify-between">
+              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                <Calendar size={24} className="text-primary" />
+              </div>
+              <span className="bg-primary/10 text-primary text-xs font-bold px-2 py-0.5 rounded-full">₱500</span>
             </div>
             <div className="flex-1 space-y-1">
               <h3 className="text-lg font-bold">Book Regular Appointment</h3>
@@ -324,11 +362,14 @@ export default function ClientAppointmentsPage() {
               <div className="w-12 h-12 rounded-xl bg-pink-500/10 flex items-center justify-center">
                 <Heart size={24} className="text-pink-500" />
               </div>
-              {!checkingOutreach && !outreachAvailable && (
-                <span className="text-xs font-semibold bg-muted text-muted-foreground rounded-full px-3 py-1">
-                  Currently Unavailable
-                </span>
-              )}
+              <div className="flex flex-col items-end gap-1.5">
+                <span className="bg-pink-100 text-pink-700 text-xs font-bold px-2 py-0.5 rounded-full">Free / ₱500</span>
+                {!checkingOutreach && !outreachAvailable && (
+                  <span className="text-xs font-semibold bg-muted text-muted-foreground rounded-full px-3 py-1">
+                    Currently Unavailable
+                  </span>
+                )}
+              </div>
             </div>
             <div className="flex-1 space-y-1">
               <h3 className="text-lg font-bold">Outreach Program</h3>

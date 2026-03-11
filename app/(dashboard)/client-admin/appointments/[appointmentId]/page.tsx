@@ -114,6 +114,13 @@ export default function AppointmentDetailPage() {
   // BUG FIX: cancellation_reason is required by DB when status = 'cancelled'
   const [cancellationReason, setCancellationReason] = useState('');
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    confirmVariant?: 'danger' | 'primary';
+    onConfirm: () => void;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [showReschedule, setShowReschedule] = useState(false);
@@ -159,87 +166,99 @@ export default function AppointmentDetailPage() {
   // handles cancellation_reason, cancelled_at, and actual_end fields that
   // the DB constraints require. The old code sent a bare Supabase update
   // that skipped these fields, causing DB errors for 'cancelled' status.
+  const performStatusUpdate = async () => {
+    const trimmedReason = cancellationReason.trim();
+    setUpdating(true);
+    try {
+      // Get the current admin user to pass as cancelled_by
+      const { data: { user } } = await supabase.auth.getUser();
+
+      const res = await fetch(`/api/client-admin/appointments/${appointmentId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          appointment_status: selectedStatus,
+          cancellation_reason: selectedStatus === 'cancelled' ? trimmedReason : '',
+          // FIX: Send the logged-in admin's user id as cancelled_by
+          cancelled_by: user?.id ?? null,
+        }),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        showToast(body.error || 'Failed to update status', 'error');
+        return;
+      }
+
+      // Re-open slot / outreach program when appointment is cancelled
+      if (selectedStatus === 'cancelled') {
+        const dateStr = toManilaDateString(appointment!.scheduled_start);
+        const apptType = appointment!.appointment_type_detail ?? 'regular';
+        if (apptType === 'outreach' && appointment!.outreach_program_id) {
+          const { count } = await supabase
+            .from('appointments')
+            .select('id', { count: 'exact', head: true })
+            .eq('outreach_program_id', appointment!.outreach_program_id)
+            .neq('appointment_status', 'cancelled');
+          await supabase
+            .from('outreach_programs')
+            .update({ current_bookings: count ?? 0, is_full: false, is_open: true })
+            .eq('id', appointment!.outreach_program_id);
+        }
+        await checkAndUpdateSlotStatus(dateStr, apptType);
+      }
+
+      // Send notification to client for confirmed / cancelled
+      if (client?.user_id && appointment!.appointment_number) {
+        if (selectedStatus === 'confirmed') {
+          sendAppointmentNotification({
+            clientUserId: client.user_id,
+            appointmentId,
+            appointmentNumber: appointment!.appointment_number,
+            type: 'confirmed',
+          }).catch(console.error);
+        } else if (selectedStatus === 'cancelled') {
+          sendAppointmentNotification({
+            clientUserId: client.user_id,
+            appointmentId,
+            appointmentNumber: appointment!.appointment_number,
+            type: 'cancelled',
+          }).catch(console.error);
+        }
+      }
+
+      showToast('Appointment status updated');
+      setCancellationReason('');
+      await fetchAppointmentData();
+    } catch {
+      showToast('Failed to update appointment', 'error');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
   const handleStatusUpdate = async () => {
-  if (!appointment || selectedStatus === appointment.appointment_status) return;
+    if (!appointment || selectedStatus === appointment.appointment_status) return;
 
-  const trimmedReason = cancellationReason.trim();
-  if (selectedStatus === 'cancelled' && !trimmedReason) {
-    showToast('Please provide a cancellation reason before cancelling.', 'error');
-    return;
-  }
-
-  if (['cancelled', 'no_show'].includes(selectedStatus)) {
-    if (!confirm(`Change status to "${selectedStatus}"?`)) return;
-  }
-
-  setUpdating(true);
-  try {
-    // Get the current admin user to pass as cancelled_by
-    const { data: { user } } = await supabase.auth.getUser();
-
-    const res = await fetch(`/api/client-admin/appointments/${appointmentId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        appointment_status: selectedStatus,
-        cancellation_reason: selectedStatus === 'cancelled' ? trimmedReason : '',
-        // FIX: Send the logged-in admin's user id as cancelled_by
-        cancelled_by: user?.id ?? null,
-      }),
-    });
-
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      showToast(body.error || 'Failed to update status', 'error');
+    const trimmedReason = cancellationReason.trim();
+    if (selectedStatus === 'cancelled' && !trimmedReason) {
+      showToast('Please provide a cancellation reason before cancelling.', 'error');
       return;
     }
 
-    // Re-open slot / outreach program when appointment is cancelled
-    if (selectedStatus === 'cancelled') {
-      const dateStr = toManilaDateString(appointment.scheduled_start);
-      const apptType = appointment.appointment_type_detail ?? 'regular';
-      if (apptType === 'outreach' && appointment.outreach_program_id) {
-        const { count } = await supabase
-          .from('appointments')
-          .select('id', { count: 'exact', head: true })
-          .eq('outreach_program_id', appointment.outreach_program_id)
-          .neq('appointment_status', 'cancelled');
-        await supabase
-          .from('outreach_programs')
-          .update({ current_bookings: count ?? 0, is_full: false, is_open: true })
-          .eq('id', appointment.outreach_program_id);
-      }
-      await checkAndUpdateSlotStatus(dateStr, apptType);
+    if (['cancelled', 'no_show'].includes(selectedStatus)) {
+      setConfirmModal({
+        title: 'Update Appointment Status',
+        message: `Change status to "${selectedStatus}"?`,
+        confirmLabel: 'Yes, update',
+        confirmVariant: selectedStatus === 'cancelled' ? 'danger' : 'primary',
+        onConfirm: performStatusUpdate,
+      });
+      return;
     }
 
-    // Send notification to client for confirmed / cancelled
-    if (client?.user_id && appointment.appointment_number) {
-      if (selectedStatus === 'confirmed') {
-        sendAppointmentNotification({
-          clientUserId: client.user_id,
-          appointmentId,
-          appointmentNumber: appointment.appointment_number,
-          type: 'confirmed',
-        }).catch(console.error);
-      } else if (selectedStatus === 'cancelled') {
-        sendAppointmentNotification({
-          clientUserId: client.user_id,
-          appointmentId,
-          appointmentNumber: appointment.appointment_number,
-          type: 'cancelled',
-        }).catch(console.error);
-      }
-    }
-
-    showToast('Appointment status updated');
-    setCancellationReason('');
-    await fetchAppointmentData();
-  } catch {
-    showToast('Failed to update appointment', 'error');
-  } finally {
-    setUpdating(false);
-  }
-};
+    await performStatusUpdate();
+  };
 
   const handleCancel = async () => {
     setSelectedStatus('cancelled');
@@ -315,31 +334,38 @@ export default function AppointmentDetailPage() {
   const handlePaymentAction = async (action: 'verify' | 'waive' | 'refund') => {
     if (!appointment) return;
     const label = action === 'verify' ? 'verify this payment' : action === 'waive' ? 'waive this payment' : 'mark this as refunded';
-    if (!confirm(`Are you sure you want to ${label}?`)) return;
-    setPaymentLoading(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const res = await fetch(`/api/client-admin/appointments/${appointmentId}/payment`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, admin_user_id: user?.id }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        showToast(json.error || 'Payment action failed', 'error');
-        return;
-      }
-      showToast(
-        action === 'verify' ? 'Payment verified — client notified' :
-        action === 'waive'  ? 'Payment waived — client notified' :
-        'Refund recorded — client notified'
-      );
-      await fetchAppointmentData();
-    } catch {
-      showToast('Failed to process payment action', 'error');
-    } finally {
-      setPaymentLoading(false);
-    }
+    setConfirmModal({
+      title: 'Confirm Payment Action',
+      message: `Are you sure you want to ${label}?`,
+      confirmLabel: 'Yes, proceed',
+      confirmVariant: action === 'refund' ? 'danger' : 'primary',
+      onConfirm: async () => {
+        setPaymentLoading(true);
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          const res = await fetch(`/api/client-admin/appointments/${appointmentId}/payment`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action, admin_user_id: user?.id }),
+          });
+          const json = await res.json();
+          if (!res.ok) {
+            showToast(json.error || 'Payment action failed', 'error');
+            return;
+          }
+          showToast(
+            action === 'verify' ? 'Payment verified — client notified' :
+            action === 'waive'  ? 'Payment waived — client notified' :
+            'Refund recorded — client notified'
+          );
+          await fetchAppointmentData();
+        } catch {
+          showToast('Failed to process payment action', 'error');
+        } finally {
+          setPaymentLoading(false);
+        }
+      },
+    });
   };
 
   if (loading) {
@@ -791,6 +817,36 @@ export default function AppointmentDetailPage() {
                 {rescheduling
                   ? <><div className="w-3.5 h-3.5 rounded-full border-2 border-primary-foreground border-t-transparent animate-spin" />Rescheduling…</>
                   : <><Calendar size={14} />Confirm Reschedule</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setConfirmModal(null)} />
+          <div className="relative z-10 bg-card rounded-2xl border border-border shadow-2xl w-full max-w-sm animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-6">
+              <h3 className="text-lg font-bold text-foreground mb-2">{confirmModal.title}</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">{confirmModal.message}</p>
+            </div>
+            <div className="px-6 pb-6 flex gap-3 justify-end">
+              <button
+                onClick={() => setConfirmModal(null)}
+                className="px-4 py-2 rounded-lg text-sm font-semibold border border-border bg-card hover:bg-accent text-foreground transition-all duration-150"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { confirmModal.onConfirm(); setConfirmModal(null); }}
+                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 active:scale-95 ${
+                  confirmModal.confirmVariant === 'danger'
+                    ? 'bg-red-600 hover:bg-red-500 text-white'
+                    : 'bg-primary hover:opacity-90 text-primary-foreground'
+                }`}
+              >
+                {confirmModal.confirmLabel || 'Confirm'}
               </button>
             </div>
           </div>

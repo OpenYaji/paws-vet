@@ -126,19 +126,32 @@ export async function getClientNotifications(
 
 // ── markNotificationRead ──────────────────────────────────────────────────────
 
-export async function markNotificationRead(notificationId: string): Promise<void> {
-  await supabase
+export async function markNotificationRead(
+  notificationId: string,
+): Promise<{ success: boolean; error?: string }> {
+  const { error } = await supabase
     .from('notification_logs')
-    .update({ is_read: true })
+    .update({ is_read: true, read_at: new Date().toISOString() })
     .eq('id', notificationId);
+  if (error) {
+    console.error('[markNotificationRead]', error);
+    return { success: false, error: error.message };
+  }
+  return { success: true };
 }
 
 // ── markAllNotificationsRead ──────────────────────────────────────────────────
 
-export async function markAllNotificationsRead(userId: string): Promise<void> {
-  await supabase
+export async function markAllNotificationsRead(
+  userId: string,
+): Promise<{ success: boolean; error?: string }> {
+  const { error } = await supabase
     .from('notification_logs')
-    .update({ is_read: true })
-    .eq('recipient_id', userId)
-    .eq('is_read', false);
+    .update({ is_read: true, read_at: new Date().toISOString() })
+    .eq('recipient_id', userId);
+  if (error) {
+    console.error('[markAllNotificationsRead]', error);
+    return { success: false, error: error.message };
+  }
+  return { success: true };
 }
