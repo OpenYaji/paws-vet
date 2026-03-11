@@ -38,7 +38,7 @@ export default function GeneralSettings() {
         const { data: { session } } = await supabase.auth.getSession()
         if (!session?.access_token) return
 
-        const res = await fetch("/api/settings/general-settings", {
+        const res = await fetch("/api/veterinarian/settings/general-settings", {
           headers: { Authorization: `Bearer ${session.access_token}` },
         })
 
@@ -69,8 +69,7 @@ export default function GeneralSettings() {
         return
       }
 
-      const res = await fetch("/api/settings/general-settings", {
-        method: "PUT",
+      const res = await fetch("/api/veterinarian/settings/general-settings", {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,

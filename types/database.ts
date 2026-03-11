@@ -12,7 +12,12 @@ export type EmploymentStatus = 'full_time' | 'part_time' | 'contract' | 'termina
 export type Gender = 'male' | 'female' | 'unknown';
 export type PaymentStatus = 'unpaid' | 'partially_paid' | 'paid' | 'overdue' | 'refunded';
 export type PaymentMethod = 'cash' | 'credit_card' | 'debit_card' | 'online' | 'insurance' | 'check';
-export type NotificationType = 'appointment_reminder' | 'test_results' | 'payment_due' | 'appointment_confirmed' | 'appointment_cancelled' | 'general' | 'low_stock';
+export type NotificationType =
+  | 'appointment_reminder' | 'test_results' | 'payment_due'
+  | 'appointment_confirmed' | 'appointment_cancelled' | 'general' | 'low_stock'
+  // vet-specific types fired by DB triggers
+  | 'new_appointment' | 'new_pet' | 'emergency' | 'appointment_today'
+  | 'quarantine_alert' | 'no_show' | 'admin_announcement' | 'admin_duty_notice';
 export type NotificationStatus = 'pending' | 'sent' | 'delivered' | 'failed';
 export type CommunicationPreference = 'email' | 'sms' | 'phone' | 'any';
 export type ActionType = 'create' | 'update' | 'delete' | 'view' | 'login' | 'logout';

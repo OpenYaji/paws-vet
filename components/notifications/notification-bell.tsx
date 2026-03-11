@@ -70,6 +70,7 @@ export function NotificationBell({ userId, className = '' }: NotificationBellPro
             related_entity_type: 'product',
             related_entity_id: p.id,
             created_at: ts,
+            is_read: false,
           });
         } else {
           // Stock is fine — clear stored timestamp so next alert gets a fresh one
@@ -183,6 +184,7 @@ export function NotificationBell({ userId, className = '' }: NotificationBellPro
                 related_entity_type: 'product',
                 related_entity_id: p.id,
                 created_at: ts,
+                is_read: false,
               };
 
               setNotifications(prev => [synthetic, ...prev].slice(0, 20));

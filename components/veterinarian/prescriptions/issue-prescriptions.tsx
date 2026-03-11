@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Search, Loader2, X, Calendar } from "lucide-react";
+import { Plus, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 
 interface IssuePrescriptionProps {
@@ -30,18 +30,23 @@ interface IssuePrescriptionProps {
 export default function IssuePrescription({
   onPrescriptionIssued,
 }: IssuePrescriptionProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  // --- UI States ---
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  const [petSearch, setPetSearch] = useState("");
+  // --- Search States ---
+  const [searchTerm, setSearchTerm] = useState("");
+  const [results, setResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [selectedPet, setSelectedPet] = useState<any | null>(null);
 
-  const [selectedPet, setSelectedPet] = useState<any>(null);
+  // --- Medical Record States ---
   const [selectedMedicalRecord, setSelectedMedicalRecord] = useState<any>(null);
   const [medicalRecords, setMedicalRecords] = useState<any[]>([]);
   const [loadingRecords, setLoadingRecords] = useState(false);
 
+  // --- Form State ---
   const [formData, setFormData] = useState({
     medication_name: "",
     dosage: "",
@@ -50,38 +55,46 @@ export default function IssuePrescription({
     notes: "",
   });
 
+  // 1. The Debounce Effect for Pet Search
   useEffect(() => {
-    const runSearch = async () => {
-      if (!petSearch.trim()) {
-        setSearchResults([]);
-        return;
-      }
+    if (!searchTerm.trim()) {
+      setResults([]);
+      setIsSearchDropdownOpen(false);
+      return;
+    }
 
+    const delayDebounceFn = setTimeout(async () => {
       setIsSearching(true);
       try {
         const res = await fetch(
-          `/api/pets?search=${encodeURIComponent(petSearch)}`,
+          `/api/veterinarian/pets/search?q=${encodeURIComponent(searchTerm)}`
         );
         const data = await res.json();
 
+        // FIX: Ensure 'data' is an array before setting it to results
         if (Array.isArray(data)) {
-          setSearchResults(data);
+          setResults(data);
+        } else if (data && Array.isArray(data.data)) {
+          // Just in case your API returns { data: [...] }
+          setResults(data.data);
+        } else {
+          // If it's an error object, fallback to an empty array
+          setResults([]);
+          console.error("API returned a non-array:", data);
         }
+        
+        setIsSearchDropdownOpen(true);
       } catch (error) {
-        console.error("Search failed", error);
+        console.error("Failed to search pets:", error);
+        setResults([]); // Fallback on catch
       } finally {
         setIsSearching(false);
       }
-    };
-
-    const timer = setTimeout(() => {
-      runSearch();
     }, 300);
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchTerm]);
 
-    return () => clearTimeout(timer);
-  }, [petSearch]);
-
-  // Fetch medical records when pet is selected
+  // 2. Fetch medical records when pet is selected
   useEffect(() => {
     const fetchMedicalRecords = async () => {
       if (!selectedPet) {
@@ -93,14 +106,12 @@ export default function IssuePrescription({
       setLoadingRecords(true);
       try {
         const res = await fetch(
-          `/api/medical-records?pet_id=${selectedPet.id}`,
+          `/api/veterinarian/medical-records?pet_id=${selectedPet.id}`
         );
         const data = await res.json();
 
         if (Array.isArray(data)) {
           setMedicalRecords(data);
-
-          // Auto-select if only one medical record exists
           if (data.length === 1) {
             setSelectedMedicalRecord(data[0]);
           }
@@ -115,6 +126,13 @@ export default function IssuePrescription({
     fetchMedicalRecords();
   }, [selectedPet]);
 
+  // 3. Handle selecting a pet from the search dropdown
+  const handleSelectPet = (pet: any) => {
+    setSelectedPet(pet);
+    setSearchTerm(pet.name); // Fill input with the selected pet's name
+    setIsSearchDropdownOpen(false); // Close the search dropdown
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPet || !selectedMedicalRecord) {
@@ -128,10 +146,10 @@ export default function IssuePrescription({
         medical_record_id: selectedMedicalRecord.id,
         prescribed_by: selectedMedicalRecord.veterinarian_id,
         ...formData,
-        instructions: formData.notes, // Map notes to instructions as API expects
+        instructions: formData.notes,
       };
 
-      const res = await fetch("/api/prescriptions", {
+      const res = await fetch("/api/veterinarian/prescriptions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -139,13 +157,11 @@ export default function IssuePrescription({
 
       if (!res.ok) {
         const errorData = await res.json();
-        alert(
-          errorData.error || "Failed to issue prescription. Please try again.",
-        );
+        alert(errorData.error || "Failed to issue prescription. Please try again.");
         return;
       }
 
-      setIsOpen(false);
+      setIsModalOpen(false);
       resetForm();
       onPrescriptionIssued();
     } catch (error) {
@@ -158,9 +174,11 @@ export default function IssuePrescription({
 
   const resetForm = () => {
     setSelectedPet(null);
+    setSearchTerm("");
+    setResults([]);
+    setIsSearchDropdownOpen(false);
     setSelectedMedicalRecord(null);
     setMedicalRecords([]);
-    setPetSearch("");
     setFormData({
       medication_name: "",
       dosage: "",
@@ -172,9 +190,9 @@ export default function IssuePrescription({
 
   return (
     <Dialog
-      open={isOpen}
+      open={isModalOpen}
       onOpenChange={(val) => {
-        setIsOpen(val);
+        setIsModalOpen(val);
         if (!val) resetForm();
       }}
     >
@@ -183,96 +201,57 @@ export default function IssuePrescription({
           <Plus size={18} /> Issue Prescription
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]">
+      
+      {/* Increased height so dropdown doesn't get cut off easily */}
+      <DialogContent className="sm:max-w-[500px]"> 
         <DialogHeader>
           <DialogTitle>Issue New Prescription</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 py-4">
-          {/* --- Pet Selection Section --- */}
-          <div className="space-y-2 relative">
+          
+          {/* --- Pet Search Field --- */}
+          <div className="relative space-y-2">
             <Label>Select Patient</Label>
+            <Input
+              type="text"
+              placeholder="Search pet by name..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                if (selectedPet) setSelectedPet(null);
+              }}
+              onFocus={() => {
+                if (results.length > 0) setIsSearchDropdownOpen(true);
+              }}
+            />
 
-            {selectedPet ? (
-              // STATE A: Pet Selected (Show Card)
-              <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-md">
-                <div>
-                  <div className="font-bold text-green-800">
-                    {selectedPet.name}
-                  </div>
-                  <div className="text-xs text-green-600">
-                    {selectedPet.species} • Owner:{" "}
-                    {selectedPet.client_profiles?.last_name || "N/A"}
-                  </div>
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="text-green-700 hover:text-green-900 hover:bg-green-100"
-                  onClick={() => setSelectedPet(null)}
-                >
-                  <X size={16} />
-                </Button>
-              </div>
-            ) : (
-              // STATE B: Search Input
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Search pet name..."
-                  className="pl-9"
-                  value={petSearch}
-                  onChange={(e) => setPetSearch(e.target.value)}
-                />
-
-                {/* Search Spinner */}
-                {isSearching && (
-                  <div className="absolute right-3 top-3">
-                    <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
-                  </div>
+            {/* --- The Search Results Dropdown --- */}
+            {isSearchDropdownOpen && (
+              <div className="absolute top-full left-0 z-50 w-full mt-1 bg-background border rounded-md shadow-lg max-h-60 overflow-auto">
+                {isSearching ? (
+                  <div className="p-3 text-sm text-muted-foreground text-center">Searching...</div>
+                ) : !Array.isArray(results) || results.length === 0 ? ( // FIX: Added Array check here
+                  <div className="p-3 text-sm text-muted-foreground text-center">No pets found.</div>
+                ) : (
+                  results.map((pet) => (
+                    <div
+                      key={pet.id}
+                      onClick={() => handleSelectPet(pet)}
+                      className="p-3 text-sm cursor-pointer hover:bg-muted border-b last:border-0"
+                    >
+                      <div className="font-medium text-foreground">{pet.name}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {pet.species} • {pet.breed} | Owner: {pet.client_profiles?.first_name}
+                      </div>
+                    </div>
+                  ))
                 )}
-
-                {/* Dropdown Results */}
-                {!selectedPet &&
-                  searchResults.length > 0 &&
-                  petSearch.length > 0 && (
-                    <div className="absolute z-50 w-full bg-white border rounded-md shadow-xl mt-1 max-h-48 overflow-y-auto">
-                      {searchResults.map((pet) => (
-                        <div
-                          key={pet.id}
-                          className="p-3 hover:bg-gray-100 cursor-pointer border-b last:border-0"
-                          onClick={() => {
-                            setSelectedPet(pet); // Set selected
-                            setPetSearch(""); // Clear search text
-                            setSearchResults([]); // Hide dropdown
-                          }}
-                        >
-                          <div className="font-medium text-gray-800">
-                            {pet.name}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            {pet.species} • {pet.breed} • Owner:{" "}
-                            {pet.client_profiles?.last_name}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                {/* No Results Message */}
-                {!isSearching &&
-                  petSearch.length > 0 &&
-                  searchResults.length === 0 && (
-                    <div className="absolute z-50 w-full bg-white border rounded-md shadow-lg mt-1 p-3 text-sm text-gray-500 text-center">
-                      No pets found.
-                    </div>
-                  )}
               </div>
             )}
           </div>
-
-          {/* --- Medical Record Selection (Only show if pet is selected) --- */}
+          
+          {/* --- Medical Record Selection --- */}
           {selectedPet && (
             <div className="space-y-2">
               <Label>Select Medical Record / Visit</Label>
@@ -284,11 +263,10 @@ export default function IssuePrescription({
                   </span>
                 </div>
               ) : medicalRecords.length === 0 ? (
-                <div className="p-4 border border-dashed rounded-md bg-amber-50 border-amber-200">
-                  <p className="text-sm text-amber-800">
+                <div className="p-4 border border-dashed rounded-md bg-amber-500/10 border-amber-500/30">
+                  <p className="text-sm text-amber-600">
                     No medical records found for this patient. Prescriptions
-                    must be linked to a completed consultation with a medical
-                    record.
+                    must be linked to a completed consultation with a medical record.
                   </p>
                 </div>
               ) : (
@@ -307,14 +285,14 @@ export default function IssuePrescription({
                   <SelectContent>
                     {medicalRecords.map((record) => (
                       <SelectItem key={record.id} value={record.id.toString()}>
-                        <div className="flex flex-col">
+                        <div className="flex flex-col text-left">
                           <span className="font-medium">
                             {format(
                               new Date(record.visit_date || record.created_at),
                               "MMM dd, yyyy",
                             )}
                           </span>
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-xs text-muted-foreground mt-0.5">
                             {record.chief_complaint || "General Consultation"} •{" "}
                             {record.record_number}
                           </span>
@@ -367,9 +345,7 @@ export default function IssuePrescription({
                 <SelectContent>
                   <SelectItem value="Once daily">Once daily (SID)</SelectItem>
                   <SelectItem value="Twice daily">Twice daily (BID)</SelectItem>
-                  <SelectItem value="Thrice daily">
-                    Thrice daily (TID)
-                  </SelectItem>
+                  <SelectItem value="Thrice daily">Thrice daily (TID)</SelectItem>
                   <SelectItem value="As needed">As needed (PRN)</SelectItem>
                 </SelectContent>
               </Select>
@@ -402,7 +378,7 @@ export default function IssuePrescription({
             <Button
               type="button"
               variant="outline"
-              onClick={() => setIsOpen(false)}
+              onClick={() => setIsModalOpen(false)}
             >
               Cancel
             </Button>

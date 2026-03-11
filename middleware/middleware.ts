@@ -59,11 +59,9 @@ export async function middleware(request: NextRequest) {
   // 1. PROTECT THE API ROUTES
   if ([
     'api/appointments',
-    'api/pets',
     'api/veterinarians',
-    'api/triage',
+    'api/veterinarian',
     'api/reports',
-    'api/prescriptions',
   ].some(path => request.nextUrl.pathname.startsWith(`/${path}`))) {
     
     // Check A: Are they logged in?

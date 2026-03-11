@@ -45,3 +45,14 @@ package-lock.json
 
 # mcp configurations
 .vscode/
+.postman
+postman/
+
+# scripts
+scripts/
+
+# seeders
+seed_images/
+
+# supabase migrations and seeds
+supabase/

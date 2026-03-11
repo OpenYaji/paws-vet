@@ -19,7 +19,7 @@ interface PrintPrescriptionDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-export default function PrintPrescriptionDialog({ rx, open, onOpenChange }: PrintPrescriptionDialogProps) {
+export default function PrintPrescription({ rx, open, onOpenChange }: PrintPrescriptionDialogProps) {
   const [vetProfile, setVetProfile] = useState<any>(null);
   const [extendedRx, setExtendedRx] = useState<any>(null);
   

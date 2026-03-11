@@ -2,6 +2,8 @@
 // Utility functions and icon mappings for notifications
 import {
   Calendar,
+  CalendarPlus,
+  CalendarCheck,
   CreditCard,
   FlaskConical,
   Info,
@@ -9,6 +11,12 @@ import {
   XCircle,
   Loader2,
   PackageX,
+  PawPrint,
+  AlertTriangle,
+  ShieldAlert,
+  UserX,
+  Megaphone,
+  ClipboardList,
 } from 'lucide-react';
 import { ReactNode } from 'react';
 import { Notification, NotificationType, NotificationStatus } from '@/types/notifications';
@@ -23,6 +31,15 @@ export function getNotificationIcon(type: NotificationType, size: number = 16): 
     payment_due: <CreditCard size={size} className="text-orange-500" />,
     general: <Info size={size} className="text-gray-500" />,
     low_stock: <PackageX size={size} className="text-red-500" />,
+    // vet-specific types
+    new_appointment: <CalendarPlus size={size} className="text-blue-500" />,
+    new_pet: <PawPrint size={size} className="text-teal-500" />,
+    emergency: <AlertTriangle size={size} className="text-red-600" />,
+    appointment_today: <CalendarCheck size={size} className="text-indigo-500" />,
+    quarantine_alert: <ShieldAlert size={size} className="text-orange-500" />,
+    no_show: <UserX size={size} className="text-gray-500" />,
+    admin_announcement: <Megaphone size={size} className="text-purple-500" />,
+    admin_duty_notice: <ClipboardList size={size} className="text-blue-600" />,
   };
 
   return icons[type] || icons.general;
@@ -70,6 +87,15 @@ export function getNotificationTypeLabel(type: NotificationType): string {
     payment_due: 'Payment Due',
     general: 'General',
     low_stock: 'Low Stock Alert',
+    // vet-specific labels
+    new_appointment: 'New Appointment',
+    new_pet: 'New Pet Registered',
+    emergency: 'Emergency',
+    appointment_today: "Today's Appointment",
+    quarantine_alert: 'Quarantine Alert',
+    no_show: 'No Show',
+    admin_announcement: 'Announcement',
+    admin_duty_notice: 'Duty Notice',
   };
 
   return labels[type] || 'Notification';
@@ -97,6 +123,15 @@ export function getNotificationColor(type: NotificationType): string {
     payment_due: 'bg-orange-50 border-orange-200',
     general: 'bg-gray-50 border-gray-200',
     low_stock: 'bg-red-50 border-red-200',
+    // vet-specific colors
+    new_appointment: 'bg-blue-50 border-blue-200',
+    new_pet: 'bg-teal-50 border-teal-200',
+    emergency: 'bg-red-100 border-red-400',
+    appointment_today: 'bg-indigo-50 border-indigo-200',
+    quarantine_alert: 'bg-orange-50 border-orange-200',
+    no_show: 'bg-gray-50 border-gray-200',
+    admin_announcement: 'bg-purple-50 border-purple-200',
+    admin_duty_notice: 'bg-blue-50 border-blue-200',
   };
 
   return colors[type] || colors.general;
@@ -105,13 +140,21 @@ export function getNotificationColor(type: NotificationType): string {
 // Sort notifications by priority
 export function sortNotificationsByPriority(notifications: Notification[]): Notification[] {
   const priorityOrder: Record<NotificationType, number> = {
-    low_stock: 1,
-    appointment_cancelled: 2,
-    payment_due: 3,
-    test_results: 4,
-    appointment_reminder: 5,
-    appointment_confirmed: 6,
-    general: 7,
+    emergency: 1,
+    quarantine_alert: 2,
+    low_stock: 3,
+    appointment_cancelled: 4,
+    no_show: 5,
+    payment_due: 6,
+    test_results: 7,
+    appointment_today: 8,
+    new_appointment: 9,
+    appointment_reminder: 10,
+    appointment_confirmed: 11,
+    new_pet: 12,
+    admin_announcement: 13,
+    admin_duty_notice: 14,
+    general: 15,
   };
 
   return [...notifications].sort((a, b) => {

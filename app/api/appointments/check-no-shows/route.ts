@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
+import { handleError } from "@/utils/error-handler";
 
 // Use service role to bypass RLS
 const supabase = createClient(
@@ -34,10 +35,8 @@ export async function POST(request: NextRequest) {
       .in("appointment_status", ["pending", "confirmed"])
       .lt("scheduled_start", gracePeriodISO); // scheduled_start is less than grace period time (in the past)
 
-    if (fetchError) {
-      console.error("Error fetching missed appointments:", fetchError);
-      return NextResponse.json({ error: fetchError.message }, { status: 400 });
-    }
+    // Delegate fetch error to centralized handler
+    if (fetchError) return handleError(fetchError, "check-no-shows");
 
     if (!missedAppointments || missedAppointments.length === 0) {
       console.log("No missed appointments found");
@@ -68,10 +67,8 @@ export async function POST(request: NextRequest) {
       .in("id", appointmentIds)
       .select();
 
-    if (updateError) {
-      console.error("Error updating appointments to no-show:", updateError);
-      return NextResponse.json({ error: updateError.message }, { status: 400 });
-    }
+    // Delegate update error to centralized handler
+    if (updateError) return handleError(updateError, "check-no-shows");
 
     console.log(
       `Successfully marked ${updatedData?.length || 0} appointment(s) as no-show`,
@@ -87,13 +84,7 @@ export async function POST(request: NextRequest) {
       })),
     });
   } catch (error: any) {
-    console.error("Error in check-no-shows:", error);
-    return NextResponse.json(
-      {
-        error: "Internal server error",
-        details: error.message,
-      },
-      { status: 500 },
-    );
+    // Unexpected JS/network error — centralized handler
+    return handleError(error, "check-no-shows");
   }
 }

@@ -17,7 +17,10 @@ import {
   PillBottle,
   Syringe,
   ShieldAlert,
-  Flag
+  Flag,
+  FileText,
+  BarChart2,
+  Camera
 } from "lucide-react";
 
 interface AdminSidebarProps {
@@ -67,6 +70,9 @@ const menuItems: MenuItem[] = [
     { name: 'Quarantine', icon: <ShieldAlert size={20} />, path: '/veterinarian/quarantine' },
     { name: 'Prescriptions', icon: <PillBottle size={20} />, path: '/veterinarian/prescriptions' },
     { name: 'Vaccinations', icon: <Syringe size={20} />, path: '/veterinarian/vaccinations' },
+    { name: 'Medical Records', icon: <FileText size={20} />, path: '/veterinarian/medical-records' },
+    { name: 'Reports', icon: <BarChart2 size={20} />, path: '/veterinarian/reports' },
+    { name: 'Capture', icon: <Camera size={20} />, path: '/veterinarian/capture' },
     { name: 'Settings', icon: <Settings size={20} />, path: '/veterinarian/settings' },
     { name: 'Help Support', icon: <LifeBuoy size={20} />, path: '/veterinarian/help' },
 ];

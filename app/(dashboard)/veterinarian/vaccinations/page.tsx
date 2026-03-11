@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/auth-client';
 import useSWR, { mutate } from 'swr';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,20 +15,36 @@ import {
 import { 
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue 
 } from "@/components/ui/select";
-import { Syringe, Calendar, ShieldCheck, Search, AlertCircle, Check } from 'lucide-react';
+import { Syringe, Calendar, ShieldCheck, Search, AlertCircle, Check, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format, addYears, addMonths } from 'date-fns';
-import { create } from 'domain';
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export default function VaccinationsPage() {
-  const { data = {}, isLoading } = useSWR('/api/vaccinations', fetcher);
+  const { data = {}, isLoading } = useSWR('/api/veterinarian/vaccinations', fetcher);
 
   const history = data?.history || [];
   const petsList = data?.pets || [];
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [page, setPage] = useState(1);
+
+  // filtered history by search, then paginated
+  const itemsPerPage = 20;
+  const filteredHistory = useMemo(() =>
+    history.filter((rec: any) =>
+      rec.pets?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      rec.vaccine_name?.toLowerCase().includes(searchTerm.toLowerCase())
+    ),
+    [history, searchTerm]
+  );
+  const totalPages = Math.max(1, Math.ceil(filteredHistory.length / itemsPerPage));
+  const safePage = Math.min(page, totalPages);
+  const paginatedHistory = filteredHistory.slice(
+    (safePage - 1) * itemsPerPage,
+    safePage * itemsPerPage,
+  );
 
   // Form State
   const [formData, setFormData] = useState({
@@ -47,7 +63,7 @@ export default function VaccinationsPage() {
     setIsSaving(true);
 
     try {
-      const response = await fetch('/api/vaccinations', {
+      const response = await fetch('/api/veterinarian/vaccinations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -67,7 +83,7 @@ export default function VaccinationsPage() {
       alert("Error: " + error.message);
     } finally {
       setIsSaving(false);
-      mutate('api/vaccinations');
+      mutate('/api/veterinarian/vaccinations');
     }
   };
   return (
@@ -153,9 +169,9 @@ export default function VaccinationsPage() {
                    />
                 </div>
                 <div className="space-y-2">
-                   <Label className="text-green-700 font-semibold">Next Due Date</Label>
-                   <Input type="date" 
-                     className="bg-green-50 border-green-200"
+                   <Label className="text-green-600 font-semibold">Next Due Date</Label>
+                   <Input type="date"
+                     className="border-green-500/40 focus-visible:ring-green-500/40"
                      value={formData.next_due_date}
                      onChange={e => setFormData({...formData, next_due_date: e.target.value})}
                    />
@@ -193,62 +209,79 @@ export default function VaccinationsPage() {
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-lg">Vaccination Log</CardTitle>
               <div className="relative w-64">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input 
                   placeholder="Search pet or vaccine..." 
                   className="pl-8"
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
                 />
               </div>
             </CardHeader>
             <CardContent>
               {/* 1. Check isLoading first */}
               {isLoading ? (
-                <div className="p-8 text-center text-gray-400">Loading records...</div>
+                <div className="p-8 text-center text-muted-foreground">Loading records...</div>
               ) : history.length === 0 ? (
-                /* 2. Then check if list is empty */
-                <div className="p-8 text-center text-gray-400 border border-dashed rounded-lg bg-gray-50">
+                <div className="p-8 text-center text-muted-foreground border border-dashed rounded-lg bg-muted/40">
                   No vaccination records found.
                 </div>
               ) : (
-                /* 3. Finally, render the list */
+                <>
                 <div className="rounded-md border">
-                  <div className="grid grid-cols-12 gap-4 p-4 font-medium text-sm bg-gray-50 border-b text-gray-600">
+                  <div className="grid grid-cols-12 gap-4 p-4 font-medium text-sm bg-muted/40 border-b text-muted-foreground">
                     <div className="col-span-3">Patient</div>
                     <div className="col-span-3">Vaccine</div>
                     <div className="col-span-3">Date Given</div>
                     <div className="col-span-3">Next Due</div>
                   </div>
-                  {history.map((rec: any) => (
-                    <div key={rec.id} className="grid grid-cols-12 gap-4 p-4 text-sm items-center hover:bg-gray-50 border-b last:border-0 transition-colors">
+                  {paginatedHistory.map((rec: any) => (
+                    <div key={rec.id} className="grid grid-cols-12 gap-4 p-4 text-sm items-center hover:bg-muted/40 border-b last:border-0 transition-colors">
                       <div className="col-span-3">
-                        <div className="font-bold text-gray-800">{rec.pets?.name}</div>
-                        <div className="text-xs text-gray-500">{rec.pets?.species}</div>
+                        <div className="font-bold text-foreground">{rec.pets?.name}</div>
+                        <div className="text-xs text-muted-foreground">{rec.pets?.species}</div>
                       </div>
                       <div className="col-span-3">
-                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                        <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
                           {rec.vaccine_name}
                         </Badge>
                         {rec.batch_number && (
-                          <div className="text-[10px] text-gray-400 mt-1">Lot: {rec.batch_number}</div>
+                          <div className="text-[10px] text-muted-foreground mt-1">Lot: {rec.batch_number}</div>
                         )}
                       </div>
-                      <div className="col-span-3 text-gray-600">
+                      <div className="col-span-3 text-muted-foreground">
                         {format(new Date(rec.administered_date), 'MMM dd, yyyy')}
                       </div>
                       <div className="col-span-3 flex items-center gap-2">
                         {rec.next_due_date ? (
-                          <span className="text-green-700 bg-green-50 px-2 py-1 rounded text-xs font-medium">
+                          <span className="text-green-700 bg-green-500/10 px-2 py-1 rounded text-xs font-medium">
                             {format(new Date(rec.next_due_date), 'MMM dd, yyyy')}
                           </span>
                         ) : (
-                          <span className="text-gray-400 text-xs">N/A</span>
+                          <span className="text-muted-foreground text-xs">N/A</span>
                         )}
                       </div>
                     </div>
                   ))}
                 </div>
+                {/* pagination controls */}
+                {filteredHistory.length > itemsPerPage && (
+                  <div className="flex items-center justify-between pt-3 border-t mt-2">
+                    <p className="text-sm text-muted-foreground">
+                      Showing {(safePage - 1) * itemsPerPage + 1}–{Math.min(safePage * itemsPerPage, filteredHistory.length)} of {filteredHistory.length}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="icon" disabled={safePage === 1} onClick={() => setPage(p => p - 1)}>
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <span className="text-sm font-medium px-2">{safePage} / {totalPages}</span>
+                      <Button variant="outline" size="icon" disabled={safePage >= totalPages} onClick={() => setPage(p => p + 1)}>
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                </>
               )}
             </CardContent>
           </Card>
@@ -256,8 +289,8 @@ export default function VaccinationsPage() {
 
         {/* --- TAB 2: DUE SOON (Simplified Placeholder) --- */}
         <TabsContent value="due">
-          <Card className="bg-orange-50 border-orange-200">
-            <CardContent className="p-12 text-center text-orange-800">
+          <Card className="bg-warning/10 border-warning/30">
+            <CardContent className="p-12 text-center text-warning">
               <ShieldCheck size={48} className="mx-auto mb-4 opacity-50" />
               <h3 className="text-lg font-bold">Booster Reminders</h3>
               <p className="text-sm opacity-80 mt-2">

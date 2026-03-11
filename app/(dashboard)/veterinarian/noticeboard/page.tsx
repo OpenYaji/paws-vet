@@ -19,13 +19,13 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Megaphone, AlertCircle, Info, Trash2, Edit, Eye } from "lucide-react";
+import { Megaphone, AlertCircle, Info, Trash2, Edit, Eye, ChevronLeft, ChevronRight } from "lucide-react";
 import { format } from "date-fns";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export default function NoticeboardPage() {
-  const { data: notices = [], isLoading } = useSWR("/api/noticeboard", fetcher);
+  const { data: notices = [], isLoading } = useSWR("/api/veterinarian/noticeboard", fetcher);
 
   // Post states
   const [isPosting, setIsPosting] = useState(false);
@@ -42,11 +42,21 @@ export default function NoticeboardPage() {
   const [editPriority, setEditPriority] = useState("normal");
   const [isUpdating, setIsUpdating] = useState(false);
 
+  // 20 notices per page
+  const itemsPerPage = 20;
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(notices.length / itemsPerPage));
+  const safePage = Math.min(page, totalPages);
+  const paginatedNotices = notices.slice(
+    (safePage - 1) * itemsPerPage,
+    safePage * itemsPerPage,
+  );
+
   const handlePostNotice = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsPosting(true);
     try {
-      const res = await fetch("/api/noticeboard", {
+      const res = await fetch("/api/veterinarian/noticeboard", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title, content, priority }),
@@ -55,7 +65,7 @@ export default function NoticeboardPage() {
         setTitle("");
         setContent("");
         setPriority("normal");
-        mutate("/api/noticeboard");
+        mutate("/api/veterinarian/noticeboard");
       }
     } catch (error) {
       console.error(error);
@@ -67,8 +77,8 @@ export default function NoticeboardPage() {
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this notice?")) return;
     try {
-      const res = await fetch(`/api/noticeboard?id=${id}`, { method: "DELETE" });
-      if (res.ok) mutate("/api/noticeboard");
+      const res = await fetch(`/api/veterinarian/noticeboard?id=${id}`, { method: "DELETE" });
+      if (res.ok) mutate("/api/veterinarian/noticeboard");
     } catch (error) {
       console.error(error);
     }
@@ -85,7 +95,7 @@ export default function NoticeboardPage() {
     e.preventDefault();
     setIsUpdating(true);
     try {
-      const res = await fetch("/api/notices", {
+      const res = await fetch("/api/veterinarian/noticeboard", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -97,7 +107,7 @@ export default function NoticeboardPage() {
       });
       if (res.ok) {
         setEditNotice(null);
-        mutate("/api/notices");
+        mutate("/api/veterinarian/noticeboard");
       }
     } catch (error) {
       console.error(error);
@@ -106,30 +116,33 @@ export default function NoticeboardPage() {
     }
   };
 
+  const inputCls =
+    "p-2 rounded-md bg-input text-foreground placeholder:text-muted-foreground border border-border focus:outline-none focus:ring-2 focus:ring-ring";
+
   return (
-    <div className="max-w-4xl mx-auto space-y-8 p-6">
+    <div className="max-w-4xl mx-auto space-y-4 p-4">
       <div className="flex items-center gap-3">
-        <Megaphone className="h-8 w-8 text-green-600" />
-        <h1 className="text-3xl font-bold">Noticeboard</h1>
+        <Megaphone className="h-7 w-7 text-green-600" />
+        <h1 className="text-2xl font-bold">Noticeboard</h1>
       </div>
 
       {/* Post Notice Form */}
-      <Card className="bg-gray-50 border-dashed border-2">
-        <CardContent className="p-6">
-          <form onSubmit={handlePostNotice} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <Card className="bg-muted/40 border-dashed border-2 border-border">
+        <CardContent className="p-4">
+          <form onSubmit={handlePostNotice} className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <input
                 type="text"
                 placeholder="Notice Title"
                 required
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="col-span-2 p-2 border rounded-md"
+                className={`col-span-2 ${inputCls}`}
               />
               <select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value)}
-                className="p-2 border rounded-md"
+                className={inputCls}
               >
                 <option value="normal">Normal Priority</option>
                 <option value="important">Important</option>
@@ -141,7 +154,7 @@ export default function NoticeboardPage() {
               required
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              className="w-full p-2 border rounded-md h-24"
+              className={`w-full h-16 ${inputCls}`}
             />
             <Button
               type="submit"
@@ -155,33 +168,35 @@ export default function NoticeboardPage() {
       </Card>
 
       {/* Notices List */}
-      <div className="space-y-4">
+      <div className="space-y-3">
         {isLoading ? (
-          <p className="text-gray-500 text-center py-8">Loading notices...</p>
+          <p className="text-muted-foreground text-center py-6">Loading notices...</p>
         ) : notices.length === 0 ? (
-          <p className="text-gray-500 text-center py-8 border rounded-lg bg-gray-50">
+          <p className="text-muted-foreground text-center py-6 border rounded-lg bg-muted/40">
             No announcements yet.
           </p>
         ) : (
-          notices.map((notice: any) => (
+          paginatedNotices.map((notice: any) => (
             <Card
               key={notice.id}
               className={
-                notice.priority === "urgent" ? "border-red-200 bg-red-50" : ""
+                notice.priority === "urgent"
+                  ? "border-destructive/30 bg-destructive/10"
+                  : ""
               }
             >
-              <CardHeader className="pb-2 flex flex-row items-start justify-between">
+              <CardHeader className="pb-1 pt-3 px-4 flex flex-row items-start justify-between">
                 <div>
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center gap-2 mb-0.5">
                     {notice.priority === "urgent" && (
                       <AlertCircle className="h-4 w-4 text-red-600" />
                     )}
                     {notice.priority === "important" && (
                       <Info className="h-4 w-4 text-blue-600" />
                     )}
-                    <CardTitle className="text-lg">{notice.title}</CardTitle>
+                    <CardTitle className="text-base">{notice.title}</CardTitle>
                   </div>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-muted-foreground">
                     Posted on{" "}
                     {format(new Date(notice.created_at), "MMM d, yyyy h:mm a")}
                   </p>
@@ -197,12 +212,12 @@ export default function NoticeboardPage() {
                   </Badge>
                 )}
               </CardHeader>
-              <CardContent>
-                <p className="text-gray-700 whitespace-pre-wrap line-clamp-2">
+              <CardContent className="px-4 py-2">
+                <p className="text-sm text-foreground/80 whitespace-pre-wrap line-clamp-2">
                   {notice.content}
                 </p>
               </CardContent>
-              <CardFooter className="flex justify-end gap-2 pt-2 border-t mt-4">
+              <CardFooter className="flex justify-end gap-2 py-2 px-4 border-t">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -228,6 +243,24 @@ export default function NoticeboardPage() {
               </CardFooter>
             </Card>
           ))
+        )}
+
+        {/* pagination controls */}
+        {notices.length > itemsPerPage && (
+          <div className="flex items-center justify-between pt-3 border-t">
+            <p className="text-sm text-muted-foreground">
+              Showing {(safePage - 1) * itemsPerPage + 1}–{Math.min(safePage * itemsPerPage, notices.length)} of {notices.length}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="icon" disabled={safePage === 1} onClick={() => setPage(p => p - 1)}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-sm font-medium px-2">{safePage} / {totalPages}</span>
+              <Button variant="outline" size="icon" disabled={safePage >= totalPages} onClick={() => setPage(p => p + 1)}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
         )}
       </div>
 
@@ -256,7 +289,7 @@ export default function NoticeboardPage() {
                 format(new Date(viewNotice.created_at), "MMMM d, yyyy h:mm a")}
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4 whitespace-pre-wrap text-gray-800">
+          <div className="py-4 whitespace-pre-wrap text-foreground">
             {viewNotice?.content}
           </div>
           <DialogFooter>
@@ -280,12 +313,12 @@ export default function NoticeboardPage() {
                 required
                 value={editTitle}
                 onChange={(e) => setEditTitle(e.target.value)}
-                className="col-span-2 p-2 border rounded-md w-full"
+                className={`col-span-2 w-full ${inputCls}`}
               />
               <select
                 value={editPriority}
                 onChange={(e) => setEditPriority(e.target.value)}
-                className="p-2 border rounded-md w-full"
+                className={`w-full ${inputCls}`}
               >
                 <option value="normal">Normal Priority</option>
                 <option value="important">Important</option>
@@ -296,7 +329,7 @@ export default function NoticeboardPage() {
               required
               value={editContent}
               onChange={(e) => setEditContent(e.target.value)}
-              className="w-full p-2 border rounded-md h-32"
+              className={`w-full h-28 ${inputCls}`}
             />
             <DialogFooter>
               <Button
