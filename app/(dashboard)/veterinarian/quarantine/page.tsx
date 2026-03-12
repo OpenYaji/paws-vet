@@ -52,43 +52,22 @@ export default function QuarantinePage() {
     '/api/veterinarian/quarantine',
     Fetcher
   );
-
-  // Fetch all pets for adding new quarantine
-  useEffect(() => {
-    const fetchPets = async () => {
-      const { data, error: petsError } = await supabase
-        .from('pets')
-        .select(`
-          id,
-          name,
-          species,
-          breed,
-          gender,
-          client_profiles(
-            id,
-            first_name,
-            last_name
-            )
-          `)
-        .eq('is_active', true)
-        .order('name', { ascending: true });
-
-      if (petsError) {
-        console.error('Error fetching all pets:', petsError);
-      } else {
-        setAllPets(data || []);
-      }
-    };
-
-    fetchPets();
-  }, []);
-
+  
   const [selectedRecord, setSelectedRecord] = useState<any | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [allPets, setAllPets] = useState<any[]>([]);
   const [page, setPage] = useState(1);
+
+  // Left-side list search state
+  const [searchTerm, setSearchTerm] = useState("");
+
+  // Right-side form pet search state
+  const [petSearchTerm, setPetSearchTerm] = useState("");
+  const [results, setResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [selectedPet, setSelectedPet] = useState<any | null>(null);
+  const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
 
   const safeRecords = Array.isArray(quarantineRecords) ? quarantineRecords : [];
 
@@ -101,7 +80,52 @@ export default function QuarantinePage() {
     notes: '',
   });
 
-  // filter out released + apply search
+  // Debounce Effect for Pet Search
+  useEffect(() => {
+    if (!petSearchTerm.trim()) {
+      setResults([]);
+      setIsSearchDropdownOpen(false);
+      return;
+    }
+
+    const delayDebounceFn = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const res = await fetch(
+          `/api/veterinarian/pets/search?q=${encodeURIComponent(petSearchTerm)}`
+        );
+        const data = await res.json();
+
+        // Ensure 'data' is an array before setting it to results
+        if (Array.isArray(data)) {
+          setResults(data);
+        } else if (data && Array.isArray(data.data)) {
+          setResults(data.data);
+        } else {
+          setResults([]);
+          console.error("API returned a non-array:", data);
+        }
+        
+        setIsSearchDropdownOpen(true);
+      } catch (error) {
+        console.error("Failed to search pets:", error);
+        setResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(delayDebounceFn);
+  }, [petSearchTerm]);
+
+  const handleSelectPet = (pet: any) => {
+    setSelectedPet(pet);
+    setPetSearchTerm(pet.name);
+    setIsSearchDropdownOpen(false);
+    // Link the selected pet to the form data
+    setForm(prevForm => ({ ...prevForm, pet_id: pet.id }));
+  };
+
+  // filter out released + apply search to left side list
   const filteredRecords = useMemo(() =>
     safeRecords.filter((r: any) =>
       r.status !== 'released' &&
@@ -139,6 +163,9 @@ export default function QuarantinePage() {
 
       mutate('/api/veterinarian/quarantine');
       setShowAddForm(false);
+      setPetSearchTerm(""); // Reset search bar
+      setResults([]);
+      setSelectedPet(null);
       setForm({
         pet_id: '', reason: '', start_date: new Date().toISOString().split('T')[0],
         expected_end_date: '', notes: ''
@@ -200,20 +227,16 @@ export default function QuarantinePage() {
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6 flex-1 h-full overflow-hidden">
 
         {/* --- LEFT: QUARANTINE LIST --- */}
-        <div className="md:col-span-4 lg:col-span-4 flex flex-col gap-4 overflow-y-auto pr-2">
-          <div className="relative">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search patients..."
-              value={searchTerm}
-              onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
-              className="pl-9"
-            />
-          </div>
-
-          <h2 className="font-semibold text-foreground flex items-center gap-2">
-            <ShieldAlert size={18} className="text-destructive" /> Active ({filteredRecords.length})
-          </h2>
+        <div className="md:col-span-4 lg:col-span-4 border-r overflow-y-auto space-y-3 pr-4">
+          
+          {/* Main List Search Bar (If you have one, it uses searchTerm) */}
+          <Input 
+            type="text"
+            placeholder="Search active quarantines..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="mb-4"
+          />
 
           {/* pagination controls */}
           {filteredRecords.length > itemsPerPage && (
@@ -274,7 +297,7 @@ export default function QuarantinePage() {
         </div>
 
         {/* --- RIGHT: DETAIL / ADD FORM --- */}
-        <div className="md:col-span-8 lg:col-span-8 overflow-y-auto">
+        <div className="md:col-span-8 lg:col-span-8 overflow-y-auto pl-2">
           {showAddForm ? (
             <Card className="border-t-4 border-t-primary">
               <CardHeader className="bg-muted/50 pb-4 border-b">
@@ -283,19 +306,49 @@ export default function QuarantinePage() {
               <CardContent className="p-6">
                 <form onSubmit={handleAddQuarantine} className="space-y-6">
                   <div className="space-y-2">
-                    <Label>Select Pet</Label>
-                    <Select value={form.pet_id} onValueChange={(val) => setForm({...form, pet_id: val})}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Choose a pet..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {allPets.map((pet: any) => (
-                          <SelectItem key={pet.id} value={pet.id}>
-                            {pet.name} — {pet.species} ({pet.client_profiles?.first_name} {pet.client_profiles?.last_name})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    {/* --- Pet Search Field --- */}
+                    <div className="relative space-y-2">
+                      <Label>Select Patient</Label>
+                      <Input
+                        type="text"
+                        placeholder="Search pet by name..."
+                        value={petSearchTerm}
+                        onChange={(e) => {
+                          setPetSearchTerm(e.target.value);
+                          if (selectedPet) {
+                            setSelectedPet(null);
+                            setForm(prev => ({ ...prev, pet_id: '' }));
+                          }
+                        }}
+                        onFocus={() => {
+                          if (results.length > 0) setIsSearchDropdownOpen(true);
+                        }}
+                      />
+
+                      {/* --- The Search Results Dropdown --- */}
+                      {isSearchDropdownOpen && (
+                        <div className="absolute top-full left-0 z-50 w-full mt-1 bg-background border rounded-md shadow-lg max-h-60 overflow-auto">
+                          {isSearching ? (
+                            <div className="p-3 text-sm text-muted-foreground text-center">Searching...</div>
+                          ) : !Array.isArray(results) || results.length === 0 ? (
+                            <div className="p-3 text-sm text-muted-foreground text-center">No pets found.</div>
+                          ) : (
+                            results.map((pet) => (
+                              <div
+                                key={pet.id}
+                                onClick={() => handleSelectPet(pet)}
+                                className="p-3 text-sm cursor-pointer hover:bg-muted border-b last:border-0"
+                              >
+                                <div className="font-medium text-foreground">{pet.name}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  {pet.species} • {pet.breed} | Owner: {pet.client_profiles?.first_name}
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="space-y-2">
@@ -339,7 +392,7 @@ export default function QuarantinePage() {
 
                   <div className="pt-4 flex justify-end gap-3">
                     <Button type="button" variant="ghost" onClick={() => setShowAddForm(false)}>Cancel</Button>
-                    <Button type="submit" disabled={isSaving} className="min-w-[160px]">
+                    <Button type="submit" disabled={isSaving || !form.pet_id} className="min-w-[160px]">
                       {isSaving ? 'Saving...' : 'Add to Quarantine'}
                     </Button>
                   </div>

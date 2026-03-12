@@ -17,35 +17,8 @@ import { Scissors, Clock, FlaskConical, AlertTriangle, CheckCircle2, XCircle } f
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 
-const fetchQueue = async () => {
-  const today = new Date().toISOString().split('T')[0];
-  const { data, error } = await supabase
-    .from('appointments')
-    .select(`
-      id,
-      scheduled_start,
-      appointment_status,
-      appointment_type,
-      reason_for_visit,
-      pets (
-        id,
-        name,
-        species,
-        breed,
-        gender,
-        date_of_birth,
-        client_profiles (first_name, last_name)
-      )
-    `)
-    .gte('scheduled_start', `${today}T00:00:00`)
-    .lt('scheduled_start', `${today}T23:59:59`)
-    .in('appointment_status', ['confirmed', 'pending', 'in_progress'])
-    .in('appointment_type', ['surgery', 'kapon'])
-    .order('scheduled_start', { ascending: true });
-
-  if (error) throw error;
-  return data;
-};
+const fetchQueue = () =>
+  fetch('/api/veterinarian/neuter').then((r) => r.json());
 
 type BloodTestStatus = {
   consultationDone: boolean;
@@ -59,7 +32,7 @@ type BloodTestStatus = {
 };
 
 export default function NeuterContent() {
-  const { data: appointments = [], isLoading, error } = useSWR('surgery-queue', fetchQueue);
+  const { data: appointments = [], isLoading, error } = useSWR('/api/veterinarian/neuter', fetchQueue);
   const [selectedAppt, setSelectedAppt] = useState<any | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
@@ -168,7 +141,7 @@ export default function NeuterContent() {
 
     // Optimistic update
     mutate(
-      'surgery-queue',
+      '/api/veterinarian/neuter',
       safeAppointments.filter((a: any) => a.id !== apptToCancel.id),
       false
     );
@@ -193,10 +166,10 @@ export default function NeuterContent() {
         description: `${apptToCancel.pets.name}'s Kapon appointment has been cancelled.`,
       });
 
-      mutate('surgery-queue');
+      mutate('/api/veterinarian/neuter');
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
-      mutate('surgery-queue');
+      mutate('/api/veterinarian/neuter');
     } finally {
       setIsCancelling(false);
     }
@@ -216,7 +189,7 @@ export default function NeuterContent() {
 
     // Optimistic update
     mutate(
-      'surgery-queue',
+      '/api/veterinarian/neuter',
       safeAppointments.filter((a: any) => a.id !== apptToProcess.id),
       false
     );
@@ -243,10 +216,10 @@ export default function NeuterContent() {
         description: `Successfully recorded ${currentProcedure.operation_type} for ${apptToProcess.pets.name}.`,
       });
 
-      mutate('surgery-queue');
+      mutate('/api/veterinarian/neuter');
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
-      mutate('surgery-queue');
+      mutate('/api/veterinarian/neuter');
     } finally {
       setIsSaving(false);
     }
@@ -478,8 +451,8 @@ export default function NeuterContent() {
                                   <SelectValue placeholder="Select procedure..." />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="Spay">Spay (Female)</SelectItem>
-                                  <SelectItem value="Neuter">Neuter (Male)</SelectItem>
+                                  <SelectItem value="spay">Spay (Female)</SelectItem>
+                                  <SelectItem value="neuter">Neuter (Male)</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>

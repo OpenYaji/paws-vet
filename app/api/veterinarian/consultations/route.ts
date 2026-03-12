@@ -163,10 +163,21 @@ export async function POST(request: NextRequest) {
       throw new Error(recordError.message);
     }
 
-    // Update appointment status to completed
+    // Fetch the appointment type to decide the next status.
+    // Kapon/surgery appointments must NOT be marked 'completed' here — they
+    // still need to pass through the Neuter tab (blood test → procedure).
+    const { data: apptRow } = await supabase
+      .from('appointments')
+      .select('appointment_type')
+      .eq('id', appointment_id)
+      .single();
+
+    const isKapon = apptRow?.appointment_type === 'kapon' || apptRow?.appointment_type === 'surgery';
+    const nextStatus = isKapon ? 'in_progress' : 'completed';
+
     const { error: appointmentError } = await supabase
       .from('appointments')
-      .update({ appointment_status: 'completed' })
+      .update({ appointment_status: nextStatus })
       .eq('id', appointment_id);
 
     if (appointmentError) {
@@ -176,9 +187,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ 
       success: true,
-      message: 'Consultation completed successfully. Prescriptions are now unlocked.',
+      message: isKapon
+        ? 'Consultation saved. Patient is now queued for Kapon / Neuter procedure.'
+        : 'Consultation completed successfully. Prescriptions are now unlocked.',
       medical_record_id: medicalRecord.id,
-      record_number: recordNumber
+      record_number: recordNumber,
+      next_step: isKapon ? 'neuter' : 'done',
     });
 
   } catch (error: any) {
