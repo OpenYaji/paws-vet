@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import useSWR from "swr";
 import { format, addWeeks, subWeeks, startOfWeek, endOfWeek } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,8 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import {
   BarChart2, Calendar, ChevronLeft, ChevronRight, FileText,
-  Pill, Syringe, AlertTriangle, Clock, TrendingUp, RefreshCw,
+  Pill, Syringe, AlertTriangle, Clock, TrendingUp, RefreshCw, Printer,
 } from "lucide-react";
 
 // ---- Types ----
@@ -94,6 +97,38 @@ function StatCard({ icon, label, value, sub }: {
 
 export default function VetReportsPage() {
   const [weekDate, setWeekDate] = useState(new Date());
+  const [reportOpen, setReportOpen] = useState(false);
+  const printRef = useRef<HTMLDivElement>(null);
+
+  const handlePrintReport = () => {
+    const el = printRef.current;
+    if (!el) return;
+    const win = window.open("", "_blank", "width=800,height=900");
+    if (!win) return;
+    win.document.write(`
+      <html><head><title>Weekly Report</title>
+      <style>
+        body { font-family: sans-serif; padding: 32px; color: #111; }
+        h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+        h2 { font-size: 15px; font-weight: 600; margin: 20px 0 8px; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; }
+        .meta { font-size: 12px; color: #6b7280; margin-bottom: 24px; }
+        .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 16px; }
+        .stat { border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px; }
+        .stat-label { font-size: 11px; text-transform: uppercase; color: #6b7280; letter-spacing: 0.05em; }
+        .stat-value { font-size: 28px; font-weight: 700; margin: 4px 0 2px; }
+        .stat-sub { font-size: 11px; color: #9ca3af; }
+        .row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; padding: 4px 0; border-bottom: 1px solid #f3f4f6; }
+        .row:last-child { border-bottom: none; }
+        .badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 9999px; background: #fee2e2; color: #dc2626; }
+        .badge-warn { background: #fef3c7; color: #d97706; }
+        ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 2; }
+        @media print { body { padding: 16px; } }
+      </style></head><body>${el.innerHTML}</body></html>
+    `);
+    win.document.close();
+    win.focus();
+    win.print();
+  };
 
   const weektStart = startOfWeek(weekDate);
   const weekEnd = endOfWeek(weekDate);
@@ -130,13 +165,22 @@ export default function VetReportsPage() {
             <p className="text-sm text-muted-foreground">Clinical activity overview</p>
           </div>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => { mutateAppt(); mutateVet(); }}
-        >
-          <RefreshCw className="h-4 w-4 mr-2" /> Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => { mutateAppt(); mutateVet(); }}
+          >
+            <RefreshCw className="h-4 w-4 mr-2" /> Refresh
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => setReportOpen(true)}
+            disabled={apptLoading || vetLoading}
+          >
+            <Printer className="h-4 w-4 mr-2" /> Weekly Report
+          </Button>
+        </div>
       </div>
 
       <Tabs defaultValue="appointments">
@@ -453,6 +497,176 @@ export default function VetReportsPage() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Weekly Report Dialog */}
+      <Dialog open={reportOpen} onOpenChange={setReportOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Printer className="h-5 w-5" /> Weekly Overall Report
+            </DialogTitle>
+          </DialogHeader>
+
+          <div ref={printRef} className="space-y-6 text-sm">
+            {/* Report header */}
+            <div>
+              <h1 className="text-xl font-bold">PAWS Veterinary Clinic</h1>
+              <p className="text-muted-foreground text-xs">
+                Week of {weekLabel} &nbsp;·&nbsp; Generated {format(new Date(), "MMM d, yyyy h:mm a")}
+              </p>
+            </div>
+
+            {/* Appointments summary */}
+            <div>
+              <h2 className="font-semibold text-base border-b pb-1 mb-3">Appointments</h2>
+              {apptReport ? (
+                <>
+                  <div className="grid grid-cols-3 gap-3 mb-4">
+                    <div className="border rounded-lg p-3">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Total</p>
+                      <p className="text-2xl font-bold">{apptReport.total_appointments}</p>
+                    </div>
+                    <div className="border rounded-lg p-3">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Completed</p>
+                      <p className="text-2xl font-bold">{apptReport.by_status?.completed ?? 0}</p>
+                    </div>
+                    <div className="border rounded-lg p-3">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Cancelled / No-show</p>
+                      <p className="text-2xl font-bold">
+                        {(apptReport.by_status?.cancelled ?? 0) + (apptReport.by_status?.no_show ?? 0)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs font-semibold uppercase text-muted-foreground mb-1">By Day</p>
+                      {Object.entries(apptReport.by_day).map(([day, count]) => (
+                        <div key={day} className="flex justify-between py-0.5 border-b last:border-0">
+                          <span className="capitalize">{day}</span>
+                          <span className="font-medium">{count}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase text-muted-foreground mb-1">By Status</p>
+                      {Object.entries(apptReport.by_status).map(([status, count]) => (
+                        <div key={status} className="flex justify-between py-0.5 border-b last:border-0">
+                          <span className="capitalize">{status.replace(/_/g, " ")}</span>
+                          <span className="font-medium">{count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <p className="text-muted-foreground">No appointment data for this week.</p>
+              )}
+            </div>
+
+            {/* Medical Records */}
+            <div>
+              <h2 className="font-semibold text-base border-b pb-1 mb-3">Medical Records (Last 30 Days)</h2>
+              {vetReport ? (
+                <>
+                  <div className="border rounded-lg p-3 inline-block mb-3">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Records</p>
+                    <p className="text-2xl font-bold">{vetReport.medical_records.total_last_30_days}</p>
+                  </div>
+                  {vetReport.medical_records.top_diagnoses.length > 0 && (
+                    <>
+                      <p className="text-xs font-semibold uppercase text-muted-foreground mb-1">Top Diagnoses</p>
+                      {vetReport.medical_records.top_diagnoses.map(({ name, count }) => (
+                        <div key={name} className="flex justify-between py-0.5 border-b last:border-0">
+                          <span>{name}</span>
+                          <span className="font-medium">{count}</span>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </>
+              ) : (
+                <p className="text-muted-foreground">No data available.</p>
+              )}
+            </div>
+
+            {/* Prescriptions */}
+            <div>
+              <h2 className="font-semibold text-base border-b pb-1 mb-3">Prescriptions</h2>
+              {vetReport ? (
+                <>
+                  <div className="grid grid-cols-3 gap-3 mb-3">
+                    <div className="border rounded-lg p-3">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Total</p>
+                      <p className="text-2xl font-bold">{vetReport.prescriptions.total}</p>
+                    </div>
+                    {Object.entries(vetReport.prescriptions.by_status).map(([status, count]) => (
+                      <div key={status} className="border rounded-lg p-3">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide capitalize">{status}</p>
+                        <p className="text-2xl font-bold">{count}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {vetReport.prescriptions.top_medications.length > 0 && (
+                    <>
+                      <p className="text-xs font-semibold uppercase text-muted-foreground mb-1">Top Medications</p>
+                      {vetReport.prescriptions.top_medications.map(({ name, count }) => (
+                        <div key={name} className="flex justify-between py-0.5 border-b last:border-0">
+                          <span>{name}</span>
+                          <span className="font-medium">{count}</span>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </>
+              ) : (
+                <p className="text-muted-foreground">No data available.</p>
+              )}
+            </div>
+
+            {/* Vaccinations */}
+            <div>
+              <h2 className="font-semibold text-base border-b pb-1 mb-3">Vaccinations</h2>
+              {vetReport ? (
+                <>
+                  <div className="grid grid-cols-3 gap-3 mb-3">
+                    <div className="border rounded-lg p-3">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Records</p>
+                      <p className="text-2xl font-bold">{vetReport.vaccinations.total}</p>
+                    </div>
+                    <div className="border rounded-lg p-3">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Overdue</p>
+                      <p className="text-2xl font-bold text-red-600">{vetReport.vaccinations.overdue_count}</p>
+                    </div>
+                    <div className="border rounded-lg p-3">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Due in 90 Days</p>
+                      <p className="text-2xl font-bold text-amber-600">{vetReport.vaccinations.upcoming_due_count}</p>
+                    </div>
+                  </div>
+                  {vetReport.vaccinations.overdue.length > 0 && (
+                    <>
+                      <p className="text-xs font-semibold uppercase text-red-600 mb-1">Overdue Vaccinations</p>
+                      {vetReport.vaccinations.overdue.map((v, i) => (
+                        <div key={i} className="flex justify-between py-0.5 border-b last:border-0">
+                          <span>{v.pet?.name ?? "—"} <span className="text-muted-foreground capitalize">({v.pet?.species ?? ""})</span> — {v.vaccine_name}</span>
+                          <Badge variant="destructive" className="text-xs">{format(new Date(v.next_due_date), "MMM d")}</Badge>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </>
+              ) : (
+                <p className="text-muted-foreground">No data available.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="flex justify-end pt-2 border-t">
+            <Button onClick={handlePrintReport}>
+              <Printer className="h-4 w-4 mr-2" /> Print Report
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

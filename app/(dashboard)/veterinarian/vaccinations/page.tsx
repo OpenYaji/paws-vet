@@ -15,8 +15,94 @@ import {
 import { 
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue 
 } from "@/components/ui/select";
-import { Syringe, Calendar, ShieldCheck, Search, AlertCircle, Check, ChevronLeft, ChevronRight } from 'lucide-react';
-import { format, addYears, addMonths } from 'date-fns';
+import { Syringe, Calendar, ShieldCheck, Search, AlertCircle, Check, ChevronLeft, ChevronRight, AlertTriangle, Clock } from 'lucide-react';
+import { format, addYears, addMonths, addDays } from 'date-fns';
+
+function BoosterTab({ history, isLoading }: { history: any[]; isLoading: boolean }) {
+  const today = new Date();
+  const in30Days = addDays(today, 30);
+
+  const overdue = history.filter((r: any) => r.next_due_date && new Date(r.next_due_date) < today);
+  const upcoming = history.filter((r: any) => {
+    if (!r.next_due_date) return false;
+    const d = new Date(r.next_due_date);
+    return d >= today && d <= in30Days;
+  });
+
+  const Row = ({ rec, badge }: { rec: any; badge: React.ReactNode }) => (
+    <div className="grid grid-cols-12 gap-4 p-4 text-sm items-center hover:bg-muted/40 border-b last:border-0 transition-colors">
+      <div className="col-span-3">
+        <div className="font-bold text-foreground">{rec.pets?.name}</div>
+        <div className="text-xs text-muted-foreground capitalize">{rec.pets?.species}</div>
+      </div>
+      <div className="col-span-3">
+        <span className="font-medium">{rec.vaccine_name}</span>
+        {rec.batch_number && <div className="text-[10px] text-muted-foreground">Lot: {rec.batch_number}</div>}
+      </div>
+      <div className="col-span-3 text-muted-foreground">
+        Last given: {format(new Date(rec.administered_date), 'MMM dd, yyyy')}
+      </div>
+      <div className="col-span-2">
+        <span className={`px-2 py-1 rounded text-xs font-medium ${
+          overdue.includes(rec) ? 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400'
+        }`}>
+          {format(new Date(rec.next_due_date), 'MMM dd, yyyy')}
+        </span>
+      </div>
+      <div className="col-span-1 flex justify-end">{badge}</div>
+    </div>
+  );
+
+  if (isLoading) {
+    return <div className="p-8 text-center text-muted-foreground">Loading...</div>;
+  }
+
+  if (overdue.length === 0 && upcoming.length === 0) {
+    return (
+      <div className="p-12 text-center text-muted-foreground border border-dashed rounded-lg bg-muted/40">
+        <ShieldCheck size={48} className="mx-auto mb-4 opacity-40" />
+        <h3 className="text-lg font-bold">All caught up!</h3>
+        <p className="text-sm mt-1">No pets are overdue or due within the next 30 days.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {overdue.length > 0 && (
+        <div className="rounded-md border border-red-200 dark:border-red-800 overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 bg-red-50 dark:bg-red-950/30 border-b border-red-200 dark:border-red-800">
+            <AlertTriangle className="h-4 w-4 text-red-600" />
+            <span className="text-sm font-semibold text-red-700 dark:text-red-400">Overdue — {overdue.length} record{overdue.length !== 1 ? 's' : ''}</span>
+          </div>
+          <div className="grid grid-cols-12 gap-4 px-4 py-2 text-xs font-medium text-muted-foreground bg-muted/40 border-b">
+            <div className="col-span-3">Patient</div><div className="col-span-3">Vaccine</div>
+            <div className="col-span-3">Last Given</div><div className="col-span-2">Due Date</div><div className="col-span-1" />
+          </div>
+          {overdue.map((rec: any) => (
+            <Row key={rec.id} rec={rec} badge={<AlertTriangle className="h-4 w-4 text-red-500" />} />
+          ))}
+        </div>
+      )}
+
+      {upcoming.length > 0 && (
+        <div className="rounded-md border border-amber-200 dark:border-amber-800 overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800">
+            <Clock className="h-4 w-4 text-amber-600" />
+            <span className="text-sm font-semibold text-amber-700 dark:text-amber-400">Due within 30 days — {upcoming.length} record{upcoming.length !== 1 ? 's' : ''}</span>
+          </div>
+          <div className="grid grid-cols-12 gap-4 px-4 py-2 text-xs font-medium text-muted-foreground bg-muted/40 border-b">
+            <div className="col-span-3">Patient</div><div className="col-span-3">Vaccine</div>
+            <div className="col-span-3">Last Given</div><div className="col-span-2">Due Date</div><div className="col-span-1" />
+          </div>
+          {upcoming.map((rec: any) => (
+            <Row key={rec.id} rec={rec} badge={<Clock className="h-4 w-4 text-amber-500" />} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -287,18 +373,9 @@ export default function VaccinationsPage() {
           </Card>
         </TabsContent>
 
-        {/* --- TAB 2: DUE SOON (Simplified Placeholder) --- */}
+        {/* --- TAB 2: DUE FOR BOOSTERS --- */}
         <TabsContent value="due">
-          <Card className="bg-warning/10 border-warning/30">
-            <CardContent className="p-12 text-center text-warning">
-              <ShieldCheck size={48} className="mx-auto mb-4 opacity-50" />
-              <h3 className="text-lg font-bold">Booster Reminders</h3>
-              <p className="text-sm opacity-80 mt-2">
-                This feature will show all pets who are due for shots in the next 30 days.
-                <br/>(Requires backend logic to filter by `next_due_date`)
-              </p>
-            </CardContent>
-          </Card>
+          <BoosterTab history={history} isLoading={isLoading} />
         </TabsContent>
       </Tabs>
     </div>

@@ -315,7 +315,7 @@ export async function DELETE(request: NextRequest) {
   }
 }
 
-export async function UPDATE(request: NextRequest) {
+export async function PATCH(request: NextRequest) {
   try {
     const cookieStore = await cookies();
 
@@ -324,9 +324,7 @@ export async function UPDATE(request: NextRequest) {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
-          getAll() {
-            return cookieStore.getAll();
-          },
+          getAll() { return cookieStore.getAll(); },
           setAll(cookiesToSet) {
             try {
               cookiesToSet.forEach(({ name, value, options }) =>
@@ -340,20 +338,39 @@ export async function UPDATE(request: NextRequest) {
       },
     );
 
-    const {
-      data: { user },
-      error: authError,
-    } = await authClient.auth.getUser();
-
+    const { data: { user }, error: authError } = await authClient.auth.getUser();
     if (authError || !user || user.user_metadata.role !== "veterinarian") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const body = await request.json();
+    const { id, mark_dispensed, ...edits } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: "Prescription ID is required" }, { status: 400 });
+    }
+
+    const patch: Record<string, any> = {};
+
+    if (mark_dispensed) {
+      patch.dispensed_date = new Date().toISOString();
+    }
+
+    const editableFields = ["medication_name", "dosage", "frequency", "duration", "instructions", "form", "quantity", "refills_allowed"];
+    for (const field of editableFields) {
+      if (field in edits) patch[field] = edits[field];
+    }
+
+    const { data, error } = await supabase
+      .from("prescriptions")
+      .update(patch)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) return handleError(error, "PATCH /api/prescriptions");
+    return NextResponse.json(data, { status: 200 });
   } catch (error: any) {
-    return NextResponse.json(
-      { error: "Internal server error: " + error.message },
-      { status: 500 },
-    );
+    return handleError(error, "PATCH /api/prescriptions");
   }
 }

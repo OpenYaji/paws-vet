@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Sun, Moon, User, LogOut, Settings } from 'lucide-react';
+import { Search, Sun, Moon, User, LogOut, Settings, LifeBuoy } from 'lucide-react';
 import { supabase } from '@/lib/auth-client';
 import { useTheme } from '@/components/veterinarian/theme-provider';
 import { Button } from '@/components/ui/button';
@@ -127,11 +127,16 @@ export default function VetHeader() {
               <span>Profile</span>
             </DropdownMenuItem>
             
-            <DropdownMenuItem className="cursor-pointer">
+            <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/veterinarian/settings')}>
               <Settings className="mr-2 h-4 w-4" />
               <span>Settings</span>
             </DropdownMenuItem>
-            
+
+            <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/veterinarian/help-support')}>
+              <LifeBuoy className="mr-2 h-4 w-4" />
+              <span>Help & Support</span>
+            </DropdownMenuItem>
+
             <DropdownMenuSeparator />
             
             <DropdownMenuItem 

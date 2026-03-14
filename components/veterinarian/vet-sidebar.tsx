@@ -73,8 +73,6 @@ const menuItems: MenuItem[] = [
     { name: 'Medical Records', icon: <FileText size={20} />, path: '/veterinarian/medical-records' },
     { name: 'Reports', icon: <BarChart2 size={20} />, path: '/veterinarian/reports' },
     { name: 'Capture', icon: <Camera size={20} />, path: '/veterinarian/capture' },
-    { name: 'Settings', icon: <Settings size={20} />, path: '/veterinarian/settings' },
-    { name: 'Help Support', icon: <LifeBuoy size={20} />, path: '/veterinarian/help' },
 ];
 
   interface NavLinkProps {
@@ -109,9 +107,9 @@ const menuItems: MenuItem[] = [
       {isCollapsed && (
         <span className="
           absolute left-full top-1/2 -translate-y-1/2 ml-4
-          bg-popover text-popover-foreground text-xs font-bold 
+          bg-popover text-popover-foreground text-xs font-bold
           rounded-md p-2 border
-          opacity-0 scale-0 group-hover:opacity-100 group-hover:scale-100 
+          opacity-0 scale-0 group-hover:opacity-100 group-hover:scale-100
           transition-all duration-200 ease-in-out
           whitespace-nowrap
           z-10
@@ -143,12 +141,7 @@ const menuItems: MenuItem[] = [
           </header>
           <nav className="flex-1 flex flex-col">
             <ul className="space-y-2 flex-1">
-              {menuItems.slice(0, -2).map((item) => (
-                <NavLink key={item.name} item={item} isActive={getIsActive(item)} isMobileLink={true} />
-              ))}
-            </ul>
-            <ul className="space-y-2 mt-auto">
-              {menuItems.slice(-2).map((item) => (
+              {menuItems.map((item) => (
                 <NavLink key={item.name} item={item} isActive={getIsActive(item)} isMobileLink={true} />
               ))}
             </ul>
@@ -161,7 +154,7 @@ const menuItems: MenuItem[] = [
       <aside className={`h-screen bg-transparent flex flex-col FlexShrink-0 transition-all duration-300 sticky top-0 ${collapsed ? 'w-28' : 'w-72'}`}>
         {collapsed ? (
           <div className="flex flex-col h-full items-center p-3 gap-3">
-            <div className="flex flex-col items-center space-y-4 bg-card border p-3 rounded-3xl shadow-lg flex-1 w-full overflow-y-auto">
+            <div className="flex flex-col items-center space-y-4 bg-card border p-3 rounded-3xl shadow-lg flex-1 w-full overflow-hidden">
               <button onClick={() => setCollapsed(false)} className="p-2 hover:bg-accent rounded-full FlexShrink-0">
                 <Menu size={20} />
               </button>
@@ -169,12 +162,7 @@ const menuItems: MenuItem[] = [
               <div className="w-8 H-[1px] bg-border FlexShrink-0"></div>
               <nav className="flex-1 flex flex-col w-full">
                 <ul className="space-y-2 flex-1">
-                  {menuItems.slice(0, -2).map((item) => (
-                    <NavLink key={item.name} item={item} isActive={getIsActive(item)} isCollapsed={true} />
-                  ))}
-                </ul>
-                <ul className="space-y-2 mt-auto">
-                  {menuItems.slice(-2).map((item) => (
+                  {menuItems.map((item) => (
                     <NavLink key={item.name} item={item} isActive={getIsActive(item)} isCollapsed={true} />
                   ))}
                 </ul>
@@ -183,7 +171,7 @@ const menuItems: MenuItem[] = [
           </div>
         ) : (
           <div className="flex flex-col h-full p-3">
-            <div className="bg-card border rounded-3xl p-4 flex-1 flex flex-col shadow-lg overflow-y-auto">
+            <div className="bg-card border rounded-3xl p-4 flex-1 flex flex-col shadow-lg overflow-hidden">
               <header className="flex flex-col items-center text-center mb-8 relative FlexShrink-0">
                 <button onClick={() => setCollapsed(true)} className="p-2 hover:bg-accent rounded-lg absolute top-0 right-0">
                   <Menu size={20} />
@@ -193,12 +181,7 @@ const menuItems: MenuItem[] = [
               </header>
               <nav className="flex-1 flex flex-col">
                 <ul className="space-y-2 flex-1">
-                  {menuItems.slice(0, -2).map((item) => (
-                    <NavLink key={item.name} item={item} isActive={getIsActive(item)} />
-                  ))}
-                </ul>
-                <ul className="space-y-2 mt-auto">
-                  {menuItems.slice(-2).map((item) => (
+                  {menuItems.map((item) => (
                     <NavLink key={item.name} item={item} isActive={getIsActive(item)} />
                   ))}
                 </ul>

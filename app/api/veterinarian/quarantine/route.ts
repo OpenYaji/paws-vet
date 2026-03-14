@@ -122,21 +122,26 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { id, status, end_date } = body;
+    const { id, status, end_date, reason, notes, expected_end_date } = body;
 
-    if (!body.id || !body.status) {
+    if (!body.id) {
       return NextResponse.json(
-        { error: "Missing required fields" },
+        { error: "Missing required field: id" },
         { status: 400 },
       );
     }
+
+    const patch: Record<string, any> = {};
+    if (status !== undefined) patch.status = status;
+    if (end_date !== undefined) patch.end_date = end_date || null;
+    if (reason !== undefined) patch.reason = reason;
+    if (notes !== undefined) patch.notes = notes;
+    if (expected_end_date !== undefined) patch.expected_end_date = expected_end_date;
+
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("quarantine_pets")
-      .update({
-        status: status,
-        end_date: end_date || null,
-      })
+      .update(patch)
       .eq("id", id)
       .select()
       .single();

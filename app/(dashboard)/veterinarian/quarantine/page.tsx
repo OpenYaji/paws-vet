@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/select";
 import {
   ShieldAlert, Search, Clock, AlertTriangle, CheckCircle2, Plus,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, Pencil, X,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Fetcher } from '@/lib/fetcher';
@@ -56,6 +56,38 @@ export default function QuarantinePage() {
   const [selectedRecord, setSelectedRecord] = useState<any | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState({ reason: '', notes: '', expected_end_date: '' });
+
+  const openEditMode = (record: any) => {
+    setEditForm({
+      reason: record.reason ?? '',
+      notes: record.notes ?? '',
+      expected_end_date: record.expected_end_date ?? '',
+    });
+    setIsEditing(true);
+  };
+
+  const handleEditSave = async () => {
+    if (!selectedRecord) return;
+    setIsSaving(true);
+    try {
+      const response = await fetch('/api/veterinarian/quarantine', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: selectedRecord.id, ...editForm }),
+      });
+      if (!response.ok) throw new Error('Failed to update');
+      const updated = await response.json();
+      setSelectedRecord(updated);
+      setIsEditing(false);
+      mutate('/api/veterinarian/quarantine');
+    } catch (err: any) {
+      alert('Error updating: ' + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
   const [allPets, setAllPets] = useState<any[]>([]);
   const [page, setPage] = useState(1);
 
@@ -449,27 +481,57 @@ export default function QuarantinePage() {
                     </div>
                   </div>
 
-                  <div className="bg-muted/50 p-3 rounded-lg">
-                    <p className="text-xs text-muted-foreground uppercase mb-1">Reason</p>
-                    <p className="text-foreground">{selectedRecord.reason}</p>
-                  </div>
-
-                  {selectedRecord.notes && (
-                    <div className="bg-muted/50 p-3 rounded-lg">
-                      <p className="text-xs text-muted-foreground uppercase mb-1">Notes</p>
-                      <p className="text-foreground">{selectedRecord.notes}</p>
+                  {isEditing ? (
+                    <div className="space-y-3">
+                      <div className="space-y-1">
+                        <Label>Reason</Label>
+                        <Textarea value={editForm.reason}
+                          onChange={e => setEditForm(f => ({ ...f, reason: e.target.value }))}
+                          className="min-h-20" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Expected End Date</Label>
+                        <Input type="date" value={editForm.expected_end_date}
+                          onChange={e => setEditForm(f => ({ ...f, expected_end_date: e.target.value }))} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Notes</Label>
+                        <Textarea value={editForm.notes}
+                          onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))}
+                          className="min-h-15" placeholder="Special instructions, monitoring..." />
+                      </div>
+                      <div className="pt-3 flex justify-end gap-2 border-t">
+                        <Button variant="ghost" size="sm" onClick={() => setIsEditing(false)} disabled={isSaving}>
+                          <X size={14} className="mr-1" /> Cancel
+                        </Button>
+                        <Button size="sm" onClick={handleEditSave} disabled={isSaving}>
+                          {isSaving ? 'Saving...' : 'Save Changes'}
+                        </Button>
+                      </div>
                     </div>
+                  ) : (
+                    <>
+                      <div className="bg-muted/50 p-3 rounded-lg">
+                        <p className="text-xs text-muted-foreground uppercase mb-1">Reason</p>
+                        <p className="text-foreground">{selectedRecord.reason}</p>
+                      </div>
+                      {selectedRecord.notes && (
+                        <div className="bg-muted/50 p-3 rounded-lg">
+                          <p className="text-xs text-muted-foreground uppercase mb-1">Notes</p>
+                          <p className="text-foreground">{selectedRecord.notes}</p>
+                        </div>
+                      )}
+                      <div className="pt-4 flex justify-end gap-3 border-t">
+                        <Button variant="outline" size="sm" onClick={() => openEditMode(selectedRecord)}>
+                          <Pencil size={14} className="mr-1" /> Edit Record
+                        </Button>
+                        <Button variant="outline" onClick={() => handleRelease(selectedRecord.id)}
+                          className="text-primary border-primary hover:bg-primary/10">
+                          <CheckCircle2 size={16} className="mr-2" /> Release from Quarantine
+                        </Button>
+                      </div>
+                    </>
                   )}
-
-                  <div className="pt-4 flex justify-end gap-3 border-t">
-                    <Button
-                      variant="outline"
-                      onClick={() => handleRelease(selectedRecord.id)}
-                      className="text-primary border-primary hover:bg-primary/10"
-                    >
-                      <CheckCircle2 size={16} className="mr-2" /> Release from Quarantine
-                    </Button>
-                  </div>
                 </CardContent>
               </Card>
             </div>
