@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Save, Image as ImageIcon, Building2, Bell, Shield } from "lucide-react";
 import { Asul } from "next/font/google";
+import { createClient } from "@/utils/supabase/client";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -18,7 +19,9 @@ export default function ClinicProfilePage() {
   const [isAnnouncing, setIsAnnouncing] = useState(false);
   const [formData, setFormData] = useState<any>({});
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingPolicy, setIsSavingPolicy] = useState(false);
   const [linkData, setLinkData ] = useState(false);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
 
   useEffect(() => {
     if (settings) setFormData(settings);
@@ -28,8 +31,8 @@ export default function ClinicProfilePage() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSave = async () => {
-    setIsSaving(true);
+  const handleSavePolicy = async () => {
+    setIsSavingPolicy(true);
     try {
       const res = await fetch('/api/veterinarian/admin', {
         method: 'PATCH',
@@ -49,6 +52,54 @@ export default function ClinicProfilePage() {
       setIsSaving(false);
     }
   };
+
+  const handleSaveBranding = async () => {
+  setIsSaving(true);
+  try {
+    const supabase = createClient();
+    let finalLogoUrl = formData.logo_url;
+
+    // upload the file if a new one was selected
+    if (logoFile) {
+      const fileExt = logoFile.name.split('.').pop();
+      const fileName = `logo-${Date.now()}.${fileExt}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('clinic-logo') // replace with your actual bucket name
+        .upload(fileName, logoFile);
+
+      if (uploadError) throw uploadError;
+
+      // get the public link
+      const { data: urlData } = supabase.storage
+        .from('clinic-logo')
+        .getPublicUrl(fileName);
+
+      finalLogoUrl = urlData.publicUrl;
+    }
+
+    // update the form data with the new url
+    const updatedData = { ...formData, logo_url: finalLogoUrl };
+
+    // send the json to your exact existing PATCH route
+    const res = await fetch('/api/veterinarian/admin', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedData),
+    });
+
+    if (res.ok) {
+      alert("Settings saved successfully!");
+    } else {
+      alert("Failed to save settings.");
+    }
+  } catch (error) {
+    console.error(error);
+    alert("Error saving settings");
+  } finally {
+    setIsSaving(false);
+  }
+};
 
   const handleAnnounce = async (activate: boolean) => {
     setIsAnnouncing(true);
@@ -93,11 +144,6 @@ export default function ClinicProfilePage() {
       setIsAnnouncing(false); 
     }
   };
-
-  const handleLinks = async () => {
-    
-  }
-
   if (isLoading) return <div className="p-8 text-muted-foreground">Loading clinic profile...</div>;
 
   return (
@@ -106,20 +152,26 @@ export default function ClinicProfilePage() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold">Clinic Profile</h2>
-          <p className="text-sm text-muted-foreground">Manage public-facing details, announcements, and branding.</p>
+          <p className="text-sm text-muted-foreground">
+            Manage public-facing details, announcements, and branding.
+          </p>
         </div>
-        <Button onClick={handleSave} disabled={isSaving}>
-          <Save className="h-4 w-4 mr-2" />
-          {isSaving ? "Saving..." : "Save Changes"}
-        </Button>
       </div>
 
       <Tabs defaultValue="branding">
         <TabsList className="grid grid-cols-4 w-full">
-          <TabsTrigger value="branding"><ImageIcon className="h-4 w-4 mr-2 hidden sm:block"/> Branding</TabsTrigger>
-          <TabsTrigger value="details"><Building2 className="h-4 w-4 mr-2 hidden sm:block"/> Details</TabsTrigger>
-          <TabsTrigger value="notices"><Bell className="h-4 w-4 mr-2 hidden sm:block"/> Notices</TabsTrigger>
-          <TabsTrigger value="policies"><Shield className="h-4 w-4 mr-2 hidden sm:block"/> Policies</TabsTrigger>
+          <TabsTrigger value="branding">
+            <ImageIcon className="h-4 w-4 mr-2 hidden sm:block" /> Branding
+          </TabsTrigger>
+          <TabsTrigger value="details">
+            <Building2 className="h-4 w-4 mr-2 hidden sm:block" /> Details
+          </TabsTrigger>
+          <TabsTrigger value="notices">
+            <Bell className="h-4 w-4 mr-2 hidden sm:block" /> Notices
+          </TabsTrigger>
+          <TabsTrigger value="policies">
+            <Shield className="h-4 w-4 mr-2 hidden sm:block" /> Policies
+          </TabsTrigger>
         </TabsList>
 
         {/* Logo and Identity */}
@@ -127,17 +179,35 @@ export default function ClinicProfilePage() {
           <Card>
             <CardHeader>
               <CardTitle>Logo & Identity</CardTitle>
-              <CardDescription>Update the clinic name and logo shown to clients.</CardDescription>
+              <CardDescription>
+                Update the clinic name and logo shown to clients.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label>Clinic Name</Label>
-                <Input name="clinic_name" value={formData.clinic_name || ''} onChange={handleChange} />
+                <Input
+                  name="clinic_name"
+                  value={formData.clinic_name || ""}
+                  onChange={handleChange}
+                />
               </div>
               <div className="space-y-2">
-                <Label>Logo URL</Label>
-                <Input name="logo_url" value={formData.logo_url || ''} onChange={handleChange} placeholder="https://..." />
+                <Label>Upload Logo</Label>
+                <Input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      setLogoFile(e.target.files[0]);
+                    }
+                  }}
+                />
               </div>
+              <Button onClick={handleSaveBranding} disabled={isSaving}>
+                <Save className="h-4 w-4 mr-2" />
+                {isSaving ? "Saving..." : "Save Changes"}
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>
@@ -147,31 +217,53 @@ export default function ClinicProfilePage() {
           <Card>
             <CardHeader>
               <CardTitle>Contact Information</CardTitle>
-              <CardDescription>How clients can reach the clinic.</CardDescription>
+              <CardDescription>
+                How clients can reach the clinic.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Public Email</Label>
-                  <Input name="email" value={formData.email || ''} onChange={handleChange} />
+                  <Input
+                    name="email"
+                    value={formData.email || ""}
+                    onChange={handleChange}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Public Phone</Label>
-                  <Input name="phone" value={formData.phone || ''} onChange={handleChange} />
+                  <Input
+                    name="phone"
+                    value={formData.phone || ""}
+                    onChange={handleChange}
+                  />
                 </div>
               </div>
               <div className="space-y-2">
-                <Label>Physical Address</Label>
-                <Textarea name="address" value={formData.address || ''} onChange={handleChange} />
+                <Label>Location Address</Label>
+                <Textarea
+                  name="address"
+                  value={formData.address || ""}
+                  onChange={handleChange}
+                />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Facebook URL</Label>
-                  <Input name="facebook_url" value={formData.facebook_url || ''} onChange={handleChange} />
+                  <Input
+                    name="facebook_url"
+                    value={formData.facebook_url || ""}
+                    onChange={handleChange}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Instagram URL</Label>
-                  <Input name="instagram_url" value={formData.instagram_url || ''} onChange={handleChange} />
+                  <Input
+                    name="instagram_url"
+                    value={formData.instagram_url || ""}
+                    onChange={handleChange}
+                  />
                 </div>
               </div>
             </CardContent>
@@ -190,28 +282,30 @@ export default function ClinicProfilePage() {
                   </span>
                 )}
               </CardTitle>
-              <CardDescription>Display notices on the client portal (e.g., holidays, promos).</CardDescription>
+              <CardDescription>
+                Display notices on the client portal (e.g., holidays, promos).
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label>Announcement Text</Label>
-                <Textarea 
-                  name="announcement_text" 
-                  value={formData.announcement_text || ''} 
-                  onChange={handleChange} 
+                <Textarea
+                  name="announcement_text"
+                  value={formData.announcement_text || ""}
+                  onChange={handleChange}
                   placeholder="e.g. We will be closed this Friday..."
                   rows={4}
                 />
               </div>
               <div className="flex justify-end gap-3 pt-2">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   disabled={isAnnouncing || !formData.is_announcement_active}
                   onClick={() => handleAnnounce(false)}
                 >
                   Remove Notice
                 </Button>
-                <Button 
+                <Button
                   disabled={isAnnouncing || !formData.announcement_text}
                   onClick={() => handleAnnounce(true)}
                   className="bg-primary hover:bg-primary/90"
@@ -228,18 +322,27 @@ export default function ClinicProfilePage() {
           <Card>
             <CardHeader>
               <CardTitle>Terms & Conditions</CardTitle>
-              <CardDescription>Update your clinic policies for booking.</CardDescription>
+              <CardDescription>
+                Update your clinic policies for booking.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label>Terms and Conditions</Label>
-                <Textarea 
-                  name="terms_conditions" 
-                  value={formData.terms_conditions || ''} 
-                  onChange={handleChange} 
+                <Textarea
+                  name="terms_conditions"
+                  value={formData.terms_conditions || ""}
+                  onChange={handleChange}
                   rows={8}
                 />
               </div>
+              <Button
+                  disabled={isAnnouncing || !formData.announcement_text}
+                  onClick={() => handleSavePolicy()}
+                  className="bg-primary hover:bg-primary/90">
+                  <Save className="h-4 w-4 mr-2" />
+                  {isSavingPolicy ? "Saving..." : "Save Policies"}
+                </Button>
             </CardContent>
           </Card>
         </TabsContent>
