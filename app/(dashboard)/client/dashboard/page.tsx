@@ -2,9 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/auth-client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-// Note: Card/CardHeader/CardContent kept for the Info Card below
+import { PawPrint, Calendar, ChevronRight, HeartPulse } from 'lucide-react';
 import Link from 'next/link';
 
 export default function ClientDashboardPage() {
@@ -119,87 +118,117 @@ export default function ClientDashboardPage() {
   }
 
   return (
-    <div className="space-y-8 max-w-6xl mx-auto">
+    <div className="space-y-8 max-w-6xl mx-auto p-6">
       {/* Welcome Section */}
-      <div className="space-y-2 pt-2">
-        <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">Welcome to your Pet Dashboard</h1>
-        <p className="text-lg text-muted-foreground">Manage your pets and appointments in one place</p>
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border border-primary/10 p-8">
+        <div className="absolute -top-10 -right-10 w-48 h-48 bg-primary/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-0 left-0 w-32 h-32 bg-primary/5 rounded-full blur-2xl" />
+        <div className="relative z-10">
+          <p className="text-sm font-semibold text-primary mb-1">Dashboard</p>
+          <h1 className="text-3xl sm:text-4xl font-bold text-foreground">
+            Welcome Back <span className="inline-block animate-in fade-in duration-500">👋</span>
+          </h1>
+          <p className="text-muted-foreground mt-2">Here&apos;s what&apos;s happening with your pets today</p>
+        </div>
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-card rounded-2xl border border-border border-l-4 border-l-primary shadow-sm p-6 group relative overflow-hidden hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-          <p className="text-xs font-bold tracking-widest uppercase text-muted-foreground mb-3 relative z-10">My Pets</p>
-          <div className="text-5xl font-bold text-primary mb-2 relative z-10">{stats.myPets}</div>
-          <p className="text-sm text-muted-foreground relative z-10">Registered pets in your account</p>
-        </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        <Link href="/client/pets" className="group">
+          <div className="bg-card rounded-2xl border border-border shadow-sm p-6 relative overflow-hidden hover:-translate-y-1 hover:shadow-lg hover:border-primary/30 transition-all duration-200">
+            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+            <div className="relative z-10 flex items-start justify-between mb-5">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center ring-1 ring-emerald-500/20">
+                <PawPrint size={22} className="text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <ChevronRight size={16} className="text-muted-foreground opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all duration-200 mt-1" />
+            </div>
+            <p className="text-xs font-bold tracking-widest uppercase text-muted-foreground mb-2 relative z-10">My Pets</p>
+            <div className="text-4xl font-bold text-foreground mb-1 relative z-10">{stats.myPets}</div>
+            <p className="text-sm text-muted-foreground relative z-10">Registered in your account</p>
+          </div>
+        </Link>
 
-        <div className="bg-card rounded-2xl border border-border border-l-4 border-l-primary shadow-sm p-6 group relative overflow-hidden hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-          <p className="text-xs font-bold tracking-widest uppercase text-muted-foreground mb-3 relative z-10">Upcoming Appointments</p>
-          <div className="text-5xl font-bold text-primary mb-2 relative z-10">{stats.upcomingAppointments}</div>
-          <p className="text-sm text-muted-foreground relative z-10">Scheduled visits</p>
-        </div>
+        <Link href="/client/appointments" className="group">
+          <div className="bg-card rounded-2xl border border-border shadow-sm p-6 relative overflow-hidden hover:-translate-y-1 hover:shadow-lg hover:border-primary/30 transition-all duration-200">
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+            <div className="relative z-10 flex items-start justify-between mb-5">
+              <div className="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center ring-1 ring-blue-500/20">
+                <Calendar size={22} className="text-blue-600 dark:text-blue-400" />
+              </div>
+              <ChevronRight size={16} className="text-muted-foreground opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all duration-200 mt-1" />
+            </div>
+            <p className="text-xs font-bold tracking-widest uppercase text-muted-foreground mb-2 relative z-10">Upcoming Appointments</p>
+            <div className="text-4xl font-bold text-foreground mb-1 relative z-10">{stats.upcomingAppointments}</div>
+            <p className="text-sm text-muted-foreground relative z-10">Scheduled visits</p>
+          </div>
+        </Link>
       </div>
 
       {/* Quick Actions */}
       <div className="space-y-4">
         <div>
-          <h2 className="text-2xl font-bold mb-1">Quick Actions</h2>
+          <h2 className="text-xl font-bold mb-0.5">Quick Actions</h2>
           <p className="text-muted-foreground text-sm">Get started with these common tasks</p>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Button asChild className="h-auto flex items-center justify-between py-4 px-6 bg-gradient-to-r from-primary to-primary/80 hover:shadow-lg transition-all duration-300 group">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Button asChild className="h-auto py-5 px-6 bg-primary hover:bg-primary/90 shadow-md hover:shadow-lg active:scale-[0.98] transition-all duration-200 group rounded-2xl">
             <Link href="/client/appointments" className="flex items-center justify-between w-full">
-              <div className="flex items-center gap-3">
-                <span className="text-3xl group-hover:scale-110 transition-transform duration-300">📅</span>
+              <div className="flex items-center gap-4">
+                <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center">
+                  <Calendar size={20} />
+                </div>
                 <div className="text-left">
-                  <div className="font-semibold">Book Appointment</div>
-                  <div className="text-xs opacity-90">Schedule a vet visit</div>
+                  <div className="font-semibold text-[15px]">Book Appointment</div>
+                  <div className="text-xs opacity-80 mt-0.5">Schedule a vet visit</div>
                 </div>
               </div>
-              <span className="text-xl opacity-60 group-hover:translate-x-1 transition-transform">→</span>
+              <ChevronRight size={18} className="opacity-50 group-hover:opacity-80 group-hover:translate-x-0.5 transition-all" />
             </Link>
           </Button>
-          <Button asChild variant="outline" className="h-auto flex items-center justify-between py-4 px-6 border-2 hover:bg-accent transition-all duration-300 group">
+          <Button asChild variant="outline" className="h-auto py-5 px-6 border border-border hover:bg-accent hover:border-primary/20 active:scale-[0.98] transition-all duration-200 group rounded-2xl">
             <Link href="/client/pets" className="flex items-center justify-between w-full">
-              <div className="flex items-center gap-3">
-                <span className="text-3xl group-hover:scale-110 transition-transform duration-300">🐾</span>
+              <div className="flex items-center gap-4">
+                <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <PawPrint size={20} className="text-primary" />
+                </div>
                 <div className="text-left">
-                  <div className="font-semibold">My Pets</div>
-                  <div className="text-xs text-muted-foreground">View & manage pets</div>
+                  <div className="font-semibold text-[15px]">My Pets</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">View &amp; manage pets</div>
                 </div>
               </div>
-              <span className="text-xl opacity-60 group-hover:translate-x-1 transition-transform">→</span>
+              <ChevronRight size={18} className="text-muted-foreground opacity-50 group-hover:opacity-80 group-hover:translate-x-0.5 transition-all" />
             </Link>
           </Button>
         </div>
       </div>
 
       {/* Info Card */}
-      <Card className="relative overflow-hidden border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
-        <div className="absolute top-0 right-0 w-40 h-40 bg-primary/10 rounded-full blur-3xl -mr-20 -mt-20"></div>
-        <CardHeader className="relative z-10">
-          <CardTitle className="flex items-center gap-2">
-            <span className="text-2xl">💡</span>
-            <span>Welcome to PAWS Veterinary</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 relative z-10">
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            Welcome! Here you can manage all aspects of your pet's healthcare. Book appointments with our experienced veterinarians, track medical records, and keep your pets healthy and happy.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="default" size="sm" asChild>
-              <Link href="/client/faq">View FAQ</Link>
-            </Button>
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/client/services">Our Services</Link>
-            </Button>
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-card p-6">
+        <div className="absolute -top-16 -right-16 w-48 h-48 bg-primary/8 rounded-full blur-3xl" />
+        <div className="absolute -bottom-8 -left-8 w-32 h-32 bg-primary/5 rounded-full blur-2xl" />
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-start gap-5">
+          <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0 ring-1 ring-primary/20">
+            <HeartPulse size={22} className="text-primary" />
           </div>
-        </CardContent>
-      </Card>
+          <div className="space-y-3 flex-1">
+            <div>
+              <h3 className="text-lg font-bold text-foreground">About PAWS Veterinary</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed mt-1">
+                Welcome! Here you can manage all aspects of your pet&apos;s healthcare. Book appointments with our experienced veterinarians, track medical records, and keep your pets healthy and happy.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="default" size="sm" asChild>
+                <Link href="/client/faq">View FAQ</Link>
+              </Button>
+              <Button variant="outline" size="sm" asChild>
+                <Link href="/client/services">Our Services</Link>
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
