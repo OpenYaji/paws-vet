@@ -28,7 +28,6 @@ function checkRateLimit(ip: string): boolean {
 /* ------------------------------------------------------------------ */
 /*  Prompt                                                              */
 /* ------------------------------------------------------------------ */
-
 function buildPrompt(stats: unknown): string {
   // Send only the fields Gemini actually needs — strip heavy arrays like recentAppointments
   const s = stats as any;
@@ -63,6 +62,12 @@ function buildPrompt(stats: unknown): string {
         name: p.product_name,
         qty: p.stock_quantity,
       })),
+      // NEW: Added lowest moving items based on sales and stock data
+      lowestMovingItems: (s.lowestMovingProducts ?? []).map((p: any) => ({
+        name: p.product_name,
+        qty: p.stock_quantity,
+        sales: p.sales_count,
+      })),
     },
     pets_by_species: s.petStats?.petsBySpecies,
     vets_performance: s.vetPerformance,
@@ -73,7 +78,14 @@ function buildPrompt(stats: unknown): string {
 Reply with ONLY this JSON, no extra text:
 {"summary":"2 sentences max","critical_alerts":[{"type":"inventory|finance|ops","message":"under 20 words","severity":"high|medium"}],"agentic_recommendations":[{"action":"under 12 words","reasoning":"1 sentence","expected_impact":"1 sentence"}],"deep_insight":"1 sentence cross-domain finding"}
 
-Rules: flag stock<=10 as high inventory, outstanding>15% of total revenue as high finance, cancelRate>15 as medium ops. Give 2-3 alerts and 3 recommendations max.`;
+Rules:
+1. Flag stock<=10 as high inventory alert.
+2. Flag outstanding>15% of total revenue as high finance alert.
+3. Flag cancelRate>15 as medium ops alert.
+4. If lowestMovingItems is non-empty: MUST create a medium inventory alert. The message MUST quote the exact product name (e.g. "Flea Collar has 45 units but only 2 sales — deadstock risk."). Do NOT say "No lowest moving items identified" if the array has data.
+5. If lowestMovingItems is non-empty: MUST include at least one recommendation with the exact product name (e.g. "Bundle Flea Collar with grooming packages to clear stock.").
+6. Only say no items exist if lowestMovingItems array is literally empty [].
+Give up to 5 alerts and 5 recommendations max.`;
 }
 
 /* ------------------------------------------------------------------ */
