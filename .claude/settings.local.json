@@ -4,7 +4,8 @@
       "Bash(find:*)",
       "Bash(xargs:*)",
       "Bash(npx next build)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(npm install:*)"
     ]
   }
 }

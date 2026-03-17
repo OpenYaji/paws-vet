@@ -15,7 +15,7 @@ import {
   Tooltip, TooltipContent, TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
-  FileText, Search, Eye, ChevronLeft, ChevronRight, LayoutList, TableIcon, Pencil, Loader2,
+  FileText, Search, Eye, ChevronLeft, ChevronRight, LayoutList, TableIcon, Pencil, Loader2, Printer,
 } from "lucide-react";
 import { Fetcher } from "@/lib/fetcher";
 import {
@@ -24,6 +24,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { mutate } from "swr";
+import PrintMedicalRecord from "@/components/veterinarian/medical-records/print-medical-record";
 
 interface MedicalRecord {
   id: string;
