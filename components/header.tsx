@@ -6,8 +6,13 @@ import { Button } from '@/components/ui/button';
 import Image from 'next/image';
 import { Menu, X } from 'lucide-react';
 import { useState } from 'react';
+import swr from 'swr';
+
+const fetcher = (url: string) => fetch(url).then(res => res.json());
 
 export function Header() {
+  const { data: settings, isValidating: isFetching } = swr('/api/veterinarian/admin', fetcher);
+
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -24,13 +29,13 @@ export function Header() {
           <div className="px-4 h-16 flex items-center justify-between">
             <Link href="/" className="flex items-center gap-2">
               <Image
-                src="/images/image.png"
-                alt="PAWS Logo"
+                src={`${settings?.logo_url || '/images/image.png'}`}
+                alt="Website's Logo"
                 width={50}
                 height={50}
                 className="rounded-full"
               />
-              <span className="text-xl font-bold text-primary">VETERINARY CLINIC</span>
+              <span className="text-xl font-bold text-primary">{settings?.clinic_name || 'Veterinary Clinic'}</span>
             </Link>
 
             <nav className="hidden md:flex items-center gap-8">

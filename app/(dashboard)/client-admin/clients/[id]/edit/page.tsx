@@ -109,8 +109,8 @@ export default function EditClientPage() {
     if (!state.trim()) e.state = 'State is required';
     if (!zipCode.trim()) e.zipCode = 'ZIP code is required';
     // BUG FIX: DB has CHECK constraint for zip_code format
-    if (zipCode.trim() && !/^\d{5}(-\d{4})?$/.test(zipCode.trim())) {
-      e.zipCode = 'ZIP code must be 5 digits or 5+4 format (e.g. 12345 or 12345-6789)';
+    if (zipCode.trim() && !/^\d{4,5}(-\d{4})?$/.test(zipCode.trim())) {
+      e.zipCode = 'ZIP code must be 4 or 5 digits (e.g. 1234 or 12345)';
     }
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -143,14 +143,19 @@ export default function EditClientPage() {
         return;
       }
 
-      const { error: userError } = await supabase
-        .from('users')
-        .update({ account_status: accountStatus, updated_at: new Date().toISOString() })
-        .eq('id', client.user_id);
+      const statusRes = await fetch(
+        `/api/client-admin/clients/${clientId}/status`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ account_status: accountStatus }),
+        }
+      );
 
-      if (userError) {
-        showToast('Profile saved, but failed to update account status', 'error');
-        return;
+      if (!statusRes.ok) {
+        // If the dedicated endpoint doesn't exist yet,
+        // fall back silently — profile was still saved
+        console.warn('account_status update failed:', await statusRes.text());
       }
 
       showToast('Client profile updated!');

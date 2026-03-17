@@ -123,6 +123,13 @@ export default function OutreachManagementPage() {
   const [programs, setPrograms] = useState<OutreachProgram[]>([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    confirmVariant?: 'danger' | 'primary';
+    onConfirm: () => void;
+  } | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   // Create modal
@@ -184,9 +191,7 @@ export default function OutreachManagementPage() {
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
-  const handleToggle = async (program: OutreachProgram, openValue: boolean) => {
-    if (!openValue && !confirm(`Close "${program.title}"? Clients will no longer be able to book this program.`)) return;
-    if (program.is_full && openValue) { showToast('Cannot reopen a full program', 'error'); return; }
+  const performToggle = async (program: OutreachProgram, openValue: boolean) => {
     setActionLoading(program.id);
     const { error } = await supabase
       .from('outreach_programs')
@@ -196,6 +201,21 @@ export default function OutreachManagementPage() {
     else { showToast(openValue ? 'Program opened for bookings' : 'Program closed'); }
     setActionLoading(null);
     fetchPrograms();
+  };
+
+  const handleToggle = (program: OutreachProgram, openValue: boolean) => {
+    if (program.is_full && openValue) { showToast('Cannot reopen a full program', 'error'); return; }
+    if (!openValue) {
+      setConfirmModal({
+        title: 'Close Program',
+        message: `Close "${program.title}"? Clients will no longer be able to book this program.`,
+        confirmLabel: 'Close Program',
+        confirmVariant: 'danger',
+        onConfirm: () => performToggle(program, false),
+      });
+      return;
+    }
+    performToggle(program, openValue);
   };
 
   const handleCreate = async () => {
@@ -565,6 +585,36 @@ export default function OutreachManagementPage() {
                   </table>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setConfirmModal(null)} />
+          <div className="relative z-10 bg-card rounded-2xl border border-border shadow-2xl w-full max-w-sm animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-6">
+              <h3 className="text-lg font-bold text-foreground mb-2">{confirmModal.title}</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">{confirmModal.message}</p>
+            </div>
+            <div className="px-6 pb-6 flex gap-3 justify-end">
+              <button
+                onClick={() => setConfirmModal(null)}
+                className="px-4 py-2 rounded-lg text-sm font-semibold border border-border bg-card hover:bg-accent text-foreground transition-all duration-150"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { confirmModal.onConfirm(); setConfirmModal(null); }}
+                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 active:scale-95 ${
+                  confirmModal.confirmVariant === 'danger'
+                    ? 'bg-red-600 hover:bg-red-500 text-white'
+                    : 'bg-primary hover:opacity-90 text-primary-foreground'
+                }`}
+              >
+                {confirmModal.confirmLabel || 'Confirm'}
+              </button>
             </div>
           </div>
         </div>

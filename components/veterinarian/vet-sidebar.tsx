@@ -64,8 +64,8 @@ export default function VetSidebar({ collapsed, setCollapsed, mobileOpen, setMob
 
 const menuItems: MenuItem[] = [
     { name: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/veterinarian/dashboard' },
-    { name: 'Notice Board', icon: <Flag size={20} />, path: '/veterinarian/noticeboard' },
     { name: 'Pet Master File', icon: <Files size={20} />, path: '/veterinarian/pets' },
+    { name: 'Medical Records', icon: <FileText size={20} />, path: '/veterinarian/medical-records' },
     { name: 'My Appointments', icon: <Calendar size={20} />, path: '/veterinarian/appointments' },
     { name: 'Quarantine', icon: <ShieldAlert size={20} />, path: '/veterinarian/quarantine' },
     { name: 'Prescriptions', icon: <PillBottle size={20} />, path: '/veterinarian/prescriptions' },
@@ -73,6 +73,8 @@ const menuItems: MenuItem[] = [
     { name: 'Medical Records', icon: <FileText size={20} />, path: '/veterinarian/medical-records' },
     { name: 'Reports', icon: <BarChart2 size={20} />, path: '/veterinarian/reports' },
     { name: 'Capture', icon: <Camera size={20} />, path: '/veterinarian/capture' },
+    { name: 'Settings', icon: <Settings size={20} />, path: '/veterinarian/settings' },
+    { name: 'Help Support', icon: <LifeBuoy size={20} />, path: '/veterinarian/help' },
 ];
 
   interface NavLinkProps {

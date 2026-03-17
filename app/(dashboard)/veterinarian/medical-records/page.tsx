@@ -37,7 +37,7 @@ interface MedicalRecord {
   appointments: { appointment_number: string; scheduled_start: string; reason_for_visit: string } | null;
 }
 
-const ITEMS_PER_PAGE = 20;
+const items_per_page = 20;
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -50,6 +50,7 @@ export default function MedicalRecordsPage() {
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<"list" | "table">("table");
   const [page, setPage] = useState(1);
+  const [printRecord, setPrintRecord] = useState<MedicalRecord | null>(null);
 
   const filtered = useMemo(() => {
     const term = search.toLowerCase();
@@ -62,11 +63,11 @@ export default function MedicalRecordsPage() {
     );
   }, [records, search]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+  const totalPages = Math.max(1, Math.ceil(filtered.length / items_per_page));
   const safePage = Math.min(page, totalPages);
   const paginated = filtered.slice(
-    (safePage - 1) * ITEMS_PER_PAGE,
-    safePage * ITEMS_PER_PAGE
+    (safePage - 1) * items_per_page,
+    safePage * items_per_page
   );
 
   const handleSearch = (v: string) => {
@@ -220,14 +221,6 @@ export default function MedicalRecordsPage() {
                         <div className="flex justify-end gap-1">
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <Button variant="outline" size="icon" onClick={() => openEdit(rec)}>
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Edit Record</TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
                               <Button variant="outline" size="icon" asChild>
                                 <Link href={`/veterinarian/medical-records/${rec.id}`}>
                                   <Eye className="h-4 w-4" />
@@ -235,6 +228,14 @@ export default function MedicalRecordsPage() {
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent>View Record</TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button variant="outline" size="icon" onClick={() => setPrintRecord(rec)}>
+                                <Printer className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Print Record</TooltipContent>
                           </Tooltip>
                         </div>
                       </TableCell>
@@ -289,13 +290,13 @@ export default function MedicalRecordsPage() {
                         : "—"}
                     </span>
                     <div className="flex gap-1">
-                      <Button variant="outline" size="sm" onClick={() => openEdit(rec)}>
-                        <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
-                      </Button>
                       <Button variant="outline" size="sm" asChild>
                         <Link href={`/veterinarian/medical-records/${rec.id}`}>
                           <Eye className="h-3.5 w-3.5 mr-1" /> View
                         </Link>
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => setPrintRecord(rec)}>
+                        <Printer className="h-3.5 w-3.5 mr-1" /> Print
                       </Button>
                     </div>
                   </div>
@@ -368,6 +369,14 @@ export default function MedicalRecordsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Single mounted print dialog — swaps content via printRecord state */}
+      {printRecord && (
+        <PrintMedicalRecord
+          record={printRecord}
+          open={!!printRecord}
+          onOpenChange={(open) => { if (!open) setPrintRecord(null); }}
+        />
+      )}
     </div>
   );
 }

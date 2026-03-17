@@ -39,9 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-package-lock.json
-package-lock.json
-package-lock.json
 
 # mcp configurations
 .vscode/
@@ -57,3 +54,7 @@ seed_images/
 
 # supabase migrations and seeds
 supabase/
+
+# packages
+package-lock.json
+package.json

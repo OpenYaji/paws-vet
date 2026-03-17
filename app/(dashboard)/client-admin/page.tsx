@@ -7,7 +7,7 @@ import Link from 'next/link';
 import {
   Search, Edit, Archive, Eye, RefreshCw,
   MoreVertical, Users, PawPrint, Calendar,
-  AlertTriangle, Download, ClipboardList, MapPin, Heart,
+  AlertTriangle, Download, ClipboardList, MapPin, Heart, Filter,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -34,6 +34,7 @@ interface ClientData {
   last_login_at?: string;
   pet_count?: number;
   appointment_count?: number;
+  deleted_at?: string | null;
 }
 
 interface PetData {
@@ -235,6 +236,14 @@ function ClientAdminPageInner() {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3500);
   };
+
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    confirmVariant?: 'danger' | 'primary';
+    onConfirm: () => void;
+  } | null>(null);
 
   // Tab sync
   useEffect(() => {
@@ -464,24 +473,64 @@ function ClientAdminPageInner() {
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
-  const handleArchiveClient = async (userId: string, name: string) => {
-    if (!confirm(`Archive ${name}? They will lose access.`)) return;
-    try {
-      const { data: { user: cu } } = await supabase.auth.getUser();
-      const { error } = await supabase
-        .from('users')
-        .update({
-          deleted_at: new Date().toISOString(),
-          deleted_by: cu?.id,
-          account_status: 'inactive',
-        })
-        .eq('id', userId);
-      if (error) { showToast('Failed to archive client', 'error'); return; }
-      showToast(`${name} archived successfully`);
-      await fetchClients();
-    } catch {
-      showToast('Failed to archive client', 'error');
-    }
+  const handleArchiveClient = async (
+    userId: string,
+    clientProfileId: string,
+    name: string,
+  ) => {
+    setConfirmModal({
+      title: 'Archive Client',
+      message: `Archive ${name}? Their account will be set to inactive and flagged as archived.`,
+      confirmLabel: 'Archive',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        setConfirmModal(null);
+        try {
+          const res = await fetch(
+            `/api/client-admin/clients/${clientProfileId}/status`,
+            {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ account_status: 'inactive', archived: true }),
+            },
+          );
+          if (!res.ok) { showToast('Failed to archive client', 'error'); return; }
+          showToast(`${name} archived successfully`);
+          await fetchClients();
+        } catch {
+          showToast('Failed to archive client', 'error');
+        }
+      },
+    });
+  };
+
+  const handleUnarchiveClient = async (
+    clientProfileId: string,
+    name: string,
+  ) => {
+    setConfirmModal({
+      title: 'Unarchive Client',
+      message: `Restore ${name}'s account? Their account will be set back to active and they will regain access.`,
+      confirmLabel: 'Unarchive',
+      onConfirm: async () => {
+        setConfirmModal(null);
+        try {
+          const res = await fetch(
+            `/api/client-admin/clients/${clientProfileId}/status`,
+            {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ account_status: 'active', archived: false }),
+            },
+          );
+          if (!res.ok) { showToast('Failed to unarchive client', 'error'); return; }
+          showToast(`${name} has been restored successfully`);
+          await fetchClients();
+        } catch {
+          showToast('Failed to unarchive client', 'error');
+        }
+      },
+    });
   };
 
   const goTab = (tab: ActiveTab) => {
@@ -541,8 +590,16 @@ function ClientAdminPageInner() {
           <div className="max-w-[1400px] mx-auto px-6 py-3">
             {/* Page header — compact, above tabs */}
             <div className="mb-2.5">
-              <h1 className="text-2xl font-bold text-foreground leading-tight">{tabLabel[activeTab]}</h1>
-              <p className="text-sm text-muted-foreground">{tabDesc[activeTab]}</p>
+              <div className="flex items-center gap-2.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-primary inline-block flex-shrink-0" />
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent leading-tight">
+                  {tabLabel[activeTab]}
+                </h1>
+                <span className="bg-primary/10 text-primary text-xs font-bold px-2.5 py-0.5 rounded-full">
+                  {totalCount}
+                </span>
+              </div>
+              <p className="text-sm text-muted-foreground mt-0.5">{tabDesc[activeTab]}</p>
             </div>
 
             {/* Tab navigation */}
@@ -561,7 +618,7 @@ function ClientAdminPageInner() {
                     onClick={() => goTab(tab.value)}
                     className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all duration-150 ${
                       activeTab === tab.value
-                        ? 'bg-primary text-primary-foreground shadow-sm'
+                        ? 'bg-primary/10 text-primary font-bold border-b-2 border-primary -mb-px'
                         : 'text-muted-foreground hover:text-foreground hover:bg-accent'
                     }`}
                   >
@@ -573,7 +630,7 @@ function ClientAdminPageInner() {
                 onClick={() => router.push('/client-admin/outreach')}
                 className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all duration-150 ${
                   pathname === '/client-admin/outreach'
-                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    ? 'bg-primary/10 text-primary font-bold border-b-2 border-primary -mb-px'
                     : 'text-muted-foreground hover:text-foreground hover:bg-accent'
                 }`}
               >
@@ -586,7 +643,7 @@ function ClientAdminPageInner() {
         <div className="max-w-[1400px] mx-auto px-6 py-6">
 
         {/* Filters */}
-        <div className="mb-6 p-6 rounded-xl border border-border bg-card shadow-sm transition-all duration-200">
+        <div className="mb-6 p-6 rounded-2xl border border-border border-l-4 border-l-primary/30 bg-card shadow-sm transition-all duration-200">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:flex-wrap">
             {/* Search */}
             <div className="relative flex-1 min-w-[200px] md:min-w-[280px]">
@@ -595,7 +652,7 @@ function ClientAdminPageInner() {
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
               />
               <input
-                className="w-full pl-9 pr-4 py-2.5 rounded-lg border border-border bg-background hover:border-primary/50 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all duration-200 text-sm"
+                className="w-full pl-9 pr-4 py-2.5 rounded-lg border border-border bg-background hover:border-primary/50 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all duration-200 text-sm placeholder:italic"
                 placeholder={
                   activeTab === 'clients' ? 'Search by name, email, phone…' :
                   activeTab === 'pets' ? 'Search by pet name, species, owner…' :
@@ -610,28 +667,31 @@ function ClientAdminPageInner() {
 
             {/* Status filter */}
             {(activeTab === 'clients' || activeTab === 'appointments' || activeTab === 'regular_appointments' || activeTab === 'outreach_appointments') && (
-              <select
-                className="px-4 py-2.5 rounded-lg border border-border bg-background hover:border-primary/50 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all duration-200 text-sm font-medium cursor-pointer"
-                value={statusFilter}
-                onChange={e => setStatusFilter(e.target.value)}
-              >
-                <option value="all">All Statuses</option>
-                {activeTab === 'clients' ? (
-                  <>
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                    <option value="suspended">Suspended</option>
-                  </>
-                ) : (
-                  <>
-                    <option value="pending">Pending</option>
-                    <option value="confirmed">Confirmed</option>
-                    <option value="completed">Completed</option>
-                    <option value="cancelled">Cancelled</option>
-                    <option value="no_show">No Show</option>
-                  </>
-                )}
-              </select>
+              <div className="relative">
+                <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                <select
+                  className="pl-9 pr-4 py-2.5 rounded-lg border border-border bg-background hover:border-primary/50 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all duration-200 text-sm font-medium cursor-pointer"
+                  value={statusFilter}
+                  onChange={e => setStatusFilter(e.target.value)}
+                >
+                  <option value="all">All Statuses</option>
+                  {activeTab === 'clients' ? (
+                    <>
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                      <option value="suspended">Suspended</option>
+                    </>
+                  ) : (
+                    <>
+                      <option value="pending">Pending</option>
+                      <option value="confirmed">Confirmed</option>
+                      <option value="completed">Completed</option>
+                      <option value="cancelled">Cancelled</option>
+                      <option value="no_show">No Show</option>
+                    </>
+                  )}
+                </select>
+              </div>
             )}
 
             {/* Archive toggle */}
@@ -672,8 +732,8 @@ function ClientAdminPageInner() {
             </button>
 
             <div className="flex-1 md:flex-none text-right">
-              <span className="text-xs md:text-sm text-muted-foreground font-medium">
-                {activeCount} of {totalCount} {activeTab}
+              <span className="bg-accent px-3 py-1 rounded-full text-xs font-bold text-foreground">
+                {activeCount} of {totalCount}
               </span>
             </div>
           </div>
@@ -687,7 +747,7 @@ function ClientAdminPageInner() {
                 <div className="absolute inset-0 border-4 border-primary/20 rounded-full animate-pulse"></div>
                 <div className="absolute inset-1 border-t-4 border-primary rounded-full animate-spin"></div>
               </div>
-              <span className="text-muted-foreground font-medium">Loading {activeTab}…</span>
+              <span className="text-muted-foreground font-medium">Loading {activeTab.replace(/_/g, ' ')}…</span>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -696,7 +756,7 @@ function ClientAdminPageInner() {
               {activeTab === 'clients' && (
                 filteredClients.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-16 px-6 gap-4 text-center">
-                    <div className="flex items-center justify-center w-16 h-16 rounded-full bg-primary/10">
+                    <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10">
                       <Users size={28} className="text-primary" />
                     </div>
                     <div>
@@ -706,7 +766,7 @@ function ClientAdminPageInner() {
                   </div>
                 ) : (
                   <table className="w-full">
-                    <thead className="bg-muted/50 border-b border-border">
+                    <thead className="bg-primary/5 border-t border-b border-border">
                       <tr>
                         <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Client</th>
                         <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Contact</th>
@@ -722,8 +782,18 @@ function ClientAdminPageInner() {
                       {filteredClients.map(c => (
                         <tr key={c.id} className="hover:bg-primary/5 transition-colors duration-150">
                           <td className="px-6 py-4">
-                            <div className="font-semibold text-foreground">{c.first_name} {c.last_name}</div>
-                            <div className="text-xs text-muted-foreground font-mono mt-1">{c.id.slice(0, 8)}…</div>
+                            <div className="flex items-center">
+                              <div className="w-8 h-8 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center flex-shrink-0 mr-3">
+                                {c.first_name[0]}{c.last_name[0]}
+                              </div>
+                              <div>
+                                <div className="font-semibold text-foreground">{c.first_name} {c.last_name}</div>
+                                <div className="text-xs text-muted-foreground font-mono mt-1">{c.id.slice(0, 8)}…</div>
+                                {showArchived && c.deleted_at && (
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 mt-0.5 inline-block">ARCHIVED</span>
+                                )}
+                              </div>
+                            </div>
                           </td>
                           <td className="px-6 py-4">
                             <div className="text-sm text-foreground">{c.email}</div>
@@ -741,11 +811,19 @@ function ClientAdminPageInner() {
                           <td className="px-6 py-4 text-center font-semibold text-foreground">{c.appointment_count ?? '—'}</td>
                           <td className="px-6 py-4 text-sm text-muted-foreground">{formatDate(c.last_login_at)}</td>
                           <td className="px-6 py-4 text-right">
-                            <ActionsDropdown items={[
-                              { label: '👁  View Profile', href: `/client-admin/clients/${c.id}` },
-                              { label: '✏️  Edit Profile', href: `/client-admin/clients/${c.id}/edit` },
-                              ...(!showArchived ? [{ label: '🗄  Archive', danger: true, onClick: () => handleArchiveClient(c.user_id, `${c.first_name} ${c.last_name}`) }] : []),
-                            ]} />
+                            <ActionsDropdown items={
+                              showArchived
+                                ? [
+                                    { label: 'View Profile', href: `/client-admin/clients/${c.id}` },
+                                    { label: 'Edit Profile', href: `/client-admin/clients/${c.id}/edit` },
+                                    { label: 'Unarchive', onClick: () => handleUnarchiveClient(c.id, `${c.first_name} ${c.last_name}`) },
+                                  ]
+                                : [
+                                    { label: 'View Profile', href: `/client-admin/clients/${c.id}` },
+                                    { label: 'Edit Profile', href: `/client-admin/clients/${c.id}/edit` },
+                                    { label: 'Archive', danger: true, onClick: () => handleArchiveClient(c.user_id, c.id, `${c.first_name} ${c.last_name}`) },
+                                  ]
+                            } />
                           </td>
                         </tr>
                       ))}
@@ -758,7 +836,7 @@ function ClientAdminPageInner() {
               {activeTab === 'pets' && (
                 filteredPets.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-16 px-6 gap-4 text-center">
-                    <div className="flex items-center justify-center w-16 h-16 rounded-full bg-primary/10">
+                    <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10">
                       <PawPrint size={28} className="text-primary" />
                     </div>
                     <div>
@@ -768,7 +846,7 @@ function ClientAdminPageInner() {
                   </div>
                 ) : (
                   <table className="w-full">
-                    <thead className="bg-muted/50 border-b border-border">
+                    <thead className="bg-primary/5 border-t border-b border-border">
                       <tr>
                         <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pet</th>
                         <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Species</th>
@@ -807,8 +885,8 @@ function ClientAdminPageInner() {
                           </td>
                           <td className="px-6 py-4 text-right">
                             <ActionsDropdown items={[
-                              { label: '👁  View Pet', href: `/client-admin/pets/${p.id}` },
-                              { label: '👤  View Owner', href: `/client-admin/clients/${p.owner_id}` },
+                              { label: 'View Pet', href: `/client-admin/pets/${p.id}` },
+                              { label: 'View Owner', href: `/client-admin/clients/${p.owner_id}` },
                             ]} />
                           </td>
                         </tr>
@@ -822,7 +900,7 @@ function ClientAdminPageInner() {
               {activeTab === 'appointments' && (
                 filteredAppointments.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-16 px-6 gap-4 text-center">
-                    <div className="flex items-center justify-center w-16 h-16 rounded-full bg-primary/10">
+                    <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10">
                       <Calendar size={28} className="text-primary" />
                     </div>
                     <div>
@@ -832,7 +910,7 @@ function ClientAdminPageInner() {
                   </div>
                 ) : (
                   <table className="w-full">
-                    <thead className="bg-muted/50 border-b border-border">
+                    <thead className="bg-primary/5 border-t border-b border-border">
                       <tr>
                         <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Date & Time</th>
                         <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Client</th>
@@ -875,8 +953,8 @@ function ClientAdminPageInner() {
                           </td>
                           <td className="px-6 py-4 text-right">
                             <ActionsDropdown items={[
-                              { label: '👁  View Details', href: `/client-admin/appointments/${a.id}` },
-                              { label: '👤  View Client', href: `/client-admin/clients/${a.client_id}` },
+                              { label: 'View Details', href: `/client-admin/appointments/${a.id}` },
+                              { label: 'View Client', href: `/client-admin/clients/${a.client_id}` },
                             ]} />
                           </td>
                         </tr>
@@ -890,7 +968,7 @@ function ClientAdminPageInner() {
               {activeTab === 'regular_appointments' && (
                 filteredRegular.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-16 px-6 gap-4 text-center">
-                    <div className="flex items-center justify-center w-16 h-16 rounded-full bg-primary/10">
+                    <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10">
                       <ClipboardList size={28} className="text-primary" />
                     </div>
                     <div>
@@ -900,7 +978,7 @@ function ClientAdminPageInner() {
                   </div>
                 ) : (
                   <table className="w-full">
-                    <thead className="bg-muted/50 border-b border-border">
+                    <thead className="bg-primary/5 border-t border-b border-border">
                       <tr>
                         {['Date', 'Client', 'Pet', 'Breed', 'Gender', 'Duration', 'Payment', 'Status', 'Actions'].map(h => (
                           <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{h}</th>
@@ -953,8 +1031,8 @@ function ClientAdminPageInner() {
                           </td>
                           <td className="px-5 py-4 text-right">
                             <ActionsDropdown items={[
-                              { label: '👁  View Details', href: `/client-admin/appointments/${a.id}` },
-                              { label: '👤  View Client', href: `/client-admin/clients/${a.client_id}` },
+                              { label: 'View Details', href: `/client-admin/appointments/${a.id}` },
+                              { label: 'View Client', href: `/client-admin/clients/${a.client_id}` },
                             ]} />
                           </td>
                         </tr>
@@ -968,7 +1046,7 @@ function ClientAdminPageInner() {
               {activeTab === 'outreach_appointments' && (
                 filteredOutreach.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-16 px-6 gap-4 text-center">
-                    <div className="flex items-center justify-center w-16 h-16 rounded-full bg-primary/10">
+                    <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10">
                       <MapPin size={28} className="text-primary" />
                     </div>
                     <div>
@@ -978,7 +1056,7 @@ function ClientAdminPageInner() {
                   </div>
                 ) : (
                   <table className="w-full">
-                    <thead className="bg-muted/50 border-b border-border">
+                    <thead className="bg-primary/5 border-t border-b border-border">
                       <tr>
                         {['Date', 'Client', 'Pet', 'Breed', 'Aspin/Puspin', 'Program', 'Amount', 'Payment', 'Status', 'Actions'].map(h => (
                           <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{h}</th>
@@ -1046,8 +1124,8 @@ function ClientAdminPageInner() {
                           </td>
                           <td className="px-4 py-4 text-right">
                             <ActionsDropdown items={[
-                              { label: '👁  View Details', href: `/client-admin/appointments/${a.id}` },
-                              { label: '👤  View Client', href: `/client-admin/clients/${a.client_id}` },
+                              { label: 'View Details', href: `/client-admin/appointments/${a.id}` },
+                              { label: 'View Client', href: `/client-admin/clients/${a.client_id}` },
                             ]} />
                           </td>
                         </tr>
@@ -1062,6 +1140,35 @@ function ClientAdminPageInner() {
         </div>
         </div>{/* max-w container */}
       </div>
+      {confirmModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setConfirmModal(null)} />
+          <div className="relative z-10 bg-card rounded-2xl border border-border shadow-2xl w-full max-w-sm animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-6">
+              <h3 className="text-lg font-bold text-foreground mb-2">{confirmModal.title}</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">{confirmModal.message}</p>
+            </div>
+            <div className="px-6 pb-6 flex gap-3 justify-end">
+              <button
+                onClick={() => setConfirmModal(null)}
+                className="px-4 py-2 rounded-lg text-sm font-semibold border border-border bg-card hover:bg-accent text-foreground transition-all duration-150"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { confirmModal.onConfirm(); setConfirmModal(null); }}
+                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 active:scale-95 ${
+                  confirmModal.confirmVariant === 'danger'
+                    ? 'bg-red-600 hover:bg-red-500 text-white'
+                    : 'bg-primary hover:opacity-90 text-primary-foreground'
+                }`}
+              >
+                {confirmModal.confirmLabel || 'Confirm'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

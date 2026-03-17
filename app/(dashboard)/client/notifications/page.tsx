@@ -100,17 +100,20 @@ export default function ClientNotificationsPage() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-8">
+    <div className="max-w-3xl mx-auto px-4 py-8">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2.5">
-          <Bell size={22} className="text-primary" />
-          <h1 className="text-xl font-bold tracking-tight">Notifications</h1>
-          {unreadCount > 0 && (
-            <span className="flex items-center justify-center min-w-[22px] h-[22px] rounded-full bg-primary text-primary-foreground text-xs font-bold px-1.5">
-              {unreadCount}
-            </span>
-          )}
+      <div className="flex items-start justify-between mb-6">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <Bell size={22} className="text-primary" />
+            <h1 className="text-2xl font-bold">Notifications</h1>
+            {unreadCount > 0 && (
+              <span className="flex items-center justify-center min-w-[24px] h-[24px] rounded-full bg-primary text-primary-foreground text-xs font-bold px-1.5 animate-pulse">
+                {unreadCount}
+              </span>
+            )}
+          </div>
+          <p className="text-sm text-muted-foreground mt-0.5">Stay updated on your appointments and payments</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -125,7 +128,7 @@ export default function ClientNotificationsPage() {
             <button
               onClick={handleMarkAllRead}
               disabled={markingAll}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold border border-border bg-card hover:bg-accent text-foreground transition-all duration-150 disabled:opacity-55"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold bg-primary text-primary-foreground hover:opacity-90 transition-all duration-150 disabled:opacity-55"
             >
               <CheckCheck size={14} />
               {markingAll ? 'Marking…' : 'Mark all read'}
@@ -142,8 +145,8 @@ export default function ClientNotificationsPage() {
         </div>
       ) : notifications.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
-          <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-            <Bell size={28} className="text-primary/60" />
+          <div className="w-16 h-16 rounded-2xl bg-accent flex items-center justify-center">
+            <Bell size={32} className="text-muted-foreground" />
           </div>
           <div>
             <h3 className="font-semibold text-foreground mb-1">No notifications yet</h3>
@@ -161,8 +164,8 @@ export default function ClientNotificationsPage() {
               className={[
                 'w-full text-left bg-card rounded-xl border border-border border-l-4',
                 notifBorderColor(notif.notification_type),
-                'shadow-sm hover:shadow-md hover:border-primary/30 transition-all duration-150 px-4 py-4 flex items-start gap-3',
-                !notif.is_read ? 'bg-primary/[0.03] dark:bg-primary/[0.06]' : '',
+                'shadow-sm hover:shadow-md hover:border-primary/30 transition-all duration-150 px-5 py-4 flex items-start gap-3',
+                !notif.is_read ? 'bg-primary/[0.06] dark:bg-primary/[0.10]' : '',
               ].join(' ')}
             >
               <div className="mt-0.5">
@@ -185,6 +188,11 @@ export default function ClientNotificationsPage() {
                 {notif.subject && notif.content && (
                   <p className="text-xs text-muted-foreground mt-1 leading-relaxed line-clamp-2">
                     {notif.content}
+                  </p>
+                )}
+                {!notif.is_read && (
+                  <p className="text-[10px] text-primary/60 mt-1.5 font-medium">
+                    Tap to mark as read
                   </p>
                 )}
               </div>

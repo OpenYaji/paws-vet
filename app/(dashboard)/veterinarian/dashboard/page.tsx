@@ -3,6 +3,11 @@
 import useSWR from 'swr';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { 
+  Aperture,
+  ChartArea,
+  SquareLibrary
+ } from 'lucide-react';
 import Link from 'next/link';
 import { Fetcher } from '@/lib/fetcher';
 
@@ -82,21 +87,21 @@ export default function VeterinarianDashboardPage() {
         <h2 className="text-2xl font-bold">Quick Actions</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           <Button asChild className="h-auto flex-col py-6" size="lg">
-            <Link href="/veterinarian/appointments">
-              <span className="text-2xl mb-2">📅</span>
-              <span>View Appointments</span>
+            <Link href="/veterinarian/capture">
+              <span className="text-2xl mb-2"><Aperture /></span>
+              <span>Pet's Medical Capture</span>
             </Link>
           </Button>
           <Button asChild variant="outline" className="h-auto flex-col py-6 bg-transparent" size="lg">
-            <Link href="/veterinarian/pets">
-              <span className="text-2xl mb-2">🐾</span>
-              <span>Pet Records</span>
+            <Link href="/veterinarian/medical-records">
+              <span className="text-2xl mb-2"><SquareLibrary /></span>
+              <span>Pet Medical Records</span>
             </Link>
           </Button>
           <Button asChild variant="outline" className="h-auto flex-col py-6 bg-transparent" size="lg">
-            <Link href="/veterinarian/pets/new-pets">
-              <span className="text-2xl mb-2">📋</span>
-              <span>Recently Added Pets</span>
+            <Link href="/veterinarian/reports">
+              <span className="text-2xl mb-2"><ChartArea /></span>
+              <span>Report's Generation</span>
             </Link>
           </Button>
         </div>

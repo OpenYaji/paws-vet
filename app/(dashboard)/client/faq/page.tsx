@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDown, Phone, Mail, MapPin } from 'lucide-react';
+import { ChevronDown, Phone, Mail, MapPin, HelpCircle, MessageCircle } from 'lucide-react';
 
 interface FAQItem {
   question: string;
@@ -30,7 +30,11 @@ export default function FAQPage() {
     <div className="max-w-4xl mx-auto p-6 space-y-8">
       {/* Header */}
       <div className="pt-2">
-        <h1 className="text-3xl font-bold mb-1">Frequently Asked Questions</h1>
+        <h1 className="text-3xl font-bold mb-1 flex items-center gap-2">
+          <HelpCircle className="w-7 h-7 text-primary" />
+          <span className="bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">Frequently Asked Questions</span>
+          <span className="ml-1 bg-primary/10 text-primary text-xs font-bold px-2 py-0.5 rounded-full">{faqs.length}</span>
+        </h1>
         <p className="text-muted-foreground">Find answers to common questions about our services, procedures, and pet care.</p>
       </div>
 
@@ -39,15 +43,18 @@ export default function FAQPage() {
         {faqs.map((faq, index) => (
           <div
             key={index}
-            className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden hover:-translate-y-0.5 hover:shadow-md transition-all duration-150"
+            className={`bg-card rounded-2xl border border-border shadow-sm overflow-hidden hover:-translate-y-0.5 hover:shadow-md transition-all duration-150 ${openIndex === index ? 'bg-primary/5' : ''}`}
           >
             <button
               onClick={() => toggleFAQ(index)}
               className="w-full flex items-center justify-between p-6 text-left hover:bg-accent/30 transition-colors duration-150"
             >
-              <h3 className="text-base font-semibold text-foreground pr-4">
-                {faq.question}
-              </h3>
+              <div className="flex items-center gap-3 pr-4">
+                <span className="flex-shrink-0 w-7 h-7 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center">{index + 1}</span>
+                <h3 className="text-base font-semibold text-foreground">
+                  {faq.question}
+                </h3>
+              </div>
               <ChevronDown
                 className={`flex-shrink-0 w-5 h-5 text-muted-foreground transition-transform duration-200 ${
                   openIndex === index ? 'rotate-180' : ''
@@ -57,7 +64,7 @@ export default function FAQPage() {
             {openIndex === index && (
               <div className="px-6 pb-6 pt-0">
                 <div className="h-px bg-border mb-4" />
-                <p className="text-muted-foreground leading-relaxed text-sm">{faq.answer}</p>
+                <p className="text-muted-foreground leading-relaxed text-sm border-l-2 border-primary/30 pl-4">{faq.answer}</p>
               </div>
             )}
           </div>
@@ -65,15 +72,18 @@ export default function FAQPage() {
       </div>
 
       {/* Contact Section */}
-      <div className="bg-accent/30 rounded-2xl border border-border p-8">
-        <h2 className="text-2xl font-bold text-foreground mb-2">Didn't Find Your Answer?</h2>
+      <div className="bg-gradient-to-br from-primary/5 via-accent/30 to-primary/10 rounded-2xl border border-border p-8">
+        <h2 className="text-2xl font-bold text-foreground mb-2 flex items-center gap-2">
+          <MessageCircle className="w-6 h-6 text-primary" />
+          Didn't Find Your Answer?
+        </h2>
         <p className="text-muted-foreground mb-6 text-sm">
           Our team is here to help! Contact us directly with any questions about your pet's care.
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {/* Phone */}
-          <div className="flex items-start gap-3 bg-card rounded-xl border border-border p-4 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
+          <div className="flex items-start gap-3 bg-card rounded-xl border border-border p-4 hover:-translate-y-0.5 hover:shadow-md hover:ring-2 hover:ring-primary/20 transition-all duration-150">
             <div className="flex-shrink-0 w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
               <Phone className="w-5 h-5 text-primary-foreground" />
             </div>
@@ -89,7 +99,7 @@ export default function FAQPage() {
           </div>
 
           {/* Email */}
-          <div className="flex items-start gap-3 bg-card rounded-xl border border-border p-4 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
+          <div className="flex items-start gap-3 bg-card rounded-xl border border-border p-4 hover:-translate-y-0.5 hover:shadow-md hover:ring-2 hover:ring-primary/20 transition-all duration-150">
             <div className="flex-shrink-0 w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
               <Mail className="w-5 h-5 text-primary-foreground" />
             </div>
@@ -105,7 +115,7 @@ export default function FAQPage() {
           </div>
 
           {/* Location */}
-          <div className="flex items-start gap-3 bg-card rounded-xl border border-border p-4 hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
+          <div className="flex items-start gap-3 bg-card rounded-xl border border-border p-4 hover:-translate-y-0.5 hover:shadow-md hover:ring-2 hover:ring-primary/20 transition-all duration-150">
             <div className="flex-shrink-0 w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
               <MapPin className="w-5 h-5 text-primary-foreground" />
             </div>
