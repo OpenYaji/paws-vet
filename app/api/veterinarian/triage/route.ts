@@ -64,24 +64,30 @@ export async function GET(request: NextRequest) {
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
     const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
-    const { data, error } = await supabase
-      .from("appointments")
-      .select(`
-        id, appointment_number, scheduled_start, checked_in_at, appointment_status, reason_for_visit,
-        pets(id, name, species, breed, photo_url, weight, color,
-          client_profiles!pets_owner_id_fkey(first_name, last_name, phone))
-      `)
-      .eq("appointment_status", "in_progress")
-      .order("checked_in_at", { ascending: true, nullsFirst: false });
+    // Run both queries in parallel — no reason to wait for one before starting the other
+    const [{ data, error }, { data: triageRecords }] = await Promise.all([
+      supabase
+        .from("appointments")
+        .select(`
+          id, appointment_number, appointment_type, scheduled_start, checked_in_at, reason_for_visit,
+          pets(id, name, species, breed,
+            client_profiles!pets_owner_id_fkey(first_name, last_name))
+        `)
+        .eq("appointment_status", "in_progress")
+        .order("checked_in_at", { ascending: true, nullsFirst: false }),
+
+      // Scope to today only — avoids a full table scan as triage_records grows
+      supabase
+        .from("triage_records")
+        .select("appointment_id")
+        .gte("created_at", startOfDay.toISOString())
+        .lte("created_at", endOfDay.toISOString()),
+    ]);
 
     if (error) {
       console.error("Error fetching waiting room:", error);
       return NextResponse.json([], { status: 200 });
     }
-
-    const { data: triageRecords } = await supabase
-      .from("triage_records")
-      .select("appointment_id");
 
     const triageCompletedIds = new Set(triageRecords?.map((r) => r.appointment_id) || []);
 
