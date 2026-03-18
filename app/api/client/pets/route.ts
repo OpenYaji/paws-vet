@@ -1,7 +1,14 @@
 // app/api/client/pets/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
+import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
+
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { autoRefreshToken: false, persistSession: false } }
+);
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -132,6 +139,30 @@ export async function POST(request: NextRequest) {
       }
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    // Notify CMS admins about the new pet registration (fire-and-forget)
+    (async () => {
+      try {
+        const { data: admins } = await supabaseAdmin
+          .from('admin_profiles')
+          .select('user_id');
+        if (admins?.length) {
+          const speciesLabel = species.charAt(0).toUpperCase() + species.slice(1);
+          await supabaseAdmin.from('notification_logs').insert(
+            admins.map((a: { user_id: string }) => ({
+              recipient_id: a.user_id,
+              notification_type: 'new_pet',
+              subject: `New Pet Registered — ${name}`,
+              content: `A client registered a new ${speciesLabel.toLowerCase()} named ${name}${breed ? ` (${breed})` : ''}.`,
+              related_entity_type: 'pet',
+              related_entity_id: data.id,
+              is_read: false,
+              delivery_status: 'pending',
+            }))
+          );
+        }
+      } catch (e) { console.error('[pet-notify] Error:', e); }
+    })();
 
     return NextResponse.json(data, { status: 201 });
   } catch (err: any) {

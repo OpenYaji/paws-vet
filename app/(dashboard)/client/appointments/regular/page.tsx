@@ -22,6 +22,7 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import Link from 'next/link';
+import { sendAdminNotification } from '@/lib/notifications';
 import {
   getAvailableDates,
   calculateDuration,
@@ -165,6 +166,8 @@ export default function RegularAppointmentPage() {
   const [loadingDates, setLoadingDates] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [dateFullError, setDateFullError] = useState(false);
+  const [closedDateReason, setClosedDateReason] = useState<string | null>(null);
+  const [closedDatesMap, setClosedDatesMap] = useState<Record<string, string | null>>({});
 
   const [reasonForVisit, setReasonForVisit] = useState('');
   const [specialInstructions, setSpecialInstructions] = useState('');
@@ -172,6 +175,7 @@ export default function RegularAppointmentPage() {
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null);
   const [paymentReference, setPaymentReference] = useState('');
+  const [senderName, setSenderName] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -215,6 +219,18 @@ export default function RegularAppointmentPage() {
     setAvailableDateSet(new Set());
     const dates = await getAvailableDates('regular', month, year);
     setAvailableDateSet(new Set(dates));
+
+    const { data: closedData } = await supabase
+      .from('closed_dates')
+      .select('closed_date, reason')
+      .gte('closed_date', `${year}-${String(month).padStart(2,'0')}-01`)
+      .lte('closed_date', `${year}-${String(month).padStart(2,'0')}-31`);
+
+    const map: Record<string, string | null> = {};
+    (closedData ?? []).forEach((r: any) => {
+      map[r.closed_date] = r.reason ?? null;
+    });
+    setClosedDatesMap(map);
     setLoadingDates(false);
   }, []);
 
@@ -284,12 +300,23 @@ export default function RegularAppointmentPage() {
         payment_status: 'unpaid',
         payment_method: paymentMethod ?? null,
         payment_reference: paymentReference.trim() || null,
+        payment_sender_name: (paymentMethod === 'gcash' || paymentMethod === 'maya')
+          ? senderName.trim()
+          : null,
         is_emergency: false,
       };
-      const { data: appt, error: insertErr } = await supabase.from('appointments').insert(payload).select('appointment_number').single();
+      const { data: appt, error: insertErr } = await supabase.from('appointments').insert(payload).select('id, appointment_number').single();
       if (insertErr) throw insertErr;
       await checkAndUpdateSlotStatus(selectedDate, 'regular');
       setAppointmentNumber(appt.appointment_number);
+
+      // Notify CMS admins about new appointment (fire-and-forget)
+      sendAdminNotification({
+        type: 'booked',
+        label: appt.appointment_number,
+        appointmentId: appt.id,
+        clientUserId: userId ?? undefined,
+      }).catch(console.error);
       setStep('payment');
     } catch (e: any) {
       setSubmitError(e.message ?? 'Something went wrong. Please try again.');
@@ -402,6 +429,7 @@ export default function RegularAppointmentPage() {
                 setConfirmed(false);
                 setPaymentMethod(null);
                 setPaymentReference('');
+                setSenderName('');
                 setAppointmentNumber(null);
               }}
             >
@@ -598,20 +626,47 @@ export default function RegularAppointmentPage() {
                       <Calendar
                         mode="single"
                         month={calMonth}
-                        onMonthChange={(m) => setCalMonth(m)}
+                        onMonthChange={(m) => {
+                          setCalMonth(m);
+                          setClosedDateReason(null);
+                        }}
                         selected={selectedDate ? new Date(`${selectedDate}T12:00:00`) : undefined}
                         onSelect={(d) => {
                           if (!d) return;
                           const key = toDateKey(d);
-                          if (availableDateSet.has(key)) {
-                            setSelectedDate(key);
-                            setDateFullError(false);
+
+                          setClosedDateReason(null);
+
+                          // If date is in closedDatesMap, show reason
+                          if (key in closedDatesMap) {
+                            setClosedDateReason(
+                              closedDatesMap[key] ??
+                              'This date is unavailable for booking.'
+                            );
+                            return;
                           }
+
+                          // If not in available set, it's full
+                          if (!availableDateSet.has(key)) {
+                            setDateFullError(false);
+                            setClosedDateReason(null);
+                            return;
+                          }
+
+                          // Date is available
+                          setSelectedDate(key);
+                          setDateFullError(false);
                         }}
                         disabled={(d) => {
-                          if (d < new Date(new Date().setHours(0, 0, 0, 0))) return true;
+                          if (d < new Date(new Date().setHours(0,0,0,0)))
+                            return true;
                           if (loadingDates) return true;
-                          return !availableDateSet.has(toDateKey(d));
+                          const key = toDateKey(d);
+                          // Allow clicking closed dates so reason can show
+                          // Only fully disable past dates and non-weekday dates
+                          const dow = d.getDay();
+                          if (dow === 0 || dow === 6) return true;
+                          return false;
                         }}
                         modifiers={{ available: (d) => availableDateSet.has(toDateKey(d)) }}
                         modifiersClassNames={{ available: 'ring-1 ring-primary/40 bg-primary/5' }}
@@ -636,6 +691,20 @@ export default function RegularAppointmentPage() {
                     Today
                   </span>
                 </div>
+
+                {closedDateReason && (
+                  <div className="flex items-start gap-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3 text-sm text-amber-700 dark:text-amber-400 animate-in fade-in duration-200">
+                    <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-semibold">
+                        This date is unavailable for booking.
+                      </p>
+                      <p className="mt-0.5 text-xs">
+                        Reason: {closedDateReason}
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 {selectedDate && (
                   <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex items-center gap-3">
@@ -811,6 +880,26 @@ export default function RegularAppointmentPage() {
                   </div>
                 )}
 
+                {(paymentMethod === 'gcash' || paymentMethod === 'maya') && (
+                  <div className="space-y-2 animate-in fade-in duration-200">
+                    <Label htmlFor="senderName" className="text-sm font-bold">
+                      Account Name / Sender Name{' '}
+                      <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="senderName"
+                      placeholder="Name shown on your GCash/Maya account"
+                      value={senderName}
+                      onChange={(e) => setSenderName(e.target.value)}
+                      className="h-11 focus:ring-2 focus:ring-ring"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      The name registered on your {paymentMethod === 'gcash'
+                        ? 'GCash' : 'Maya'} account.
+                    </p>
+                  </div>
+                )}
+
                 {paymentMethod === 'cash' && (
                   <div style={{ backgroundColor: '#fef08a', color: '#1a1a1a', borderColor: '#ca8a04' }} className="border rounded-xl p-4 text-sm animate-in fade-in duration-200 flex items-start gap-3">
                     <span className="text-xl flex-shrink-0">💡</span>
@@ -838,7 +927,8 @@ export default function RegularAppointmentPage() {
                     disabled={
                       !paymentMethod ||
                       submitting ||
-                      ((paymentMethod === 'gcash' || paymentMethod === 'maya') && !paymentReference.trim())
+                      ((paymentMethod === 'gcash' || paymentMethod === 'maya') && !paymentReference.trim()) ||
+                      ((paymentMethod === 'gcash' || paymentMethod === 'maya') && !senderName.trim())
                     }
                     className="bg-primary text-primary-foreground hover:opacity-90 active:scale-95 flex-1 max-w-xs"
                     onClick={handleSubmit}

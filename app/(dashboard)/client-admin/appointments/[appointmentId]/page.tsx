@@ -10,7 +10,7 @@ import {
   ArrowLeft, Calendar, Clock, User, PawPrint,
   FileText, CheckCircle, XCircle, AlertCircle,
   Save, AlertTriangle, RefreshCw, CreditCard, BadgeDollarSign,
-  ShieldCheck, Undo2,
+  ShieldCheck,
 } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -40,6 +40,9 @@ interface Appointment {
   payment_reference?: string | null;
   paid_at?: string | null;
   is_aspin_puspin?: boolean;
+  payment_sender_name?: string | null;
+  payment_verified_by?: string | null;
+  payment_verified_at?: string | null;
 }
 
 interface Client {
@@ -123,6 +126,7 @@ export default function AppointmentDetailPage() {
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [verifierName, setVerifierName] = useState<string | null>(null);
   const [showReschedule, setShowReschedule] = useState(false);
   const [rescheduleStart, setRescheduleStart] = useState('');
   const [rescheduleEnd, setRescheduleEnd] = useState('');
@@ -151,6 +155,53 @@ export default function AppointmentDetailPage() {
       setSelectedStatus(data.appointment_status);
       setClient(data.pets?.client_profiles ?? null);
       setPet(data.pets ?? null);
+
+      if (data.payment_verified_by) {
+        const { data: verifier } = await supabase
+          .from('users')
+          .select('email')
+          .eq('id', data.payment_verified_by)
+          .maybeSingle();
+        const { data: adminProfile } = await supabase
+          .from('admin_profiles')
+          .select('first_name, last_name')
+          .eq('user_id', data.payment_verified_by)
+          .maybeSingle();
+        if (adminProfile) {
+          setVerifierName(`${adminProfile.first_name} ${adminProfile.last_name}`);
+        } else {
+          // Try veterinarian_profiles
+          const { data: vetProfile } = await supabase
+            .from('veterinarian_profiles')
+            .select('first_name, last_name')
+            .eq('user_id', data.payment_verified_by)
+            .maybeSingle();
+
+          if (vetProfile) {
+            setVerifierName(
+              `${vetProfile.first_name} ${vetProfile.last_name}`
+            );
+          } else {
+            // Try client_profiles as final fallback
+            const { data: clientProfile } = await supabase
+              .from('client_profiles')
+              .select('first_name, last_name')
+              .eq('user_id', data.payment_verified_by)
+              .maybeSingle();
+
+            if (clientProfile) {
+              setVerifierName(
+                `${clientProfile.first_name} ${clientProfile.last_name}`
+              );
+            } else {
+              // Last resort: email
+              setVerifierName(verifier?.email ?? null);
+            }
+          }
+        }
+      } else {
+        setVerifierName(null);
+      }
     } catch {
       setError('Failed to load appointment');
     } finally {
@@ -596,7 +647,7 @@ export default function AppointmentDetailPage() {
               )}
             </div>
             <div className="p-6 flex flex-col gap-5">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 <div className="flex flex-col gap-0.5">
                   <span className="text-xs text-muted-foreground font-medium">Amount</span>
                   <span className="text-sm font-bold">
@@ -619,6 +670,38 @@ export default function AppointmentDetailPage() {
                     {appointment.paid_at ? new Date(appointment.paid_at).toLocaleString('en-PH', { timeZone: 'Asia/Manila' }) : '—'}
                   </span>
                 </div>
+
+                {appointment.payment_sender_name && (
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs text-muted-foreground font-medium">Sender Name</span>
+                    <span className="text-sm font-medium">
+                      {appointment.payment_sender_name}
+                    </span>
+                  </div>
+                )}
+
+                {verifierName && (
+                  <div className="flex flex-col gap-0.5 col-span-2 sm:col-span-1">
+                    <span className="text-xs text-muted-foreground font-medium">Verified By</span>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-sm font-medium">
+                        {verifierName}
+                      </span>
+                      {appointment.payment_verified_at && (
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(appointment.payment_verified_at).toLocaleString('en-PH', {
+                            timeZone: 'Asia/Manila',
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Pending reference notice */}
@@ -653,15 +736,6 @@ export default function AppointmentDetailPage() {
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold border border-border bg-card hover:bg-accent text-foreground transition-all duration-150 disabled:opacity-55"
                     >
                       <BadgeDollarSign size={15} /> Waive Payment
-                    </button>
-                  )}
-                  {appointment.payment_status === 'paid' && (
-                    <button
-                      onClick={() => handlePaymentAction('refund')}
-                      disabled={paymentLoading}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all duration-150 disabled:opacity-55"
-                    >
-                      <Undo2 size={14} /> Refund
                     </button>
                   )}
                 </div>

@@ -30,6 +30,7 @@ import {
   checkDuplicateBooking,
 } from '@/lib/booking-engine';
 import type { OutreachProgram } from '@/lib/booking-engine';
+import { sendAdminNotification } from '@/lib/notifications';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -339,7 +340,7 @@ export default function OutreachAppointmentPage() {
       const { data: appt, error: insertErr } = await supabase
         .from('appointments')
         .insert(payload)
-        .select('appointment_number')
+        .select('id, appointment_number')
         .single();
 
       if (insertErr) throw insertErr;
@@ -375,6 +376,14 @@ export default function OutreachAppointmentPage() {
       }
 
       setAppointmentNumber(appt.appointment_number);
+
+      // Notify CMS admins about new outreach appointment (fire-and-forget)
+      sendAdminNotification({
+        type: 'booked',
+        label: appt.appointment_number,
+        appointmentId: appt.id,
+        clientUserId: userId ?? undefined,
+      }).catch(console.error);
     } catch (e: any) {
       setSubmitError(e.message ?? 'Something went wrong. Please try again.');
     } finally {

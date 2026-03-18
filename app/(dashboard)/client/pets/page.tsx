@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { Plus, Edit2, Upload, X, PawPrint } from 'lucide-react';
 import { supabase } from '@/lib/auth-client';
+import { sendAdminNotification } from '@/lib/notifications';
 
 interface Pet {
   id: string;
@@ -471,6 +472,11 @@ export default function PetsPage() {
       handleModalClose();
       fetchPets();
       showToast(`Pet ${isEdit ? 'updated' : 'added'} successfully!`, 'success');
+      if (isEdit) {
+        sendAdminNotification({ type: 'pet_updated', label: formData.name, petId: editingPet!.id }).catch(console.error);
+      } else {
+        sendAdminNotification({ type: 'pet_added', label: formData.name, petId: result.id }).catch(console.error);
+      }
     } catch (error: any) {
       showToast(error.message || 'An error occurred while saving the pet.', 'error');
     } finally {

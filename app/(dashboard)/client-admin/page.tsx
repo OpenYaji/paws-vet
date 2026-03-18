@@ -6,7 +6,7 @@ import { supabase } from '@/lib/auth-client';
 import Link from 'next/link';
 import {
   Search, Edit, Archive, Eye, RefreshCw,
-  MoreVertical, Users, PawPrint, Calendar,
+  MoreVertical, Users, PawPrint, Calendar, Bell,
   AlertTriangle, Download, ClipboardList, MapPin, Heart, Filter,
 } from 'lucide-react';
 import {
@@ -97,8 +97,21 @@ interface OutreachAppointmentData {
   breed?: string | null;
 }
 
+interface NotificationLogData {
+  id: string;
+  recipient_id: string;
+  notification_type: string;
+  subject: string | null;
+  content: string;
+  delivery_status: string;
+  is_read: boolean;
+  sent_at: string;
+  related_entity_type: string | null;
+  related_entity_id: string | null;
+}
+
 // REMOVED: 'dashboard' from type — CMS only handles clients, pets, appointments
-type ActiveTab = 'clients' | 'pets' | 'appointments' | 'regular_appointments' | 'outreach_appointments';
+type ActiveTab = 'clients' | 'pets' | 'appointments' | 'regular_appointments' | 'outreach_appointments' | 'notifications';
 
 // ── CSV helpers ────────────────────────────────────────────────────────────────
 
@@ -226,6 +239,7 @@ function ClientAdminPageInner() {
   const [appointments, setAppointments] = useState<AppointmentData[]>([]);
   const [regularAppointments, setRegularAppointments] = useState<RegularAppointmentData[]>([]);
   const [outreachAppointments, setOutreachAppointments] = useState<OutreachAppointmentData[]>([]);
+  const [notificationLogs, setNotificationLogs] = useState<NotificationLogData[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -401,6 +415,28 @@ function ClientAdminPageInner() {
     } catch (e) { console.error(e); }
   }, []);
 
+  const fetchNotificationLogs = useCallback(async () => {
+    try {
+      const { data } = await supabase
+        .from('notification_logs')
+        .select('*')
+        .order('sent_at', { ascending: false })
+        .limit(200);
+      setNotificationLogs((data || []).map((n: any) => ({
+        id: n.id,
+        recipient_id: n.recipient_id,
+        notification_type: n.notification_type,
+        subject: n.subject,
+        content: n.content,
+        delivery_status: n.delivery_status,
+        is_read: n.is_read ?? false,
+        sent_at: n.sent_at,
+        related_entity_type: n.related_entity_type,
+        related_entity_id: n.related_entity_id,
+      })));
+    } catch (e) { console.error(e); }
+  }, []);
+
   const loadTab = useCallback(async () => {
     setLoading(true);
     try {
@@ -409,10 +445,11 @@ function ClientAdminPageInner() {
       else if (activeTab === 'appointments') await fetchAppointments();
       else if (activeTab === 'regular_appointments') await fetchRegularAppointments();
       else if (activeTab === 'outreach_appointments') await fetchOutreachAppointments();
+      else if (activeTab === 'notifications') await fetchNotificationLogs();
     } finally {
       setLoading(false);
     }
-  }, [activeTab, fetchClients, fetchPets, fetchAppointments, fetchRegularAppointments, fetchOutreachAppointments]);
+  }, [activeTab, fetchClients, fetchPets, fetchAppointments, fetchRegularAppointments, fetchOutreachAppointments, fetchNotificationLogs]);
 
   useEffect(() => {
     loadTab();
@@ -468,6 +505,16 @@ function ClientAdminPageInner() {
       a.pet_name.toLowerCase().includes(q) ||
       (a.outreach_program_title ?? '').toLowerCase().includes(q);
     const matchesStatus = statusFilter === 'all' || a.appointment_status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  const filteredNotifications = notificationLogs.filter(n => {
+    const q = searchTerm.toLowerCase();
+    const matchesSearch = !q ||
+      (n.subject ?? '').toLowerCase().includes(q) ||
+      n.content.toLowerCase().includes(q) ||
+      n.notification_type.replace(/_/g, ' ').toLowerCase().includes(q);
+    const matchesStatus = statusFilter === 'all' || n.delivery_status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
@@ -547,6 +594,7 @@ function ClientAdminPageInner() {
     appointments: 'All Appointments',
     regular_appointments: 'Regular Appointments',
     outreach_appointments: 'Outreach Appointments',
+    notifications: 'Notification Logs',
   };
 
   const tabDesc: Record<ActiveTab, string> = {
@@ -555,6 +603,7 @@ function ClientAdminPageInner() {
     appointments: 'Track and manage all scheduled appointments',
     regular_appointments: 'Clinic appointments booked through regular scheduling',
     outreach_appointments: 'Appointments booked through outreach programs',
+    notifications: 'View all system notifications sent to clients',
   };
 
   const activeCount =
@@ -562,6 +611,7 @@ function ClientAdminPageInner() {
     activeTab === 'pets' ? filteredPets.length :
     activeTab === 'regular_appointments' ? filteredRegular.length :
     activeTab === 'outreach_appointments' ? filteredOutreach.length :
+    activeTab === 'notifications' ? filteredNotifications.length :
     filteredAppointments.length;
 
   const totalCount =
@@ -569,6 +619,7 @@ function ClientAdminPageInner() {
     activeTab === 'pets' ? pets.length :
     activeTab === 'regular_appointments' ? regularAppointments.length :
     activeTab === 'outreach_appointments' ? outreachAppointments.length :
+    activeTab === 'notifications' ? notificationLogs.length :
     appointments.length;
 
   return (
@@ -636,6 +687,16 @@ function ClientAdminPageInner() {
               >
                 <Heart size={14} />Outreach Programs
               </button>
+              <button
+                onClick={() => goTab('notifications')}
+                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all duration-150 ${
+                  activeTab === 'notifications'
+                    ? 'bg-primary/10 text-primary font-bold border-b-2 border-primary -mb-px'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                }`}
+              >
+                <Bell size={14} />Notifications
+              </button>
             </div>
           </div>
         </div>
@@ -658,6 +719,7 @@ function ClientAdminPageInner() {
                   activeTab === 'pets' ? 'Search by pet name, species, owner…' :
                   activeTab === 'regular_appointments' ? 'Search by client, pet, breed…' :
                   activeTab === 'outreach_appointments' ? 'Search by client, pet, program…' :
+                  activeTab === 'notifications' ? 'Search by subject, content, type…' :
                   'Search by client, pet, or reason…'
                 }
                 value={searchTerm}
@@ -666,7 +728,7 @@ function ClientAdminPageInner() {
             </div>
 
             {/* Status filter */}
-            {(activeTab === 'clients' || activeTab === 'appointments' || activeTab === 'regular_appointments' || activeTab === 'outreach_appointments') && (
+            {(activeTab === 'clients' || activeTab === 'appointments' || activeTab === 'regular_appointments' || activeTab === 'outreach_appointments' || activeTab === 'notifications') && (
               <div className="relative">
                 <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                 <select
@@ -680,6 +742,13 @@ function ClientAdminPageInner() {
                       <option value="active">Active</option>
                       <option value="inactive">Inactive</option>
                       <option value="suspended">Suspended</option>
+                    </>
+                  ) : activeTab === 'notifications' ? (
+                    <>
+                      <option value="pending">Pending</option>
+                      <option value="sent">Sent</option>
+                      <option value="delivered">Delivered</option>
+                      <option value="failed">Failed</option>
                     </>
                   ) : (
                     <>
@@ -884,10 +953,14 @@ function ClientAdminPageInner() {
                             </span>
                           </td>
                           <td className="px-6 py-4 text-right">
-                            <ActionsDropdown items={[
-                              { label: 'View Pet', href: `/client-admin/pets/${p.id}` },
-                              { label: 'View Owner', href: `/client-admin/clients/${p.owner_id}` },
-                            ]} />
+                            <div className="flex items-center justify-end gap-1">
+                              <Link href={`/client-admin/pets/${p.id}`} className="p-2 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-150" title="View Pet">
+                                <Eye size={16} />
+                              </Link>
+                              <Link href={`/client-admin/clients/${p.owner_id}`} className="p-2 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-150" title="View Owner">
+                                <Users size={16} />
+                              </Link>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -952,10 +1025,14 @@ function ClientAdminPageInner() {
                             }`}>{a.status}</span>
                           </td>
                           <td className="px-6 py-4 text-right">
-                            <ActionsDropdown items={[
-                              { label: 'View Details', href: `/client-admin/appointments/${a.id}` },
-                              { label: 'View Client', href: `/client-admin/clients/${a.client_id}` },
-                            ]} />
+                            <div className="flex items-center justify-end gap-1">
+                              <Link href={`/client-admin/appointments/${a.id}`} className="p-2 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-150" title="View Details">
+                                <Eye size={16} />
+                              </Link>
+                              <Link href={`/client-admin/clients/${a.client_id}`} className="p-2 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-150" title="View Client">
+                                <Users size={16} />
+                              </Link>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -1030,10 +1107,14 @@ function ClientAdminPageInner() {
                             }`}>{a.appointment_status}</span>
                           </td>
                           <td className="px-5 py-4 text-right">
-                            <ActionsDropdown items={[
-                              { label: 'View Details', href: `/client-admin/appointments/${a.id}` },
-                              { label: 'View Client', href: `/client-admin/clients/${a.client_id}` },
-                            ]} />
+                            <div className="flex items-center justify-end gap-1">
+                              <Link href={`/client-admin/appointments/${a.id}`} className="p-2 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-150" title="View Details">
+                                <Eye size={16} />
+                              </Link>
+                              <Link href={`/client-admin/clients/${a.client_id}`} className="p-2 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-150" title="View Client">
+                                <Users size={16} />
+                              </Link>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -1123,10 +1204,91 @@ function ClientAdminPageInner() {
                             }`}>{a.appointment_status}</span>
                           </td>
                           <td className="px-4 py-4 text-right">
-                            <ActionsDropdown items={[
-                              { label: 'View Details', href: `/client-admin/appointments/${a.id}` },
-                              { label: 'View Client', href: `/client-admin/clients/${a.client_id}` },
-                            ]} />
+                            <div className="flex items-center justify-end gap-1">
+                              <Link href={`/client-admin/appointments/${a.id}`} className="p-2 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-150" title="View Details">
+                                <Eye size={16} />
+                              </Link>
+                              <Link href={`/client-admin/clients/${a.client_id}`} className="p-2 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-150" title="View Client">
+                                <Users size={16} />
+                              </Link>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )
+              )}
+
+              {/* NOTIFICATIONS TABLE */}
+              {activeTab === 'notifications' && (
+                filteredNotifications.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 px-6 gap-4 text-center">
+                    <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10">
+                      <Bell size={28} className="text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-lg text-foreground mb-1">No notifications found</h3>
+                      <p className="text-muted-foreground text-sm">Try adjusting your search or filters</p>
+                    </div>
+                  </div>
+                ) : (
+                  <table className="w-full">
+                    <thead className="bg-primary/5 border-t border-b border-border">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Sent</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Type</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Subject</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Content</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Delivery</th>
+                        <th className="px-6 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wide">Read</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {filteredNotifications.map(n => (
+                        <tr key={n.id} className="hover:bg-primary/5 transition-colors duration-150">
+                          <td className="px-6 py-4">
+                            <div className="text-sm font-semibold text-foreground whitespace-nowrap">{formatDate(n.sent_at)}</div>
+                            <div className="text-xs text-muted-foreground mt-0.5">
+                              {new Date(n.sent_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                              n.notification_type === 'appointment_confirmed' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300' :
+                              n.notification_type === 'appointment_cancelled' ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300' :
+                              n.notification_type === 'appointment_reminder' ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300' :
+                              n.notification_type === 'payment_due' ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300' :
+                              n.notification_type === 'test_results' ? 'bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300' :
+                              'bg-muted text-muted-foreground'
+                            }`}>
+                              {n.notification_type.replace(/_/g, ' ')}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-foreground font-medium max-w-[200px] truncate" title={n.subject ?? ''}>
+                            {n.subject || '—'}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-muted-foreground max-w-xs truncate" title={n.content}>
+                            {n.content}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                              n.delivery_status === 'delivered' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300' :
+                              n.delivery_status === 'sent' ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300' :
+                              n.delivery_status === 'failed' ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300' :
+                              'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300'
+                            }`}>
+                              {n.delivery_status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                              n.is_read
+                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
+                                : 'bg-muted text-muted-foreground'
+                            }`}>
+                              {n.is_read ? 'Read' : 'Unread'}
+                            </span>
                           </td>
                         </tr>
                       ))}

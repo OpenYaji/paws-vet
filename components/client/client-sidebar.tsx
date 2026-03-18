@@ -274,12 +274,25 @@ function NotificationBell() {
 // =============================================
 // MAIN SIDEBAR
 // =============================================
+interface NavSettings {
+  show_dashboard: boolean;
+  show_appointments: boolean;
+  show_history: boolean;
+  show_pets: boolean;
+  show_products: boolean;
+  show_services: boolean;
+  show_transactions: boolean;
+  show_faq: boolean;
+  show_settings: boolean;
+}
+
 interface ClientSidebarProps {
   collapsed: boolean;
   setCollapsed: (collapsed: boolean) => void;
   mobileOpen: boolean;
   setMobileOpen: (open: boolean) => void;
   profile: any;
+  navSettings?: NavSettings;
 }
 
 interface MenuItem {
@@ -288,7 +301,19 @@ interface MenuItem {
   path: string;
 }
 
-export default function ClientSidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen, profile }: ClientSidebarProps) {
+const NAV_SETTING_KEY: Record<string, keyof NavSettings> = {
+  'Dashboard':    'show_dashboard',
+  'Appointments': 'show_appointments',
+  'History':      'show_history',
+  'My Pets':      'show_pets',
+  'Products':     'show_products',
+  'Services':     'show_services',
+  'Transactions': 'show_transactions',
+  'FAQ':          'show_faq',
+  'Settings':     'show_settings',
+};
+
+export default function ClientSidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen, profile, navSettings }: ClientSidebarProps) {
   const [isLogoutModalOpen, setLogoutModalOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
@@ -378,7 +403,10 @@ export default function ClientSidebar({ collapsed, setCollapsed, mobileOpen, set
           {/* Nav Items */}
           <nav className="flex-1 flex flex-col justify-between min-h-0 overflow-hidden">
             <div className="flex flex-col space-y-1">
-              {menuItems.map((item) => (
+              {menuItems.filter(item => {
+                const key = NAV_SETTING_KEY[item.name];
+                return key && navSettings ? navSettings[key] !== false : true;
+              }).map((item) => (
                 <NavLink
                   key={item.name}
                   item={item}

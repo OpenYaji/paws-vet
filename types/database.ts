@@ -17,7 +17,9 @@ export type NotificationType =
   | 'appointment_confirmed' | 'appointment_cancelled' | 'general' | 'low_stock'
   // vet-specific types fired by DB triggers
   | 'new_appointment' | 'new_pet' | 'emergency' | 'appointment_today'
-  | 'quarantine_alert' | 'no_show' | 'admin_announcement' | 'admin_duty_notice';
+  | 'quarantine_alert' | 'no_show' | 'admin_announcement' | 'admin_duty_notice'
+  // CMS admin notification types
+  | 'appointment_booked' | 'pet_added' | 'pet_updated';
 export type NotificationStatus = 'pending' | 'sent' | 'delivered' | 'failed';
 export type CommunicationPreference = 'email' | 'sms' | 'phone' | 'any';
 export type ActionType = 'create' | 'update' | 'delete' | 'view' | 'login' | 'logout';

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/auth-client';
 import { Button } from '@/components/ui/button';
-import { PawPrint, Calendar, ChevronRight, HeartPulse } from 'lucide-react';
+import { PawPrint, Calendar, ChevronRight, HeartPulse, Megaphone } from 'lucide-react';
 import Link from 'next/link';
 
 export default function ClientDashboardPage() {
@@ -14,6 +14,12 @@ export default function ClientDashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [userId, setUserId] = useState<string>('');
   const [clientId, setClientId] = useState<string>('');
+  const [clinicSettings, setClinicSettings] = useState({
+    clinic_name: 'PAWS Veterinary',
+    dashboard_about_text: "Welcome! Here you can manage all aspects of your pet's healthcare.",
+    is_announcement_active: false,
+    announcement_text: '',
+  });
 
   useEffect(() => {
     async function loadStats() {
@@ -46,14 +52,14 @@ export default function ClientDashboardPage() {
           setIsLoading(false);
           return;
         }
-        
+
         console.log('Client Profile ID:', profile.id);
         setClientId(profile.id);
 
         // Fetch pets using the API endpoint (bypasses RLS issues)
         try {
           const petsResponse = await fetch(`/api/client/pets?client_id=${profile.id}`);
-          
+
           if (!petsResponse.ok) {
             console.error('Failed to fetch pets:', petsResponse.status);
           }
@@ -73,14 +79,14 @@ export default function ClientDashboardPage() {
           let upcomingCount = 0;
           if (petIds.length > 0) {
             const today = new Date().toISOString();
-            
+
             const { count, error: appointmentsError } = await supabase
               .from('appointments')
               .select('*', { count: 'exact', head: true })
               .in('pet_id', petIds)
               .gte('scheduled_start', today)
               .in('appointment_status', ['pending', 'confirmed']);
-            
+
             if (appointmentsError) {
               console.error('Error fetching appointments:', appointmentsError);
             } else {
@@ -96,6 +102,15 @@ export default function ClientDashboardPage() {
         } catch (fetchError) {
           console.error('Error fetching pets via API:', fetchError);
         }
+
+        // Load clinic settings
+        const { data: clinicData } = await supabase
+          .from('clinic_settings')
+          .select('clinic_name, dashboard_about_text, is_announcement_active, announcement_text')
+          .eq('id', 1)
+          .single();
+        if (clinicData) setClinicSettings(clinicData);
+
       } catch (error) {
         console.error('Error loading stats:', error);
       } finally {
@@ -119,6 +134,15 @@ export default function ClientDashboardPage() {
 
   return (
     <div className="space-y-8 max-w-6xl mx-auto p-6">
+
+      {/* Announcement Banner */}
+      {clinicSettings.is_announcement_active && clinicSettings.announcement_text && (
+        <div className="bg-primary/10 border border-primary/20 rounded-2xl px-5 py-3 flex items-center gap-3 text-sm font-medium text-primary">
+          <Megaphone size={16} className="flex-shrink-0" />
+          {clinicSettings.announcement_text}
+        </div>
+      )}
+
       {/* Welcome Section */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border border-primary/10 p-8">
         <div className="absolute -top-10 -right-10 w-48 h-48 bg-primary/10 rounded-full blur-3xl" />
@@ -213,9 +237,9 @@ export default function ClientDashboardPage() {
           </div>
           <div className="space-y-3 flex-1">
             <div>
-              <h3 className="text-lg font-bold text-foreground">About PAWS Veterinary</h3>
+              <h3 className="text-lg font-bold text-foreground">{clinicSettings.clinic_name}</h3>
               <p className="text-sm text-muted-foreground leading-relaxed mt-1">
-                Welcome! Here you can manage all aspects of your pet&apos;s healthcare. Book appointments with our experienced veterinarians, track medical records, and keep your pets healthy and happy.
+                {clinicSettings.dashboard_about_text}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">

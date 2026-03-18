@@ -1,6 +1,5 @@
 // app/api/notifications/route.ts
-import { createCookieClient } from "@/lib/supabase-server";
-import { createClient } from "@supabase/supabase-js";
+import { createClient } from "@/utils/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 
 // Creating JSON responses for consistent and reuable response formatting
@@ -12,7 +11,7 @@ function jsonError(message: any, status: number = 400, details?: any) {
 }
 
 async function requireUser(req: NextRequest) {
-  const supabase = await createCookieClient();
+  const supabase = await createClient();
   const { data, error } = await supabase.auth.getUser();
 
   if (error || !data?.user) {

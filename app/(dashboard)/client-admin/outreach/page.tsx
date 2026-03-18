@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   ArrowLeft, Calendar, Users, Plus, RefreshCw,
   CheckCircle, XCircle, Eye, Download, AlertTriangle,
-  MoreVertical, Loader2, ToggleLeft, ToggleRight,
+  MoreVertical, Loader2, ToggleLeft, ToggleRight, Edit, Trash2,
 } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -145,6 +145,19 @@ export default function OutreachManagementPage() {
     is_open: false,
   });
 
+  // Edit modal
+  const [showEdit, setShowEdit] = useState(false);
+  const [editProgram, setEditProgram] = useState<OutreachProgram | null>(null);
+  const [editForm, setEditForm] = useState({
+    title: '',
+    description: '',
+    program_date: '',
+    registration_start: '',
+    registration_end: '',
+    max_capacity: 16,
+  });
+  const [saving, setSaving] = useState(false);
+
   // Registrations modal
   const [viewProgram, setViewProgram] = useState<OutreachProgram | null>(null);
   const [registrations, setRegistrations] = useState<Registration[]>([]);
@@ -163,7 +176,34 @@ export default function OutreachManagementPage() {
       .from('outreach_programs')
       .select('*')
       .order('program_date', { ascending: false });
-    if (!error && data) setPrograms(data as OutreachProgram[]);
+    if (!error && data) {
+      setPrograms(data as OutreachProgram[]);
+
+      const today = new Date().toISOString().slice(0, 10);
+      const pastOpenPrograms = (data ?? []).filter(
+        (p: OutreachProgram) =>
+          p.is_open && p.program_date < today
+      );
+
+      if (pastOpenPrograms.length > 0) {
+        await Promise.all(
+          pastOpenPrograms.map((p: OutreachProgram) =>
+            supabase
+              .from('outreach_programs')
+              .update({ is_open: false })
+              .eq('id', p.id)
+          )
+        );
+        // Refetch after auto-closing
+        const { data: refreshed } = await supabase
+          .from('outreach_programs')
+          .select('*')
+          .order('program_date', { ascending: false });
+        if (refreshed) setPrograms(refreshed as OutreachProgram[]);
+        setLoading(false);
+        return;
+      }
+    }
     setLoading(false);
   }, []);
 
@@ -243,6 +283,72 @@ export default function OutreachManagementPage() {
     showToast('Outreach program created');
     setShowCreate(false);
     setForm({ title: '', description: '', program_date: '', registration_start: '', registration_end: '', max_capacity: 16, is_open: false });
+    fetchPrograms();
+  };
+
+  const handleDelete = (program: OutreachProgram) => {
+    setConfirmModal({
+      title: 'Delete Program',
+      message: `Permanently delete "${program.title}"? This cannot be undone. Any existing bookings for this program will remain but the program will be removed.`,
+      confirmLabel: 'Delete',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        const { error } = await supabase
+          .from('outreach_programs')
+          .delete()
+          .eq('id', program.id);
+        if (error) {
+          showToast(
+            error.message || 'Failed to delete',
+            'error'
+          );
+          return;
+        }
+        showToast('Program deleted');
+        fetchPrograms();
+      },
+    });
+  };
+
+  const handleEditOpen = (p: OutreachProgram) => {
+    setEditProgram(p);
+    setEditForm({
+      title: p.title,
+      description: p.description ?? '',
+      program_date: p.program_date,
+      registration_start: p.registration_start ?? '',
+      registration_end: p.registration_end ?? '',
+      max_capacity: p.max_capacity,
+    });
+    setShowEdit(true);
+  };
+
+  const handleEditSave = async () => {
+    if (!editProgram) return;
+    if (!editForm.title.trim() || !editForm.program_date) {
+      showToast('Title and Program Date are required', 'error');
+      return;
+    }
+    setSaving(true);
+    const { error } = await supabase
+      .from('outreach_programs')
+      .update({
+        title: editForm.title.trim(),
+        description: editForm.description.trim() || null,
+        program_date: editForm.program_date,
+        registration_start: editForm.registration_start || null,
+        registration_end: editForm.registration_end || null,
+        max_capacity: editForm.max_capacity,
+      })
+      .eq('id', editProgram.id);
+    setSaving(false);
+    if (error) {
+      showToast(error.message || 'Failed to save', 'error');
+      return;
+    }
+    showToast('Program updated successfully');
+    setShowEdit(false);
+    setEditProgram(null);
     fetchPrograms();
   };
 
@@ -343,6 +449,21 @@ export default function OutreachManagementPage() {
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-1.5 justify-end">
+                        {/* Edit */}
+                        <button
+                          onClick={() => handleEditOpen(p)}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border border-border bg-card hover:bg-accent text-foreground transition-all duration-150"
+                        >
+                          <Edit size={12} /> Edit
+                        </button>
+
+                        <button
+                          onClick={() => handleDelete(p)}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all duration-150"
+                        >
+                          <Trash2 size={12} /> Delete
+                        </button>
+
                         {/* View Registrations */}
                         <button
                           onClick={() => handleViewRegistrations(p)}
@@ -386,6 +507,111 @@ export default function OutreachManagementPage() {
           </div>
         )}
       </div>
+
+      {/* ── Edit Program Modal ───────────────────────────────────────────── */}
+      {showEdit && editProgram && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50" onClick={() => !saving && setShowEdit(false)} />
+          <div className="relative z-10 bg-card rounded-2xl border border-border shadow-2xl w-full max-w-lg overflow-y-auto max-h-[90vh]">
+            <div className="px-6 py-5 border-b border-border flex items-center justify-between">
+              <h2 className="text-lg font-bold">Edit Outreach Program</h2>
+              <button
+                onClick={() => !saving && setShowEdit(false)}
+                className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground transition-all duration-150"
+              >
+                <XCircle size={16} />
+              </button>
+            </div>
+            <div className="p-6 flex flex-col gap-4">
+              {/* Title */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-semibold">Title <span className="text-destructive">*</span></label>
+                <input
+                  className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-background text-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
+                  placeholder="e.g. Barangay Outreach — Pasay City"
+                  value={editForm.title}
+                  onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
+                />
+              </div>
+              {/* Description */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-semibold">Description</label>
+                <textarea
+                  rows={3}
+                  className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-background text-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all resize-vertical"
+                  placeholder="Optional program description…"
+                  value={editForm.description}
+                  onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
+                />
+              </div>
+              {/* Program Date */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-semibold">Program Date <span className="text-destructive">*</span></label>
+                <input
+                  type="date"
+                  className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-background text-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
+                  value={editForm.program_date}
+                  onChange={e => setEditForm(f => ({ ...f, program_date: e.target.value }))}
+                />
+              </div>
+              {/* Registration window */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-semibold">Registration Start</label>
+                  <input
+                    type="datetime-local"
+                    className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-background text-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
+                    value={editForm.registration_start}
+                    onChange={e => setEditForm(f => ({ ...f, registration_start: e.target.value }))}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-semibold">Registration End</label>
+                  <input
+                    type="datetime-local"
+                    className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-background text-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
+                    value={editForm.registration_end}
+                    onChange={e => setEditForm(f => ({ ...f, registration_end: e.target.value }))}
+                  />
+                </div>
+              </div>
+              {/* Max Capacity */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-semibold">Max Capacity</label>
+                <input
+                  type="number"
+                  min={editProgram.current_bookings}
+                  max={500}
+                  className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-background text-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
+                  value={editForm.max_capacity}
+                  onChange={e => setEditForm(f => ({ ...f, max_capacity: Number(e.target.value) }))}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Cannot be set lower than current bookings ({editProgram.current_bookings})
+                </p>
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-border flex justify-end gap-2">
+              <button
+                onClick={() => setShowEdit(false)}
+                disabled={saving}
+                className="px-4 py-2 rounded-lg text-sm font-semibold border border-border bg-card hover:bg-accent text-foreground transition-all duration-150 disabled:opacity-55"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleEditSave}
+                disabled={saving}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold bg-primary text-primary-foreground hover:opacity-90 active:scale-95 transition-all duration-150 disabled:opacity-55"
+              >
+                {saving
+                  ? <><Loader2 size={14} className="animate-spin" />Saving…</>
+                  : <><CheckCircle size={14} />Save Changes</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Create Program Modal ─────────────────────────────────────────── */}
       {showCreate && (

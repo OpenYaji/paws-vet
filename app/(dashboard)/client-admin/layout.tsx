@@ -5,15 +5,36 @@ import { Suspense, useState, useEffect } from 'react';
 import { supabase } from '@/lib/auth-client';
 import ClientThemeProvider from '@/components/client/theme-provider';
 import { PawPrint, Settings } from 'lucide-react';
+import { CmsNotificationBell } from '@/components/notifications/cms-notification-bell';
 
 function ClientAdminNav() {
   const [displayName, setDisplayName] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    const fetchUnread = async () => {
+      try {
+        const res = await fetch('/api/client-admin/notifications/unread-count');
+        if (res.ok) {
+          const { count } = await res.json();
+          setUnreadCount(count ?? 0);
+        }
+      } catch {
+        // silent fail — bell just shows no badge
+      }
+    };
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 30_000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     (async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
+        setUserId(user.id);
 
         // Try admin_profiles first, then veterinarian_profiles
         const { data: admin } = await supabase
@@ -38,7 +59,21 @@ function ClientAdminNav() {
           return;
         }
 
-        // Fallback to email
+        // Try client_profiles as fallback
+        const { data: clientProfile } = await supabase
+          .from('client_profiles')
+          .select('first_name, last_name')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (clientProfile) {
+          setDisplayName(
+            `${clientProfile.first_name} ${clientProfile.last_name}`
+          );
+          return;
+        }
+
+        // Final fallback to email
         setDisplayName(user.email ?? null);
       } catch {
         // silently fail — name is cosmetic
@@ -73,6 +108,15 @@ function ClientAdminNav() {
               <span className="hidden sm:block text-slate-300 text-sm font-medium max-w-[180px] truncate">
                 {displayName}
               </span>
+            )}
+
+            {/* Notifications */}
+            {userId && (
+              <CmsNotificationBell
+                userId={userId}
+                className="text-slate-400 hover:text-white hover:bg-slate-700"
+                viewAllHref="/client-admin/notifications"
+              />
             )}
 
             {/* Settings */}

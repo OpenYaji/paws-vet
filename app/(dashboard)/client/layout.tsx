@@ -7,7 +7,19 @@ import ClientSidebar from '@/components/client/client-sidebar';
 import ClientThemeProvider from '@/components/client/theme-provider';
 import { Menu } from 'lucide-react';
 
-function ClientLayoutContent({ children, profile, collapsed, setCollapsed, mobileOpen, setMobileOpen }: any) {
+interface NavSettings {
+  show_dashboard: boolean;
+  show_appointments: boolean;
+  show_history: boolean;
+  show_pets: boolean;
+  show_products: boolean;
+  show_services: boolean;
+  show_transactions: boolean;
+  show_faq: boolean;
+  show_settings: boolean;
+}
+
+function ClientLayoutContent({ children, profile, collapsed, setCollapsed, mobileOpen, setMobileOpen, navSettings }: any) {
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background transition-colors duration-200">
       {/* Desktop Sidebar — completely fixed, never scrolls */}
@@ -18,6 +30,7 @@ function ClientLayoutContent({ children, profile, collapsed, setCollapsed, mobil
           setCollapsed={setCollapsed}
           mobileOpen={mobileOpen}
           setMobileOpen={setMobileOpen}
+          navSettings={navSettings}
         />
       </div>
 
@@ -29,6 +42,7 @@ function ClientLayoutContent({ children, profile, collapsed, setCollapsed, mobil
           setCollapsed={setCollapsed}
           mobileOpen={mobileOpen}
           setMobileOpen={setMobileOpen}
+          navSettings={navSettings}
         />
       </div>
 
@@ -55,6 +69,17 @@ export default function ClientDashboardLayout({ children }: { children: React.Re
   const [profile, setProfile] = useState<any>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [navSettings, setNavSettings] = useState<NavSettings>({
+    show_dashboard: true,
+    show_appointments: true,
+    show_history: true,
+    show_pets: true,
+    show_products: true,
+    show_services: true,
+    show_transactions: true,
+    show_faq: true,
+    show_settings: true,
+  });
   const router = useRouter();
 
   // Lock body/html scroll — only the content panel should scroll
@@ -74,7 +99,7 @@ export default function ClientDashboardLayout({ children }: { children: React.Re
   useEffect(() => {
     async function checkAuth() {
       const { data: { session } } = await supabase.auth.getSession();
-      
+
       if (!session) {
         router.push('/login');
         return;
@@ -92,6 +117,17 @@ export default function ClientDashboardLayout({ children }: { children: React.Re
     }
     checkAuth();
   }, [router]);
+
+  useEffect(() => {
+    supabase
+      .from('nav_settings')
+      .select('*')
+      .eq('id', 1)
+      .single()
+      .then(({ data }) => {
+        if (data) setNavSettings(data);
+      });
+  }, []);
 
   if (isLoading) {
     return (
@@ -114,6 +150,7 @@ export default function ClientDashboardLayout({ children }: { children: React.Re
         setCollapsed={setCollapsed}
         mobileOpen={mobileOpen}
         setMobileOpen={setMobileOpen}
+        navSettings={navSettings}
       >
         {children}
       </ClientLayoutContent>

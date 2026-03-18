@@ -29,6 +29,8 @@ interface PaymentRecord {
   payment_reference: string | null;
   paid_at: string | null;
   is_aspin_puspin: boolean;
+  payment_sender_name?: string | null;
+  payment_verified_at?: string | null;
   pet: {
     name: string;
     species: string;
@@ -84,9 +86,9 @@ function TypeBadge({ type }: { type: string | null }) {
   );
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
 // Component
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default function ClientTransactionsPage() {
   const [records, setRecords]     = useState<PaymentRecord[]>([]);
@@ -118,6 +120,8 @@ export default function ClientTransactionsPage() {
           payment_reference,
           paid_at,
           is_aspin_puspin,
+          payment_sender_name,
+          payment_verified_at,
           pets!appointments_pet_id_fkey (
             name,
             species,
@@ -141,6 +145,8 @@ export default function ClientTransactionsPage() {
         payment_reference:       row.payment_reference ?? null,
         paid_at:                 row.paid_at ?? null,
         is_aspin_puspin:         row.is_aspin_puspin ?? false,
+        payment_sender_name:     row.payment_sender_name ?? null,
+        payment_verified_at:     row.payment_verified_at ?? null,
         pet: Array.isArray(row.pets) ? (row.pets[0] ?? null) : (row.pets ?? null),
       })) as PaymentRecord[];
 
@@ -160,7 +166,7 @@ export default function ClientTransactionsPage() {
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="flex flex-col items-center gap-3 text-muted-foreground">
           <Loader2 size={36} className="animate-spin text-primary" />
-          <p className="text-sm font-medium">Loading payment historyâ€¦</p>
+          <p className="text-sm font-medium">Loading payment history…</p>
         </div>
       </div>
     );
@@ -295,7 +301,7 @@ export default function ClientTransactionsPage() {
                 </div>
 
                 {/* Payment cells */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 pt-1">
                   <PayCell
                     label="Amount"
                     value={
@@ -307,25 +313,39 @@ export default function ClientTransactionsPage() {
                   />
                   <PayCell
                     label="Method"
-                    value={rec.payment_method ? METHOD_LABEL[rec.payment_method] : 'â€”'}
+                    value={rec.payment_method ? METHOD_LABEL[rec.payment_method] : '—'}
                   />
                   <PayCell
                     label="Reference"
-                    value={rec.payment_reference ?? 'â€”'}
+                    value={rec.payment_reference ?? '—'}
                     mono
                   />
                   <PayCell
                     label="Paid on"
-                    value={rec.paid_at ? format(new Date(rec.paid_at), 'PPP') : 'â€”'}
+                    value={rec.paid_at ? format(new Date(rec.paid_at), 'PPP') : '—'}
                   />
+
+                  {rec.payment_sender_name && (
+                    <PayCell
+                      label="Sender Name"
+                      value={rec.payment_sender_name}
+                    />
+                  )}
+
+                  {rec.payment_status === 'paid' && rec.payment_verified_at && (
+                    <PayCell
+                      label="Verified On"
+                      value={format(new Date(rec.payment_verified_at), 'PPP')}
+                    />
+                  )}
                 </div>
 
                 {/* Pending verification notice */}
                 {referenceSubmitted && (
-                  <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-2.5 text-xs text-amber-700 dark:text-amber-400">
-                    <AlertCircle size={13} className="flex-shrink-0 mt-0.5" />
+                  <div className="flex items-start gap-2 rounded-xl border border-amber-600 bg-amber-600 px-4 py-2.5 text-sm font-semibold leading-relaxed text-white dark:border-amber-500 dark:bg-amber-700 dark:text-white">
+                    <AlertCircle size={14} className="mt-0.5 flex-shrink-0 text-white" />
                     <span>
-                      Reference submitted â€”{' '}
+                      Reference submitted —{' '}
                       <strong>awaiting verification by the PAWS team</strong>. Your booking will be
                       confirmed once payment is verified.
                     </span>
@@ -340,9 +360,9 @@ export default function ClientTransactionsPage() {
   );
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
 // Sub-component
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
 
 function PayCell({
   label,
