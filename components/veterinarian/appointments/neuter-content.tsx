@@ -65,7 +65,7 @@ export default function NeuterContent() {
     const autoPrice = !isPuspinOrAspin && servicePrice != null ? String(servicePrice) : '';
 
     setProcedure({
-      operation_type: isFemale ? 'Spay' : 'Neuter',
+      operation_type: isFemale ? 'spay' : 'neuter',
       operation_cost: autoPrice,
       notes: appt.reason_for_visit || '',
     });
@@ -417,18 +417,10 @@ export default function NeuterContent() {
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-2">
                               <Label>Procedure Type</Label>
-                              <Select
+                              <Input
                                 value={procedure.operation_type}
-                                onValueChange={(val) => setProcedure({ ...procedure, operation_type: val })}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select procedure..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="spay">Spay (Female)</SelectItem>
-                                  <SelectItem value="neuter">Neuter (Male)</SelectItem>
-                                </SelectContent>
-                              </Select>
+                                readOnly className="bg-muted/50 cursor-not-allowed"
+                              />
                             </div>
                             <div className="space-y-2">
                               <Label>Procedure Cost (₱)</Label>
