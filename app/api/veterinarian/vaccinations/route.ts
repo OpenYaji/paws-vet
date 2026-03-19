@@ -20,9 +20,11 @@ export async function GET(request: NextRequest) {
         .order("name"),
 
       (() => {
+        const showArchived = request.nextUrl.searchParams.get("archived") === "true";
         let q = supabase
           .from("vaccination_records")
           .select(`*, pets(id, name, species, breed, client_profiles(last_name))`)
+          .eq("is_archived", showArchived)
           .order("administered_date", { ascending: false });
         if (petId) q = q.eq("pet_id", petId).limit(100);
         else q = q.limit(50);
@@ -62,6 +64,23 @@ export async function POST(request: NextRequest) {
     if (!vetProfile) return NextResponse.json({ error: "Veterinarian profile not found" }, { status: 404 });
 
     const body = await request.json();
+
+    // Duplicate lot number guard — same batch_number on an active record means the vial was already logged
+    if (body.batch_number) {
+      const { data: existing } = await supabase
+        .from("vaccination_records")
+        .select("id")
+        .eq("batch_number", body.batch_number)
+        .eq("is_archived", false)
+        .maybeSingle();
+
+      if (existing) {
+        return NextResponse.json(
+          { error: `Lot number "${body.batch_number}" already exists in an active record. Please verify before saving.` },
+          { status: 409 }
+        );
+      }
+    }
 
     const { data, error } = await supabase
       .from("vaccination_records")
@@ -105,11 +124,12 @@ export async function PATCH(request: NextRequest) {
       .from("vaccination_records")
       .update(updates)
       .eq("id", id)
-      .select()
-      .single();
+      .select();
 
     if (error) return handleError(error, "PATCH /api/vaccinations");
-    return NextResponse.json(data);
+    if (!data || data.length === 0)
+      return NextResponse.json({ error: "Record not found or update not permitted" }, { status: 404 });
+    return NextResponse.json(data[0]);
   } catch (error: any) {
     return handleError(error, "PATCH /api/vaccinations");
   }
@@ -127,7 +147,11 @@ export async function DELETE(request: NextRequest) {
     const { id } = await request.json();
     if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
 
-    const { error } = await supabase.from("vaccination_records").delete().eq("id", id);
+    // Soft-delete — mirrors the pets archive pattern (is_archived: true instead of actual deletion)
+    const { error } = await supabase
+      .from("vaccination_records")
+      .update({ is_archived: true })
+      .eq("id", id);
     if (error) return handleError(error, "DELETE /api/vaccinations");
     return NextResponse.json({ success: true });
   } catch (error: any) {
