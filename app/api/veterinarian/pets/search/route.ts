@@ -26,6 +26,7 @@ export async function GET(request: Request) {
             name,
             species,
             breed,
+            date_of_birth,
             client_profiles (first_name, last_name)
         `,
       )
