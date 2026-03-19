@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import useSWR, { mutate } from 'swr';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -34,8 +34,17 @@ const TRIAGE_BADGE: Record<string, string> = {
 };
 
 export default function TriageContent() {
-  const { data: queue = [], isLoading, error } = useSWR('/api/veterinarian/triage', fetcher);
+  const { data: queue = [], isLoading, error } = useSWR('/api/veterinarian/triage', fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 30_000,
+  });
   const safeQueue = Array.isArray(queue) ? queue : [];
+
+  // Defer the completed section until after the critical queue has painted
+  const [showCompleted, setShowCompleted] = useState(false);
+  useEffect(() => {
+    if (!isLoading) setShowCompleted(true);
+  }, [isLoading]);
 
   const [selectedAppt, setSelectedAppt] = useState<any | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -330,8 +339,8 @@ export default function TriageContent() {
 
       </div>
 
-      {/* Completed Triage Records (for vitals correction) */}
-      <CompletedTriageSection />
+      {/* Completed Triage Records — rendered only after the queue above has loaded */}
+      {showCompleted && <CompletedTriageSection />}
     </div>
   );
 }
@@ -340,7 +349,8 @@ function CompletedTriageSection() {
   const { data: completed = [], mutate: refetch } = useSWR(
     '/api/veterinarian/triage?completed=true',
     (url: string) => fetch(url).then(r => r.json()),
-    { revalidateOnFocus: false }
+    // Today's completed records are static until manually edited — no need to revalidate passively
+    { revalidateOnFocus: false, revalidateOnReconnect: false }
   );
 
   const [editRec, setEditRec] = useState<any>(null);
