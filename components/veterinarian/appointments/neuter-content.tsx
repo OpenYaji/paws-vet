@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/auth-client';
+import { useState } from 'react';
 import useSWR, { mutate } from 'swr';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,16 +19,6 @@ import { useToast } from '@/hooks/use-toast';
 const fetchQueue = () =>
   fetch('/api/veterinarian/neuter').then((r) => r.json());
 
-type BloodTestStatus = {
-  consultationDone: boolean;
-  medicalRecordId: string | null;
-  bloodTest: {
-    id: string;
-    test_name: string;
-    findings: string | null;
-    is_abnormal: boolean;
-  } | null;
-};
 
 export default function NeuterContent() {
   const { data: appointments = [], isLoading, error } = useSWR('/api/veterinarian/neuter', fetchQueue);
@@ -38,9 +27,7 @@ export default function NeuterContent() {
   const [isCancelling, setIsCancelling] = useState(false);
   const { toast } = useToast();
 
-  // Blood test state
-  const [bloodTestStatus, setBloodTestStatus] = useState<BloodTestStatus | null>(null);
-  const [isLoadingBloodTest, setIsLoadingBloodTest] = useState(false);
+  // Blood test form state
   const [bloodTestForm, setBloodTestForm] = useState({
     test_name: 'Complete Blood Count (CBC)',
     findings: '',
@@ -57,33 +44,29 @@ export default function NeuterContent() {
 
   const safeAppointments = Array.isArray(appointments) ? appointments : [];
 
-  // Fetch blood test status whenever an appointment is selected
-  useEffect(() => {
-    if (!selectedAppt) {
-      setBloodTestStatus(null);
-      return;
-    }
-    const load = async () => {
-      setIsLoadingBloodTest(true);
-      try {
-        const res = await fetch(`/api/veterinarian/medical-test-results?appointment_id=${selectedAppt.id}`);
-        const data = await res.json();
-        setBloodTestStatus(data);
-      } catch {
-        setBloodTestStatus(null);
-      } finally {
-        setIsLoadingBloodTest(false);
-      }
-    };
-    load();
-  }, [selectedAppt]);
+  // Derive blood test status directly from the SWR queue data (no separate fetch needed)
+  const medRecord = selectedAppt?.medical_records?.[0] ?? null;
+  const consultationDone = !!medRecord;
+  const bloodTest = (medRecord?.medical_test_results ?? []).find((t: any) => t.test_type === 'Blood Test') ?? null;
+  const bloodTestDone = !!bloodTest;
+  const bloodTestAbnormal = bloodTest?.is_abnormal ?? false;
+  const medicalRecordId = medRecord?.id ?? null;
 
   const handleSelect = (appt: any) => {
     setSelectedAppt(appt);
     const isFemale = appt.pets.gender?.toLowerCase() === 'female';
+
+    // Puspin / Aspin breeds get blank cost — vet fills manually
+    const breedKey = appt.pets.breed?.toLowerCase().trim() ?? '';
+    const isPuspinOrAspin = breedKey === 'puspin' || breedKey === 'aspin';
+
+    // Pull the price from the booked appointment service (first service line)
+    const servicePrice = appt.appointment_services?.[0]?.actual_price;
+    const autoPrice = !isPuspinOrAspin && servicePrice != null ? String(servicePrice) : '';
+
     setProcedure({
       operation_type: isFemale ? 'Spay' : 'Neuter',
-      operation_cost: '',
+      operation_cost: autoPrice,
       notes: appt.reason_for_visit || '',
     });
     setBloodTestForm({ test_name: 'Complete Blood Count (CBC)', findings: '', is_abnormal: false });
@@ -91,15 +74,12 @@ export default function NeuterContent() {
 
   const handleSaveBloodTest = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Check for both camelCase and snake_case depending on what your API returns
-    const recordId = bloodTestStatus?.medicalRecordId || (bloodTestStatus as any)?.medical_record_id;
 
-    if (!recordId) {
-      toast({ 
-        title: 'Missing Record', 
-        description: 'Could not find the medical record ID. Make sure the consultation is completely saved.', 
-        variant: 'destructive' 
+    if (!medicalRecordId) {
+      toast({
+        title: 'Missing Record',
+        description: 'Could not find the medical record ID. Make sure the consultation is completely saved.',
+        variant: 'destructive',
       });
       return;
     }
@@ -110,22 +90,23 @@ export default function NeuterContent() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          medical_record_id: recordId,
+          medical_record_id: medicalRecordId,
           test_name: bloodTestForm.test_name,
           findings: bloodTestForm.findings,
           is_abnormal: bloodTestForm.is_abnormal,
         }),
       });
-      
+
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || 'Failed to save blood test');
 
       toast({ title: 'Blood Test Recorded', description: 'Blood test results have been saved.' });
 
-      // Refresh blood test status
-      const refreshed = await fetch(`/api/veterinarian/medical-test-results?appointment_id=${selectedAppt.id}`);
-      setBloodTestStatus(await refreshed.json());
-      
+      // Refresh the queue — blood test data is now embedded in the SWR response
+      const freshQueue = await mutate('/api/veterinarian/neuter');
+      const freshAppt = (Array.isArray(freshQueue) ? freshQueue : []).find((a: any) => a.id === selectedAppt?.id);
+      if (freshAppt) setSelectedAppt(freshAppt);
+
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     } finally {
@@ -225,10 +206,6 @@ export default function NeuterContent() {
     }
   };
 
-  // Determine current step
-  const consultationDone = bloodTestStatus?.consultationDone ?? false;
-  const bloodTestDone = !!bloodTestStatus?.bloodTest;
-  const bloodTestAbnormal = bloodTestStatus?.bloodTest?.is_abnormal ?? false;
 
   return (
     <div className="space-y-6 flex flex-col">
@@ -308,10 +285,7 @@ export default function NeuterContent() {
               </CardHeader>
 
               <CardContent className="p-6 space-y-6">
-                {isLoadingBloodTest ? (
-                  <div className="text-sm text-muted-foreground py-6 text-center">Loading blood test status...</div>
-                ) : (
-                  <>
+                <>
                     {/* ── STEP 1: Blood Test ── */}
                     {!bloodTestDone && (
                       <section className="space-y-4">
@@ -398,9 +372,9 @@ export default function NeuterContent() {
                           </Badge>
                         </div>
                         <div className="rounded-lg border bg-muted/30 p-4 text-sm space-y-1">
-                          <p><span className="font-medium">Test:</span> {bloodTestStatus?.bloodTest?.test_name}</p>
-                          {bloodTestStatus?.bloodTest?.findings && (
-                            <p><span className="font-medium">Findings:</span> {bloodTestStatus.bloodTest.findings}</p>
+                          <p><span className="font-medium">Test:</span> {bloodTest?.test_name}</p>
+                          {bloodTest?.findings && (
+                            <p><span className="font-medium">Findings:</span> {bloodTest.findings}</p>
                           )}
                         </div>
                       </section>
@@ -462,9 +436,14 @@ export default function NeuterContent() {
                                 type="number"
                                 value={procedure.operation_cost}
                                 onChange={(e) => setProcedure({ ...procedure, operation_cost: e.target.value })}
-                                placeholder="e.g. 2500"
+                                placeholder="Enter cost"
                                 min="0"
                               />
+                              {(['puspin', 'aspin'].includes(selectedAppt?.pets?.breed?.toLowerCase().trim() ?? '')) && (
+                                <p className="text-xs text-amber-600 dark:text-amber-400">
+                                  {selectedAppt.pets.breed} breed — please enter the cost manually.
+                                </p>
+                              )}
                             </div>
                           </div>
                           <div className="space-y-2">
@@ -491,8 +470,7 @@ export default function NeuterContent() {
                         </form>
                       </section>
                     )}
-                  </>
-                )}
+              </>
               </CardContent>
             </Card>
           )}
