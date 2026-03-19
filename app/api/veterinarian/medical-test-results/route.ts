@@ -22,33 +22,25 @@ export async function GET(request: NextRequest) {
 
   if (!appointmentId) return jsonError("appointment_id is required", 400);
 
-  // Find the medical record for this appointment
+  // Single joined query: medical record + its blood test results in one round-trip
   const { data: medRecord, error: mrError } = await supabase
     .from("medical_records")
-    .select("id")
+    .select("id, medical_test_results(*)")
     .eq("appointment_id", appointmentId)
     .maybeSingle();
 
   if (mrError) return jsonError(mrError.message, 500);
   if (!medRecord) {
-    // No consultation done yet
     return NextResponse.json({ bloodTest: null, consultationDone: false });
   }
 
-  // Find the blood test result linked to that medical record
-  const { data: bloodTest, error: btError } = await supabase
-    .from("medical_test_results")
-    .select("*")
-    .eq("medical_record_id", medRecord.id)
-    .eq("test_type", "Blood Test")
-    .maybeSingle();
-
-  if (btError) return jsonError(btError.message, 500);
+  const bloodTest =
+    (medRecord.medical_test_results as any[]).find((t) => t.test_type === "Blood Test") ?? null;
 
   return NextResponse.json({
     consultationDone: true,
     medicalRecordId: medRecord.id,
-    bloodTest: bloodTest ?? null,
+    bloodTest,
   });
 }
 
