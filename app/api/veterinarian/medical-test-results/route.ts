@@ -71,9 +71,8 @@ export async function POST(request: NextRequest) {
 
   if (vetError || !vetProfile) return jsonError("Vet profile not found", 403);
 
-  const { data, error } = await supabase
-    .from("medical_test_results")
-    .insert({
+  const [insertResult, auditResult] = await Promise.all([
+    supabase.from("medical_test_results").insert({
       medical_record_id,
       test_type: "Blood Test",
       test_name,
@@ -81,11 +80,17 @@ export async function POST(request: NextRequest) {
       ordered_by: vetProfile.id,
       findings: findings ?? null,
       is_abnormal: is_abnormal ?? false,
-    })
-    .select()
-    .single();
+    }).select().single(),
+    supabase.from("audit_logs").insert({
+      user_id: user.id,
+      action_type: "create",
+      table_name: "medical_test_results",
+      details: `Recorded blood test "${test_name}" for medical_record_id ${medical_record_id}`,
+    }),
+  ]);
 
-  if (error) return jsonError(error.message, 500);
+  if (insertResult.error) return jsonError(insertResult.error.message, 500);
+  if (auditResult.error) throw auditResult.error;
 
-  return NextResponse.json(data, { status: 201 });
+  return NextResponse.json(insertResult.data, { status: 201 });
 }

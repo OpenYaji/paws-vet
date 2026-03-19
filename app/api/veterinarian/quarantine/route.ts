@@ -94,20 +94,26 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createClient();
 
-    const { data, error } = await supabase
-      .from("quarantine_pets")
-      .insert({
+    const [insertResult, auditResult] = await Promise.all([
+      supabase.from("quarantine_pets").insert({
         pet_id,
         reason,
         notes: notes || null,
         start_date,
         expected_end_date,
         status: "active",
-      })
-      .select() // Return the inserted record
-      .single(); // Expect exactly one record to be returned
-    if (error) return handleError(error, "POST /api/quarantine");
-    return NextResponse.json(data, { status: 201 });
+      }).select().single(),
+      supabase.from("audit_logs").insert({
+        user_id: user.id,
+        action_type: "create",
+        table_name: "quarantine_pets",
+        details: `Placed pet_id ${pet_id} in quarantine. Reason: ${reason}`,
+      }),
+    ]);
+
+    if (insertResult.error) return handleError(insertResult.error, "POST /api/quarantine");
+    if (auditResult.error) throw auditResult.error;
+    return NextResponse.json(insertResult.data, { status: 201 });
   } catch (error) {
     // Unexpected error — centralized handler
     return handleError(error, "POST /api/quarantine");
@@ -139,17 +145,25 @@ export async function PATCH(request: NextRequest) {
     if (expected_end_date !== undefined) patch.expected_end_date = expected_end_date;
 
     const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("quarantine_pets")
-      .update(patch)
-      .eq("id", id)
-      .select()
-      .single();
 
-    // Delegate update error to centralized handler
-    if (error) return handleError(error, "PATCH /api/quarantine");
+    const { data: oldRecord } = await supabase.from("quarantine_pets").select().eq("id", id).single();
 
-    return NextResponse.json(data, { status: 200 });
+    const [updateResult, auditResult] = await Promise.all([
+      supabase.from("quarantine_pets").update(patch).eq("id", id).select().single(),
+      supabase.from("audit_logs").insert({
+        user_id: user.id,
+        action_type: "update",
+        table_name: "quarantine_pets",
+        details: `Updated quarantine record id ${id}`,
+        old_values: oldRecord ?? null,
+        new_values: patch,
+      }),
+    ]);
+
+    if (updateResult.error) return handleError(updateResult.error, "PATCH /api/quarantine");
+    if (auditResult.error) throw auditResult.error;
+
+    return NextResponse.json(updateResult.data, { status: 200 });
   } catch (error) {
     // Unexpected error — centralized handler
     return handleError(error, "PATCH /api/quarantine");

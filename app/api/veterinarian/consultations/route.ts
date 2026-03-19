@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
   try {
-    // Request validation and authentication
+    const { data: { user } } = await supabase.auth.getUser();
     const body = await request.json();
     const { 
       appointment_id,
@@ -142,12 +142,18 @@ export async function POST(request: NextRequest) {
     if (medicalResult.error) return handleError(medicalResult.error, 'Failed to insert medical record');
     if (appointmentTypeResult.error) return handleError(appointmentTypeResult.error, 'Failed to fetch appointment type');
 
-    const appointmentUpdateResult = await supabase
-      .from('appointments')
-      .update({ appointment_status: nextStatus })
-      .eq('id', appointment_id);
-    
+    const [appointmentUpdateResult, auditResult] = await Promise.all([
+      supabase.from('appointments').update({ appointment_status: nextStatus }).eq('id', appointment_id),
+      supabase.from('audit_logs').insert({
+        user_id: user?.id ?? null,
+        action_type: 'create',
+        table_name: 'medical_records',
+        details: `Created medical record ${recordNumber} for appointment_id ${appointment_id}, pet_id ${pet_id}`,
+      }),
+    ]);
+
     if (appointmentUpdateResult.error) return handleError(appointmentUpdateResult.error, 'Failed to update appointment status');
+    if (auditResult.error) throw auditResult.error;
 
     return NextResponse.json({ 
       success: true,

@@ -67,20 +67,24 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const priority = body.priority || "normal";
 
-    const { data, error } = await supabase
-      .from("noticeboard")
-      .insert([{ title: body.title, content: body.content, priority, author_id: user.id }])
-      .select()
-      .single();
+    const [insertResult, auditResult] = await Promise.all([
+      supabase.from("noticeboard").insert([{ title: body.title, content: body.content, priority, author_id: user.id }]).select().single(),
+      supabase.from("audit_logs").insert({
+        user_id: user.id,
+        action_type: "create",
+        table_name: "noticeboard",
+        details: `Posted notice "${body.title}" with priority "${priority}"`,
+      }),
+    ]);
 
-    if (error) throw error;
+    if (insertResult.error) throw insertResult.error;
+    if (auditResult.error) throw auditResult.error;
 
-    // Push notification to all vets for important/urgent notices
     if (priority === "urgent" || priority === "important") {
-      notifyAllVets(data.id, body.title, body.content, priority);
+      notifyAllVets(insertResult.data.id, body.title, body.content, priority);
     }
 
-    return NextResponse.json(data, { status: 201 });
+    return NextResponse.json(insertResult.data, { status: 201 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -96,15 +100,23 @@ export async function PATCH(request: NextRequest) {
     const { id, title, content, priority } = body;
     if (!id) return NextResponse.json({ error: "Notice ID is required" }, { status: 400 });
 
-    const { data, error } = await supabase
-      .from("noticeboard")
-      .update({ title, content, priority })
-      .eq("id", id)
-      .select()
-      .single();
+    const { data: oldRecord } = await supabase.from("noticeboard").select().eq("id", id).single();
 
-    if (error) throw error;
-    return NextResponse.json(data, { status: 200 });
+    const [updateResult, auditResult] = await Promise.all([
+      supabase.from("noticeboard").update({ title, content, priority }).eq("id", id).select().single(),
+      supabase.from("audit_logs").insert({
+        user_id: user.id,
+        action_type: "update",
+        table_name: "noticeboard",
+        details: `Updated notice id ${id}`,
+        old_values: oldRecord ?? null,
+        new_values: { title, content, priority },
+      }),
+    ]);
+
+    if (updateResult.error) throw updateResult.error;
+    if (auditResult.error) throw auditResult.error;
+    return NextResponse.json(updateResult.data, { status: 200 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -119,8 +131,18 @@ export async function DELETE(request: NextRequest) {
     const id = request.nextUrl.searchParams.get("id");
     if (!id) return NextResponse.json({ error: "Notice ID is required" }, { status: 400 });
 
-    const { error } = await supabase.from("noticeboard").delete().eq("id", id);
-    if (error) throw error;
+    const [deleteResult, auditResult] = await Promise.all([
+      supabase.from("noticeboard").delete().eq("id", id),
+      supabase.from("audit_logs").insert({
+        user_id: user.id,
+        action_type: "delete",
+        table_name: "noticeboard",
+        details: `Deleted notice id ${id}`,
+      }),
+    ]);
+
+    if (deleteResult.error) throw deleteResult.error;
+    if (auditResult.error) throw auditResult.error;
     return NextResponse.json({ message: "Notice deleted" }, { status: 200 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

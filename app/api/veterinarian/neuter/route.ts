@@ -232,7 +232,8 @@ export async function POST(request: NextRequest) {
       }),
       supabase.from("audit_logs").insert({
         user_id: user.id,
-        action: "create",
+        action_type: "create",
+        table_name: "neuter_pet",
         details: `Recorded ${operation_type} procedure for pet_id ${pet_id} in appointment_id ${appointment_id}`,
       }),
     ]);

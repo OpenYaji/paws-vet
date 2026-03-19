@@ -99,34 +99,36 @@ export async function POST(request: NextRequest) {
     // Force the owner_id to be the logged-in client if they are not staff
     const assignedOwnerId = role === "client" ? user.id : body.owner_id || null;
 
-    const { data, error } = await supabase
-      .from("pets")
-      .insert([
-        {
-          owner_id: assignedOwnerId,
-          name: body.name,
-          species: body.species,
-          breed: body.breed || null,
-          date_of_birth: body.date_of_birth,
-          gender: body.gender,
-          color: body.color || null,
-          weight: parseFloat(body.weight) || 0,
-          microchip_number: body.microchip_number || null,
-          is_spayed_neutered: body.is_spayed_neutered || false,
-          behavioral_notes: body.behavioral_notes || null,
-          special_needs: body.special_needs || null,
-          current_medical_status: body.current_medical_status || null,
-          photo_url: body.photo_url || null,
-          is_active: true,
-        },
-      ])
-      .select(`*, client_profiles ( id, first_name, last_name, phone, email )`)
-      .single();
+    const [insertResult, auditResult] = await Promise.all([
+      supabase.from("pets").insert([{
+        owner_id: assignedOwnerId,
+        name: body.name,
+        species: body.species,
+        breed: body.breed || null,
+        date_of_birth: body.date_of_birth,
+        gender: body.gender,
+        color: body.color || null,
+        weight: parseFloat(body.weight) || 0,
+        microchip_number: body.microchip_number || null,
+        is_spayed_neutered: body.is_spayed_neutered || false,
+        behavioral_notes: body.behavioral_notes || null,
+        special_needs: body.special_needs || null,
+        current_medical_status: body.current_medical_status || null,
+        photo_url: body.photo_url || null,
+        is_active: true,
+      }]).select(`*, client_profiles ( id, first_name, last_name, phone, email )`).single(),
+      supabase.from("audit_logs").insert({
+        user_id: user.id,
+        action_type: "create",
+        table_name: "pets",
+        details: `Added new pet "${body.name}" (${body.species})`,
+      }),
+    ]);
 
-    // Delegate insert error to centralized handler
-    if(error) return handleError(error, "POST /api/pets");
+    if (insertResult.error) return handleError(insertResult.error, "POST /api/pets");
+    if (auditResult.error) throw auditResult.error;
 
-    return NextResponse.json(data, { status: 201 });
+    return NextResponse.json(insertResult.data, { status: 201 });
   } catch (error: any) {
     // Unexpected JS error — centralized handler
     return handleError(error, "POST /api/pets");
@@ -153,19 +155,30 @@ export async function PATCH(request: NextRequest) {
 
     const { id: _, ...updates } = body;
 
-    let query = supabase.from("pets").update(updates).eq("id", id);
+    let updateQuery = supabase.from("pets").update(updates).eq("id", id);
 
-    // Clients can only update their own pets
     if (role === "client") {
-      query = query.eq("owner_id", user.id);
+      updateQuery = updateQuery.eq("owner_id", user.id);
     }
 
-    const { data, error } = await query.select().single();
+    const { data: oldRecord } = await supabase.from("pets").select().eq("id", id).single();
 
-    // Delegate update error to centralized handler
-    if (error) return handleError(error, "PATCH /api/pets");
+    const [updateResult, auditResult] = await Promise.all([
+      updateQuery.select().single(),
+      supabase.from("audit_logs").insert({
+        user_id: user.id,
+        action_type: "update",
+        table_name: "pets",
+        details: `Updated pet id ${id}`,
+        old_values: oldRecord ?? null,
+        new_values: updates,
+      }),
+    ]);
 
-    return NextResponse.json(data, { status: 200 });
+    if (updateResult.error) return handleError(updateResult.error, "PATCH /api/pets");
+    if (auditResult.error) throw auditResult.error;
+
+    return NextResponse.json(updateResult.data, { status: 200 });
   } catch (error: any) {
     // Unexpected JS error — centralized handler
     return handleError(error, "PATCH /api/pets");
@@ -189,25 +202,26 @@ export async function DELETE(request: NextRequest) {
         { status: 400 },
       );
 
-    let query = supabase
-      .from("pets")
-      .update({ is_archived: true })
-      .eq("id", id);
+    let archiveQuery = supabase.from("pets").update({ is_archived: true }).eq("id", id);
 
-    // Clients can only archive their own pets
     if (role === "client") {
-      query = query.eq("owner_id", user.id);
+      archiveQuery = archiveQuery.eq("owner_id", user.id);
     }
 
-    const { error } = await query;
+    const [archiveResult, auditResult] = await Promise.all([
+      archiveQuery,
+      supabase.from("audit_logs").insert({
+        user_id: user.id,
+        action_type: "delete",
+        table_name: "pets",
+        details: `Archived pet id ${id}`,
+      }),
+    ]);
 
-    // Delegate archive error to centralized handler
-    if (error) return handleError(error, "DELETE /api/pets");
+    if (archiveResult.error) return handleError(archiveResult.error, "DELETE /api/pets");
+    if (auditResult.error) throw auditResult.error;
 
-    return NextResponse.json(
-      { message: "Pet archived successfully" },
-      { status: 200 },
-    );
+    return NextResponse.json({ message: "Pet archived successfully" }, { status: 200 });
   } catch (error: any) {
     // Unexpected JS error — centralized handler
     return handleError(error, "DELETE /api/pets");

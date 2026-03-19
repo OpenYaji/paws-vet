@@ -121,25 +121,30 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
 
-    const { data: triageData, error: triageError } = await supabase
-      .from("triage_records")
-      .insert({
+    const [triageResult, , auditResult] = await Promise.all([
+      supabase.from("triage_records").insert({
         appointment_id, pet_id,
         weight: parseFloat(weight),
         temperature: parseFloat(temperature),
         heart_rate: heart_rate ? parseInt(heart_rate) : null,
         respiratory_rate: respiratory_rate ? parseInt(respiratory_rate) : null,
         mucous_membrane, triage_level, chief_complaint,
-      })
-      .select()
-      .single();
+      }).select().single(),
+      supabase.from("pets").update({ weight: parseFloat(weight) }).eq("id", pet_id),
+      supabase.from("audit_logs").insert({
+        user_id: user?.id ?? null,
+        action_type: "create",
+        table_name: "triage_records",
+        details: `Recorded triage for appointment_id ${appointment_id}, pet_id ${pet_id}`,
+      }),
+    ]);
 
-    if (triageError) throw new Error(triageError.message);
+    if (triageResult.error) throw new Error(triageResult.error.message);
+    if (auditResult.error) throw auditResult.error;
 
-    await supabase.from("pets").update({ weight: parseFloat(weight) }).eq("id", pet_id);
-
-    return NextResponse.json({ success: true, message: "Triage completed successfully", triage_id: triageData.id });
+    return NextResponse.json({ success: true, message: "Triage completed successfully", triage_id: triageResult.data.id });
   } catch (error: any) {
     return handleError(error, "POST /api/triage");
   }
@@ -163,15 +168,23 @@ export async function PATCH(request: NextRequest) {
       if (key in updates) patch[key] = updates[key];
     }
 
-    const { data, error } = await supabase
-      .from("triage_records")
-      .update(patch)
-      .eq("id", id)
-      .select()
-      .single();
+    const { data: oldRecord } = await supabase.from("triage_records").select().eq("id", id).single();
 
-    if (error) return handleError(error, "PATCH /api/triage");
-    return NextResponse.json(data);
+    const [updateResult, auditResult] = await Promise.all([
+      supabase.from("triage_records").update(patch).eq("id", id).select().single(),
+      supabase.from("audit_logs").insert({
+        user_id: user.id,
+        action_type: "update",
+        table_name: "triage_records",
+        details: `Updated triage record id ${id}`,
+        old_values: oldRecord ?? null,
+        new_values: patch,
+      }),
+    ]);
+
+    if (updateResult.error) return handleError(updateResult.error, "PATCH /api/triage");
+    if (auditResult.error) throw auditResult.error;
+    return NextResponse.json(updateResult.data);
   } catch (error: any) {
     return handleError(error, "PATCH /api/triage");
   }

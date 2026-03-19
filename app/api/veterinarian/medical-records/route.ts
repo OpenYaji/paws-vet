@@ -50,9 +50,18 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { data, error } = await adminSupabase.from('medical_records').insert([body]).select();
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-    return NextResponse.json(data, { status: 201 });
+    const [insertResult, auditResult] = await Promise.all([
+      adminSupabase.from('medical_records').insert([body]).select(),
+      adminSupabase.from('audit_logs').insert({
+        user_id: user.id,
+        action_type: 'create',
+        table_name: 'medical_records',
+        details: `Created medical record for pet_id ${body.pet_id}, appointment_id ${body.appointment_id}`,
+      }),
+    ]);
+    if (insertResult.error) return NextResponse.json({ error: insertResult.error.message }, { status: 400 });
+    if (auditResult.error) throw auditResult.error;
+    return NextResponse.json(insertResult.data, { status: 201 });
   } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
@@ -76,15 +85,23 @@ export async function PATCH(request: NextRequest) {
       if (key in updates) patch[key] = updates[key];
     }
 
-    const { data, error } = await adminSupabase
-      .from('medical_records')
-      .update(patch)
-      .eq('id', id)
-      .select()
-      .single();
+    const { data: oldRecord } = await adminSupabase.from('medical_records').select().eq('id', id).single();
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-    return NextResponse.json(data);
+    const [updateResult, auditResult] = await Promise.all([
+      adminSupabase.from('medical_records').update(patch).eq('id', id).select().single(),
+      adminSupabase.from('audit_logs').insert({
+        user_id: user.id,
+        action_type: 'update',
+        table_name: 'medical_records',
+        details: `Updated medical record id ${id}`,
+        old_values: oldRecord ?? null,
+        new_values: patch,
+      }),
+    ]);
+
+    if (updateResult.error) return NextResponse.json({ error: updateResult.error.message }, { status: 400 });
+    if (auditResult.error) throw auditResult.error;
+    return NextResponse.json(updateResult.data);
   } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

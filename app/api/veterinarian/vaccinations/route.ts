@@ -82,9 +82,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const { data, error } = await supabase
-      .from("vaccination_records")
-      .insert([{
+    const [insertResult, auditResult] = await Promise.all([
+      supabase.from("vaccination_records").insert([{
         pet_id: body.pet_id,
         vaccine_name: body.vaccine_name,
         vaccine_type: body.vaccine_type,
@@ -93,11 +92,18 @@ export async function POST(request: NextRequest) {
         next_due_date: body.next_due_date || null,
         administered_by: vetProfile.id,
         side_effects_noted: body.notes || null,
-      }])
-      .select();
+      }]).select(),
+      supabase.from("audit_logs").insert({
+        user_id: user.id,
+        action_type: "create",
+        table_name: "vaccination_records",
+        details: `Logged vaccination "${body.vaccine_name}" for pet_id ${body.pet_id}`,
+      }),
+    ]);
 
-    if (error) return handleError(error, "POST /api/vaccinations (insert)");
-    return NextResponse.json(data, { status: 201 });
+    if (insertResult.error) return handleError(insertResult.error, "POST /api/vaccinations (insert)");
+    if (auditResult.error) throw auditResult.error;
+    return NextResponse.json(insertResult.data, { status: 201 });
   } catch (error: any) {
     return handleError(error, "POST /api/vaccinations");
   }
@@ -120,16 +126,25 @@ export async function PATCH(request: NextRequest) {
     delete updates.administered_by;
     delete updates.pet_id;
 
-    const { data, error } = await supabase
-      .from("vaccination_records")
-      .update(updates)
-      .eq("id", id)
-      .select();
+    const { data: oldRecord } = await supabase.from("vaccination_records").select().eq("id", id).single();
 
-    if (error) return handleError(error, "PATCH /api/vaccinations");
-    if (!data || data.length === 0)
+    const [updateResult, auditResult] = await Promise.all([
+      supabase.from("vaccination_records").update(updates).eq("id", id).select(),
+      supabase.from("audit_logs").insert({
+        user_id: user.id,
+        action_type: "update",
+        table_name: "vaccination_records",
+        details: `Updated vaccination record id ${id}`,
+        old_values: oldRecord ?? null,
+        new_values: updates,
+      }),
+    ]);
+
+    if (updateResult.error) return handleError(updateResult.error, "PATCH /api/vaccinations");
+    if (!updateResult.data || updateResult.data.length === 0)
       return NextResponse.json({ error: "Record not found or update not permitted" }, { status: 404 });
-    return NextResponse.json(data[0]);
+    if (auditResult.error) throw auditResult.error;
+    return NextResponse.json(updateResult.data[0]);
   } catch (error: any) {
     return handleError(error, "PATCH /api/vaccinations");
   }
@@ -147,12 +162,18 @@ export async function DELETE(request: NextRequest) {
     const { id } = await request.json();
     if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
 
-    // Soft-delete — mirrors the pets archive pattern (is_archived: true instead of actual deletion)
-    const { error } = await supabase
-      .from("vaccination_records")
-      .update({ is_archived: true })
-      .eq("id", id);
-    if (error) return handleError(error, "DELETE /api/vaccinations");
+    const [archiveResult, auditResult] = await Promise.all([
+      supabase.from("vaccination_records").update({ is_archived: true }).eq("id", id),
+      supabase.from("audit_logs").insert({
+        user_id: user.id,
+        action_type: "delete",
+        table_name: "vaccination_records",
+        details: `Archived vaccination record id ${id}`,
+      }),
+    ]);
+
+    if (archiveResult.error) return handleError(archiveResult.error, "DELETE /api/vaccinations");
+    if (auditResult.error) throw auditResult.error;
     return NextResponse.json({ success: true });
   } catch (error: any) {
     return handleError(error, "DELETE /api/vaccinations");

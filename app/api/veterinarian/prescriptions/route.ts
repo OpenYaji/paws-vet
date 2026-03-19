@@ -176,30 +176,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data: prescriptionData, error: prescriptionError } = await supabase
-      .from("prescriptions")
-      .insert([
-        {
-          medical_record_id,
-          prescribed_by,
-          medication_name,
-          dosage: body.dosage,
-          frequency: body.frequency,
-          duration: body.duration,
-          instructions: body.instructions,
-          form: body.form || null,
-          quantity: body.quantity || null,
-          refills_allowed: body.refills_allowed || 0,
-          is_controlled_substance: body.is_controlled_substance || false,
-        },
-      ])
-      .select()
-      .single();
+    const [prescriptionResult, auditResult] = await Promise.all([
+      supabase.from("prescriptions").insert([{
+        medical_record_id,
+        prescribed_by,
+        medication_name,
+        dosage: body.dosage,
+        frequency: body.frequency,
+        duration: body.duration,
+        instructions: body.instructions,
+        form: body.form || null,
+        quantity: body.quantity || null,
+        refills_allowed: body.refills_allowed || 0,
+        is_controlled_substance: body.is_controlled_substance || false,
+      }]).select().single(),
+      supabase.from("audit_logs").insert({
+        user_id: user.id,
+        action_type: "create",
+        table_name: "prescriptions",
+        details: `Issued prescription "${medication_name}" for medical_record_id ${medical_record_id}`,
+      }),
+    ]);
 
-    // Delegate insert error to centralized handler
-    if (prescriptionError) return handleError(prescriptionError, "POST /api/prescriptions");
+    if (prescriptionResult.error) return handleError(prescriptionResult.error, "POST /api/prescriptions");
+    if (auditResult.error) throw auditResult.error;
 
-    return NextResponse.json(prescriptionData, { status: 201 });
+    return NextResponse.json(prescriptionResult.data, { status: 201 });
   } catch (error) {
     // Unexpected JS/DB error — centralized handler
     return handleError(error, "POST /api/prescriptions");
@@ -361,15 +363,23 @@ export async function PATCH(request: NextRequest) {
       if (field in edits) patch[field] = edits[field];
     }
 
-    const { data, error } = await supabase
-      .from("prescriptions")
-      .update(patch)
-      .eq("id", id)
-      .select()
-      .single();
+    const { data: oldRecord } = await supabase.from("prescriptions").select().eq("id", id).single();
 
-    if (error) return handleError(error, "PATCH /api/prescriptions");
-    return NextResponse.json(data, { status: 200 });
+    const [updateResult, auditResult] = await Promise.all([
+      supabase.from("prescriptions").update(patch).eq("id", id).select().single(),
+      supabase.from("audit_logs").insert({
+        user_id: user.id,
+        action_type: "update",
+        table_name: "prescriptions",
+        details: `Updated prescription id ${id}`,
+        old_values: oldRecord ?? null,
+        new_values: patch,
+      }),
+    ]);
+
+    if (updateResult.error) return handleError(updateResult.error, "PATCH /api/prescriptions");
+    if (auditResult.error) throw auditResult.error;
+    return NextResponse.json(updateResult.data, { status: 200 });
   } catch (error: any) {
     return handleError(error, "PATCH /api/prescriptions");
   }
