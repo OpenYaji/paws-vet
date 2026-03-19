@@ -1,42 +1,11 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@/utils/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { createServerClient } from '@supabase/auth-helpers-nextjs';
 import { handleError } from '@/utils/error-handler';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-);
-
-// --- GET: Fetch appointments that have been triaged and are ready for consultation ---
 export async function GET(request: NextRequest) {
+  const supabase = await createClient();
   try {
-    const cookieStore = await cookies();
-    
-    const authClient = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() { return cookieStore.getAll(); },
-          setAll(cookiesToSet) {
-            try {
-              cookiesToSet.forEach(({ name, value, options }) => 
-                cookieStore.set(name, value, options)
-              )
-            } catch {}
-          },
-        },
-      }
-    );
-    
-    const { data: { user }, error: authError } = await authClient.auth.getUser();
-
-    if(authError || !user || user.user_metadata.role !== 'veterinarian') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const today = new Date().toISOString().split('T')[0];
 
     // Get appointments that are in_progress AND have a triage record (checked in today)
@@ -48,17 +17,13 @@ export async function GET(request: NextRequest) {
         scheduled_start,
         checked_in_at,
         appointment_status,
-        reason_for_visit,
         pets (
           id,
           name,
           species,
           breed,
-          gender,
           date_of_birth,
-          photo_url,
           weight,
-          color,
           client_profiles!pets_owner_id_fkey (
             first_name,
             last_name,
@@ -110,9 +75,10 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// --- POST: Save consultation/medical record ---
 export async function POST(request: NextRequest) {
+  const supabase = await createClient();
   try {
+    // Request validation and authentication
     const body = await request.json();
     const { 
       appointment_id,
@@ -141,7 +107,7 @@ export async function POST(request: NextRequest) {
     const recordNumber = `MR-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 
     // Insert medical record
-    const { data: medicalRecord, error: recordError } = await supabase
+    const medicalRecord = supabase
       .from('medical_records')
       .insert({
         record_number: recordNumber,
@@ -157,40 +123,38 @@ export async function POST(request: NextRequest) {
       })
       .select()
       .single();
-
-    if (recordError) {
-      console.error('Error creating medical record:', recordError);
-      throw new Error(recordError.message);
-    }
-
-    // Fetch the appointment type to decide the next status.
-    // Kapon/surgery appointments must NOT be marked 'completed' here — they
-    // still need to pass through the Neuter tab (blood test → procedure).
-    const { data: apptRow } = await supabase
+    
+    const apptTypeQuery = supabase
       .from('appointments')
       .select('appointment_type')
       .eq('id', appointment_id)
       .single();
 
-    const isKapon = apptRow?.appointment_type === 'kapon' || apptRow?.appointment_type === 'surgery';
+    const [ medicalResult, appointmentTypeResult ] = await Promise.all([
+      medicalRecord,
+      apptTypeQuery,
+    ]);
+
+    const appointmentType = appointmentTypeResult.data?.appointment_type?.toLowerCase?.() || '';
+    const isKapon = appointmentType === 'kapon' || appointmentType === 'surgery';
     const nextStatus = isKapon ? 'in_progress' : 'completed';
 
-    const { error: appointmentError } = await supabase
+    if (medicalResult.error) return handleError(medicalResult.error, 'Failed to insert medical record');
+    if (appointmentTypeResult.error) return handleError(appointmentTypeResult.error, 'Failed to fetch appointment type');
+
+    const appointmentUpdateResult = await supabase
       .from('appointments')
       .update({ appointment_status: nextStatus })
       .eq('id', appointment_id);
-
-    if (appointmentError) {
-      console.error('Error updating appointment:', appointmentError);
-      // Don't throw - medical record was created successfully
-    }
+    
+    if (appointmentUpdateResult.error) return handleError(appointmentUpdateResult.error, 'Failed to update appointment status');
 
     return NextResponse.json({ 
       success: true,
       message: isKapon
         ? 'Consultation saved. Patient is now queued for Kapon / Neuter procedure.'
         : 'Consultation completed successfully. Prescriptions are now unlocked.',
-      medical_record_id: medicalRecord.id,
+      medical_record_id: medicalResult.data?.id,
       record_number: recordNumber,
       next_step: isKapon ? 'neuter' : 'done',
     });
