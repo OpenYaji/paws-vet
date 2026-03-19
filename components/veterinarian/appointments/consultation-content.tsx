@@ -13,7 +13,8 @@ import {
   Stethoscope, FileText, ClipboardCheck
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { Fetcher } from '@/lib/fetcher'
+import { Fetcher } from '@/lib/fetcher';
+import { toast } from '@/components/ui/use-toast';
 
 export default function ConsultationContent() {
   // SWR for fetching the consultation queue (appointments ready for exam)
@@ -85,14 +86,11 @@ export default function ConsultationContent() {
       if (!res.ok) {
         throw new Error(result.error || 'Failed to save consultation');
       }
-      alert("Consultation saved successfully!");
-      // Refresh the queue and reset the form
+      toast({ title: 'Consultation Saved', description: 'Medical record has been created.' });
       mutate('api/veterinarian/consultations');
-
-      // Reset selected appointment and form state
       setSelectedAppt(null);
     } catch (error: any) {
-      alert('Error saving record: ' + error.message);
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } finally {
       setIsSaving(false);
     }

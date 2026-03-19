@@ -58,6 +58,7 @@ import Link from "next/link";
 import AddNewPet from "@/components/veterinarian/pets/add-new-pet";
 import useSWR, { mutate } from "swr";
 import { supabase } from "@/lib/auth-client";
+import { toast } from "@/components/ui/use-toast";
 
 const items_list = 10; // changed from 5 per user request
 const items_table = 10;
@@ -131,6 +132,7 @@ export default function PatientsPage() {
 
   const { data: apiResponse, isLoading } = useSWR(swrKey, fetcher, {
     revalidateOnFocus: false,
+    dedupingInterval: 60000,
   });
 
   const allPets: Pet[] = useMemo(
@@ -288,7 +290,11 @@ export default function PatientsPage() {
 
         if (uploadError) {
           console.error("upload error:", uploadError);
-          alert("Failed to upload image.");
+          toast({
+            title: "Error",
+            description: "Failed to upload image.",
+            variant: "destructive",
+          });
           setIsSavingPet(false);
           return;
         }
@@ -301,6 +307,7 @@ export default function PatientsPage() {
         finalPhotoUrl = publicUrlData.publicUrl;
       }
 
+      // PATCH updated pet info to the API
       const payload = { ...editForm, photo_url: finalPhotoUrl };
 
       const res = await fetch(`/api/veterinarian/pets/${viewTarget.id}`, {
@@ -311,17 +318,25 @@ export default function PatientsPage() {
 
       if (!res.ok) {
         const err = await res.json();
-        alert(err.error || "Failed to save");
+        toast({
+          title: "Error",
+          description: err.error || "Failed to save",
+          variant: "destructive",
+        });
         setIsSavingPet(false);
         return;
       }
       setViewTarget({ ...viewTarget, ...payload });
       setIsEditMode(false);
       setSelectedImageFile(null);
-      mutate(swrKey); 
+      mutate(swrKey);
     } catch (error) {
       console.error(error);
-      alert("Error saving pet.");
+      toast({
+        title: "Error",
+        description: "An error occurred while saving the pet record.",
+        variant: "destructive",
+      });
     } finally {
       setIsSavingPet(false);
     }

@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { Syringe, Pencil, Loader2, ShieldCheck, Search, ChevronLeft, ChevronRight, AlertTriangle, Clock, Archive } from 'lucide-react';
 import { format, addYears, addDays, differenceInYears, differenceInMonths } from 'date-fns';
+import { toast } from '@/components/ui/use-toast';
 
 function BoosterTab({ history, isLoading }: { history: any[]; isLoading: boolean }) {
   const today = new Date();
@@ -229,10 +230,11 @@ export default function VaccinationsPage() {
       });
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || 'Failed to update record');
+      toast({ title: 'Record Updated', description: 'Vaccination record has been updated.' });
       setIsEditOpen(false);
       mutate(swrKey);
     } catch (error: any) {
-      alert('Error: ' + error.message);
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } finally {
       setIsEditSaving(false);
     }
@@ -265,10 +267,11 @@ export default function VaccinationsPage() {
         }),
         false
       );
+      toast({ title: 'Record Archived', description: 'Vaccination record has been archived.' });
       setIsArchiveOpen(false);
       mutate(swrKey);
     } catch (error: any) {
-      alert('Error: ' + error.message);
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } finally {
       setIsArchiving(false);
     }
@@ -286,9 +289,10 @@ export default function VaccinationsPage() {
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Failed to log vaccination');
+      toast({ title: 'Vaccination Logged', description: 'Record has been saved.' });
       setIsModalOpen(false);
     } catch (error: any) {
-      alert('Error: ' + error.message);
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } finally {
       setIsSaving(false);
       mutate(swrKey);

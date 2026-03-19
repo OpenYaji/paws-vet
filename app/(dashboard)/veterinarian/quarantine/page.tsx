@@ -19,6 +19,7 @@ import {
 import { format } from 'date-fns';
 import { Fetcher } from '@/lib/fetcher';
 import { Pet } from '@/types/pets';
+import { toast } from '@/components/ui/use-toast';
 
 type PetsResponse = {
   pets: Pet[];
@@ -81,9 +82,10 @@ export default function QuarantinePage() {
       const updated = await response.json();
       setSelectedRecord(updated);
       setIsEditing(false);
+      toast({ title: 'Record Updated', description: 'Quarantine record has been updated.' });
       mutate('/api/veterinarian/quarantine');
     } catch (err: any) {
-      alert('Error updating: ' + err.message);
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
     } finally {
       setIsSaving(false);
     }
@@ -193,9 +195,10 @@ export default function QuarantinePage() {
         throw new Error(errorData.error || 'Failed to add quarantine record');
       }
 
+      toast({ title: 'Quarantine Added', description: 'Pet has been placed in quarantine.' });
       mutate('/api/veterinarian/quarantine');
       setShowAddForm(false);
-      setPetSearchTerm(""); // Reset search bar
+      setPetSearchTerm("");
       setResults([]);
       setSelectedPet(null);
       setForm({
@@ -203,7 +206,7 @@ export default function QuarantinePage() {
         expected_end_date: '', notes: ''
       });
     } catch (error: any) {
-      alert('Error adding quarantine record: ' + error.message);
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } finally {
       setIsSaving(false);
     }
@@ -229,11 +232,10 @@ export default function QuarantinePage() {
         throw new Error(errorData.error || 'Failed to release from quarantine');
       }
 
-      // Final revalidation from the server
+      toast({ title: 'Released', description: 'Pet has been released from quarantine.' });
       mutate('/api/veterinarian/quarantine');
     } catch (error: any) {
-      alert('Error releasing from quarantine: ' + error.message);
-      // Revert optimistic update on error
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
       mutate('/api/veterinarian/quarantine');
     }
   };

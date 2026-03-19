@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Save, Image as ImageIcon, Building2, Bell, Shield } from "lucide-react";
 import { Asul } from "next/font/google";
 import { createClient } from "@/utils/supabase/client";
+import { toast } from "@/components/ui/use-toast";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -40,14 +41,14 @@ export default function ClinicProfilePage() {
         body: JSON.stringify(formData),
       });
       if (res.ok) {
-        alert("Clinic profile saved!");
+        toast({ title: 'Clinic Profile Saved', description: 'Settings have been saved.' });
         mutate('/api/veterinarian/admin');
       } else {
-        alert("Failed to save settings.");
+        toast({ title: 'Error', description: 'Failed to save settings.', variant: 'destructive' });
       }
     } catch (error) {
       console.error(error);
-      alert("Error saving settings.");
+      toast({ title: 'Error', description: 'Error saving settings.', variant: 'destructive' });
     } finally {
       setIsSaving(false);
     }
@@ -89,13 +90,13 @@ export default function ClinicProfilePage() {
     });
 
     if (res.ok) {
-      alert("Settings saved successfully!");
+      toast({ title: 'Settings Saved', description: 'Branding settings have been saved.' });
     } else {
-      alert("Failed to save settings.");
+      toast({ title: 'Error', description: 'Failed to save settings.', variant: 'destructive' });
     }
   } catch (error) {
     console.error(error);
-    alert("Error saving settings");
+    toast({ title: 'Error', description: 'Error saving settings.', variant: 'destructive' });
   } finally {
     setIsSaving(false);
   }
@@ -128,7 +129,10 @@ export default function ClinicProfilePage() {
         if (!notify.ok) throw new Error("Failed to send notification");
       }
 
-      alert(activate ? "Announcement published and clients notified!" : "Announcement removed.");
+      toast({
+        title: activate ? 'Announcement Published' : 'Announcement Removed',
+        description: activate ? 'Clients have been notified.' : 'Announcement has been removed.',
+      });
       
       // Update local state
       if (!activate) {
@@ -139,7 +143,7 @@ export default function ClinicProfilePage() {
       mutate('/api/veterinarian/admin');
     } catch (error) {
       console.error(error);
-      alert("Error updating announcement.");
+      toast({ title: 'Error', description: 'Error updating announcement.', variant: 'destructive' });
     } finally {
       setIsAnnouncing(false); 
     }

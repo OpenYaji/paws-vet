@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { User, Mail, Phone, Award, Stethoscope, Save, Loader2, Calendar } from 'lucide-react';
+import { toast } from '@/components/ui/use-toast';
 
 export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
@@ -133,11 +134,11 @@ export default function ProfilePage() {
         .upsert(updates, { onConflict: 'user_id' });
 
       if (error) throw error;
-      alert("Profile updated successfully!");
+      toast({ title: 'Profile Updated', description: 'Your profile has been saved.' });
 
     } catch (error: any) {
-      console.error(error); // Check console for detailed SQL errors
-      alert("Error saving profile: " + error.message);
+      console.error(error);
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } finally {
       setSaving(false);
     }

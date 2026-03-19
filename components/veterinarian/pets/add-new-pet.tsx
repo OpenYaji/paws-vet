@@ -23,6 +23,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { toast } from "@/components/ui/use-toast";
 
 interface AddNewPetProps {
   onPetAdded: () => void;
@@ -57,7 +58,7 @@ export default function AddNewPet({ onPetAdded }: AddNewPetProps) {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 5 * 1024 * 1024) {
-        alert("File is too large. Max 5MB.");
+        toast({ title: 'File Too Large', description: 'Maximum allowed file size is 5MB.', variant: 'destructive' });
         return;
       }
       setSelectedImageFile(file);
@@ -77,7 +78,7 @@ export default function AddNewPet({ onPetAdded }: AddNewPetProps) {
 
     try {
       if (!newPet.name || !newPet.species) {
-        alert("Please fill in Name and Species");
+        toast({ title: 'Missing Fields', description: 'Please fill in Name and Species.', variant: 'destructive' });
         setIsSaving(false);
         return;
       }
@@ -128,6 +129,7 @@ export default function AddNewPet({ onPetAdded }: AddNewPetProps) {
         throw new Error(result.error || "Failed to add pet");
       }
 
+      toast({ title: 'Pet Added', description: 'The new pet has been saved.' });
       onPetAdded();
       setIsAddOpen(false);
       setNewPet({
@@ -150,7 +152,7 @@ export default function AddNewPet({ onPetAdded }: AddNewPetProps) {
       setImagePreviewUrl(null);
       mutate('/api/veterinarian/pets'); // Refresh pet list after adding
     } catch (error: any) {
-      alert("Error adding pet: " + error.message);
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } finally {
       setIsSaving(false);
     }
