@@ -16,11 +16,15 @@ import { format } from 'date-fns';
 import { Fetcher } from '@/lib/fetcher'
 
 export default function ConsultationContent() {
+  // SWR for fetching the consultation queue (appointments ready for exam)
   const { data: queue = [] } = useSWR<any[]>('/api/veterinarian/consultations', Fetcher);
+
+  // Local state for selected appointment and form inputs
   const isLoading = false;
   const [selectedAppt, setSelectedAppt] = useState<any | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Form state for the medical record being created/edited
   const [record, setRecord] = useState({
     chief_complaint: '',
     examination_findings: '',
@@ -30,6 +34,7 @@ export default function ConsultationContent() {
     next_appointment: ''
   });
 
+  // When a patient is selected from the queue, pre-fill the chief complaint with the reason for visit
   const handleSelectPatient = (appt: any) => {
     setSelectedAppt(appt);
     setRecord({
@@ -42,11 +47,13 @@ export default function ConsultationContent() {
     });
   };
 
+  // Submit Consultation: Used Promise to allow parallel DB operations and centralized error handling
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
 
     try {
+      // Get the vet's profile to link in the medical record
       const { data: { user } } = await supabase.auth.getUser();
       const { data: vetProfile } = await supabase
         .from('veterinarian_profiles')
@@ -56,36 +63,34 @@ export default function ConsultationContent() {
 
       if (!vetProfile) throw new Error("Vet profile not found");
 
-      const recordNumber = `MR-${Date.now().toString().slice(-6)}`;
+      // Prepare payload for the API route
+      const payload = {
+        appointment_id: selectedAppt.id,
+        pet_id: selectedAppt.pets.id,
+        veterinarian_id: vetProfile.id,
+        subjective: record.chief_complaint,
+        objective: record.examination_findings,
+        assessment: record.diagnosis,
+        plan: record.treatment_plan
+      };
 
-      const { error } = await supabase
-        .from('medical_records')
-        .insert([{
-          record_number: recordNumber,
-          appointment_id: selectedAppt.id,
-          pet_id: selectedAppt.pets.id,
-          veterinarian_id: vetProfile.id,
-          visit_date: new Date().toISOString(),
-          chief_complaint: record.chief_complaint,
-          examination_findings: record.examination_findings,
-          diagnosis: record.diagnosis,
-          treatment_plan: record.treatment_plan,
-          follow_up_instructions: record.follow_up_instructions,
-          next_appointment_recommended: record.next_appointment || null,
-          record_created_by: vetProfile.id,
-        }]);
-
-      if (error) throw error;
-
-      await supabase
-        .from('appointments')
-        .update({ appointment_status: 'completed' })
-        .eq('id', selectedAppt.id);
-
+      // Call the API route to save the consultation and create the medical record
+      const res = await fetch('/api/veterinarian/consultations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      // Response handling with centralized error management
+      const result = await res.json();
+      if (!res.ok) {
+        throw new Error(result.error || 'Failed to save consultation');
+      }
       alert("Consultation saved successfully!");
-      mutate('consultation-queue');
-      setSelectedAppt(null);
+      // Refresh the queue and reset the form
+      mutate('api/veterinarian/consultations');
 
+      // Reset selected appointment and form state
+      setSelectedAppt(null);
     } catch (error: any) {
       alert('Error saving record: ' + error.message);
     } finally {
