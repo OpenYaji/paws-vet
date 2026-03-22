@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import useSWR from 'swr';
 import {
   Dialog,
   DialogContent,
@@ -45,6 +46,29 @@ interface FormData {
   behavioral_notes: string;
   current_medical_status: string;
 }
+
+const fetchPetsData = async () => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const { data: profile } = await supabase
+    .from('client_profiles')
+    .select('id')
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  if (!profile) return { pets: [], clientId: null };
+
+  const res = await fetch(
+    `/api/client/pets?client_id=${profile.id}`
+  );
+  const pets = res.ok ? await res.json() : [];
+
+  return {
+    pets: Array.isArray(pets) ? pets : [],
+    clientId: profile.id
+  };
+};
 
 // FIX: PetForm defined OUTSIDE PetsPage so it's not recreated on every render
 function PetForm({
@@ -280,12 +304,9 @@ const emptyForm: FormData = {
 };
 
 export default function PetsPage() {
-  const [pets, setPets] = useState<Pet[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingPet, setEditingPet] = useState<Pet | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [clientId, setClientId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string>('');
@@ -293,76 +314,23 @@ export default function PetsPage() {
   const [formData, setFormData] = useState<FormData>(emptyForm);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null);
 
+  const { data: petsData, isLoading, mutate } = useSWR(
+    'client-pets',
+    fetchPetsData,
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      dedupingInterval: 60000,
+    }
+  );
+
+  const pets = petsData?.pets ?? [];
+  const clientId = petsData?.clientId ?? null;
+  const loading = isLoading;
+
   const showToast = (msg: string, type: 'success' | 'error' | 'info' = 'info') => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3500);
-  };
-
-  useEffect(() => {
-    fetchClientProfile();
-  }, []);
-
-  useEffect(() => {
-    if (clientId) fetchPets();
-  }, [clientId]);
-
-  const fetchClientProfile = async () => {
-    try {
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-      if (authError || !user) {
-        setError('Authentication error. Please log in again.');
-        setLoading(false);
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from('client_profiles')
-        .select('id')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      if (error) {
-        setError('Error fetching profile: ' + error.message);
-        setLoading(false);
-        return;
-      }
-
-      if (data) {
-        setClientId(data.id);
-      } else {
-        setError('No client profile found. Please contact support.');
-        setLoading(false);
-      }
-    } catch (error) {
-      setError('Unexpected error loading profile');
-      setLoading(false);
-    }
-  };
-
-  const fetchPets = async () => {
-    if (!clientId) { setLoading(false); return; }
-
-    setLoading(true);
-    setError('');
-    try {
-      const response = await fetch(`/api/client/pets?client_id=${clientId}`);
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        setError(`Failed to load pets: ${errorData.error || 'Unknown error'}`);
-        setPets([]);
-        return;
-      }
-
-      const data = await response.json();
-      setPets(Array.isArray(data) ? data : []);
-    } catch (error: any) {
-      setError('Network error loading pets: ' + error.message);
-      setPets([]);
-    } finally {
-      setLoading(false);
-    }
   };
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -470,7 +438,7 @@ export default function PetsPage() {
       if (!response.ok) throw new Error(result.error || `Failed to ${isEdit ? 'update' : 'create'} pet`);
 
       handleModalClose();
-      fetchPets();
+      mutate();
       showToast(`Pet ${isEdit ? 'updated' : 'added'} successfully!`, 'success');
       if (isEdit) {
         sendAdminNotification({ type: 'pet_updated', label: formData.name, petId: editingPet!.id }).catch(console.error);

@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { supabase } from '@/lib/auth-client';
+import useSWR from 'swr';
 import Link from 'next/link';
 import {
   Calendar, Clock, PawPrint, FileText, Download,
@@ -27,109 +28,91 @@ interface Appointment {
   }[] | null;
 }
 
+const fetchHistory = async () => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const { data: profile } = await supabase
+    .from('client_profiles')
+    .select('id')
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  if (!profile) return [];
+
+  const { data: petsData } = await supabase
+    .from('pets')
+    .select('id')
+    .eq('owner_id', profile.id);
+
+  const petIds = (petsData ?? []).map((p: any) => p.id);
+  if (petIds.length === 0) return [];
+
+  const { data } = await supabase
+    .from('appointments')
+    .select(`
+      id, appointment_number, appointment_type_detail,
+      scheduled_start, scheduled_end,
+      appointment_status, reason_for_visit,
+      cancellation_reason, payment_status,
+      payment_amount,
+      pets!appointments_pet_id_fkey (
+        name, species, breed
+      )
+    `)
+    .in('pet_id', petIds)
+    .in('appointment_status', ['completed', 'cancelled', 'no_show'])
+    .order('scheduled_start', { ascending: false });
+
+  return data ?? [];
+};
+
 export default function AppointmentHistoryPage() {
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [filteredAppointments, setFilteredAppointments] = useState<Appointment[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: history, isLoading, mutate, error: swrError } = useSWR(
+    'client-history',
+    fetchHistory,
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      dedupingInterval: 60000,
+    }
+  );
+
+  const appointments = (history ?? []) as Appointment[];
+  const loading = isLoading;
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
-  const [error, setError] = useState<string | null>(null);
   const itemsPerPage = 10;
 
-  const fetchAppointmentHistory = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        setError('Please sign in to view your appointment history');
-        return;
-      }
+  const error = swrError?.message ?? null;
 
-      const { data: profile } = await supabase
-        .from('client_profiles')
-        .select('id')
-        .eq('user_id', user.id)
-        .single();
-
-      if (!profile) {
-        setError('Client profile not found');
-        return;
-      }
-
-      const { data: pets } = await supabase
-        .from('pets')
-        .select('id')
-        .eq('owner_id', profile.id);
-
-      if (!pets || pets.length === 0) {
-        setAppointments([]);
-        setFilteredAppointments([]);
-        return;
-      }
-
-      const petIds = pets.map(p => p.id);
-
-      const { data: appointments, error: apptError } = await supabase
-        .from('appointments')
-        .select(`
-          id,
-          appointment_number,
-          scheduled_start,
-          scheduled_end,
-          appointment_status,
-          reason_for_visit,
-          special_instructions,
-          is_emergency,
-          created_at,
-          pets!appointments_pet_id_fkey (
-            name,
-            species,
-            breed
-          )
-        `)
-        .in('pet_id', petIds)
-        .in('appointment_status', ['completed', 'cancelled', 'no_show'])
-        .order('scheduled_start', { ascending: false });
-
-      if (apptError) {
-        setError(apptError.message);
-        return;
-      }
-
-      setAppointments((appointments || []) as unknown as Appointment[]);
-      setFilteredAppointments((appointments || []) as unknown as Appointment[]);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load appointment history');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchAppointmentHistory();
-  }, [fetchAppointmentHistory]);
-
-  useEffect(() => {
-    let filtered = [...appointments];
+  const filteredAppointments = useMemo(() => {
+    let filtered = appointments;
 
     if (searchTerm) {
       const q = searchTerm.toLowerCase();
-      filtered = filtered.filter(apt =>
-        apt.reason_for_visit.toLowerCase().includes(q) ||
-        (apt.pets ? (Array.isArray(apt.pets) ? apt.pets[0]?.name : apt.pets.name)?.toLowerCase().includes(q) : false) ||
-        apt.appointment_number.toLowerCase().includes(q)
+      filtered = filtered.filter((apt: any) =>
+        apt.appointment_number?.toLowerCase().includes(q) ||
+        apt.reason_for_visit?.toLowerCase().includes(q) ||
+        (Array.isArray(apt.pets)
+          ? apt.pets[0]?.name?.toLowerCase().includes(q)
+          : apt.pets?.name?.toLowerCase().includes(q))
       );
     }
 
     if (statusFilter !== 'all') {
-      filtered = filtered.filter(apt => apt.appointment_status === statusFilter);
+      filtered = filtered.filter(
+        (apt: any) => apt.appointment_status === statusFilter
+      );
     }
 
-    setFilteredAppointments(filtered);
-    setCurrentPage(1);
+    return filtered;
   }, [searchTerm, statusFilter, appointments]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter]);
 
   const totalPages = Math.ceil(filteredAppointments.length / itemsPerPage);
   const paginatedAppointments = filteredAppointments.slice(
@@ -206,7 +189,7 @@ export default function AppointmentHistoryPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={fetchAppointmentHistory}
+            onClick={() => mutate()}
             className="p-2 rounded-lg border border-border bg-card hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-150"
             aria-label="Refresh history"
           >

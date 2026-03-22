@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { supabase } from '@/lib/auth-client';
+import useSWR from 'swr';
 import { ChevronDown, Phone, Mail, MapPin, HelpCircle, MessageCircle } from 'lucide-react';
 
 interface FAQItem {
@@ -9,30 +10,48 @@ interface FAQItem {
   answer: string;
 }
 
+const fetchFAQData = async () => {
+  const [faqRes, clinicRes] = await Promise.all([
+    supabase
+      .from('faqs')
+      .select('*')
+      .eq('is_active', true)
+      .order('display_order', { ascending: true }),
+    supabase
+      .from('clinic_settings')
+      .select('phone, email, address')
+      .eq('id', 1)
+      .single(),
+  ]);
+
+  return {
+    faqs: faqRes.data ?? [],
+    clinicInfo: clinicRes.data ?? {
+      phone: '(123) 456-7890',
+      email: 'info@pawsclinic.com',
+      address: '123 Pet Street, VC 12345',
+    },
+  };
+};
+
 export default function FAQPage() {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
-  const [faqs, setFaqs] = useState<FAQItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [clinicInfo, setClinicInfo] = useState({
+  const { data, isLoading: loading } = useSWR(
+    'client-faq',
+    fetchFAQData,
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      dedupingInterval: 300000,
+    }
+  );
+
+  const faqs = (data?.faqs ?? []) as FAQItem[];
+  const clinicInfo = data?.clinicInfo ?? {
     phone: '(123) 456-7890',
     email: 'info@pawsclinic.com',
     address: '123 Pet Street, VC 12345',
-  });
-
-  useEffect(() => {
-    Promise.all([
-      supabase.from('faqs').select('*')
-        .eq('is_active', true)
-        .order('display_order', { ascending: true }),
-      supabase.from('clinic_settings')
-        .select('phone, email, address')
-        .eq('id', 1).single(),
-    ]).then(([faqRes, clinicRes]) => {
-      setFaqs((faqRes.data ?? []) as FAQItem[]);
-      if (clinicRes.data) setClinicInfo(clinicRes.data);
-      setLoading(false);
-    });
-  }, []);
+  };
 
   const toggleFAQ = (index: number) => {
     setOpenIndex(openIndex === index ? null : index);

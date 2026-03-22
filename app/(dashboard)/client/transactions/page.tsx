@@ -1,7 +1,7 @@
 ﻿'use client';
 
-import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/auth-client';
+import useSWR, { useSWRConfig } from 'swr';
 import {
   Receipt,
   PawPrint,
@@ -86,80 +86,83 @@ function TypeBadge({ type }: { type: string | null }) {
   );
 }
 
+const fetchTransactions = async () => {
+  const { data: { user }, error: authErr } =
+    await supabase.auth.getUser();
+  if (authErr || !user)
+    throw new Error('Session expired.');
+
+  const { data, error } = await supabase
+    .from('appointments')
+    .select(`
+      id,
+      appointment_number,
+      appointment_type_detail,
+      scheduled_start,
+      appointment_status,
+      payment_amount,
+      payment_status,
+      payment_method,
+      payment_reference,
+      paid_at,
+      payment_sender_name,
+      payment_verified_at,
+      is_aspin_puspin,
+      pets!appointments_pet_id_fkey (
+        name, species, breed
+      )
+    `)
+    .eq('booked_by', user.id)
+    .order('scheduled_start', { ascending: false });
+
+  if (error) throw error;
+
+  const rows = (data ?? []).map((row: any) => ({
+    id: row.id,
+    appointment_number: row.appointment_number,
+    appointment_type_detail: row.appointment_type_detail,
+    scheduled_start: row.scheduled_start,
+    appointment_status: row.appointment_status,
+    payment_amount: row.payment_amount ?? 0,
+    payment_status: (row.payment_status ?? 'unpaid') as AppointmentPaymentStatus,
+    payment_method: (row.payment_method ?? null) as AppointmentPaymentMethod,
+    payment_reference: row.payment_reference ?? null,
+    paid_at: row.paid_at ?? null,
+    payment_sender_name: row.payment_sender_name ?? null,
+    payment_verified_at: row.payment_verified_at ?? null,
+    is_aspin_puspin: row.is_aspin_puspin ?? false,
+    pet: Array.isArray(row.pets)
+      ? (row.pets[0] ?? null)
+      : (row.pets ?? null),
+  }));
+
+  const totalPaid = rows
+    .filter(r => r.payment_status === 'paid')
+    .reduce((s, r) => s + r.payment_amount, 0);
+
+  return { records: rows, totalPaid };
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function ClientTransactionsPage() {
-  const [records, setRecords]     = useState<PaymentRecord[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState<string | null>(null);
-  const [totalPaid, setTotalPaid] = useState(0);
+  const { mutate } = useSWRConfig();
+  const { data, isLoading: loading, error: swrError } =
+    useSWR(
+      'client-transactions',
+      fetchTransactions,
+      {
+        revalidateOnFocus: false,
+        revalidateOnReconnect: false,
+        dedupingInterval: 60000,
+      }
+    );
 
-  useEffect(() => { load(); }, []);
-
-  async function load() {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const { data: { user }, error: authErr } = await supabase.auth.getUser();
-      if (authErr || !user) throw new Error('Session expired. Please log in again.');
-
-      const { data, error: qErr } = await supabase
-        .from('appointments')
-        .select(`
-          id,
-          appointment_number,
-          appointment_type_detail,
-          scheduled_start,
-          appointment_status,
-          payment_amount,
-          payment_status,
-          payment_method,
-          payment_reference,
-          paid_at,
-          is_aspin_puspin,
-          payment_sender_name,
-          payment_verified_at,
-          pets!appointments_pet_id_fkey (
-            name,
-            species,
-            breed
-          )
-        `)
-        .eq('booked_by', user.id)
-        .order('scheduled_start', { ascending: false });
-
-      if (qErr) throw qErr;
-
-      const rows = (data ?? []).map((row: any) => ({
-        id:                      row.id,
-        appointment_number:      row.appointment_number,
-        appointment_type_detail: row.appointment_type_detail,
-        scheduled_start:         row.scheduled_start,
-        appointment_status:      row.appointment_status,
-        payment_amount:          row.payment_amount ?? 0,
-        payment_status:          (row.payment_status ?? 'unpaid') as AppointmentPaymentStatus,
-        payment_method:          row.payment_method as AppointmentPaymentMethod,
-        payment_reference:       row.payment_reference ?? null,
-        paid_at:                 row.paid_at ?? null,
-        is_aspin_puspin:         row.is_aspin_puspin ?? false,
-        payment_sender_name:     row.payment_sender_name ?? null,
-        payment_verified_at:     row.payment_verified_at ?? null,
-        pet: Array.isArray(row.pets) ? (row.pets[0] ?? null) : (row.pets ?? null),
-      })) as PaymentRecord[];
-
-      setRecords(rows);
-      setTotalPaid(
-        rows.filter(r => r.payment_status === 'paid').reduce((s, r) => s + r.payment_amount, 0),
-      );
-    } catch (e: any) {
-      setError(e.message ?? 'Failed to load payment history.');
-    } finally {
-      setLoading(false);
-    }
-  }
+  const records = (data?.records ?? []) as PaymentRecord[];
+  const totalPaid = data?.totalPaid ?? 0;
+  const error = swrError?.message ?? null;
 
   if (loading) {
     return (
@@ -179,7 +182,7 @@ export default function ClientTransactionsPage() {
           <AlertCircle size={36} className="text-destructive mx-auto mb-4" />
           <p className="font-semibold text-destructive mb-2">Unable to load</p>
           <p className="text-sm text-muted-foreground mb-4">{error}</p>
-          <Button variant="outline" onClick={load} className="gap-2">
+          <Button variant="outline" onClick={() => mutate('client-transactions')} className="gap-2">
             <RefreshCw size={14} /> Retry
           </Button>
         </div>
@@ -204,7 +207,7 @@ export default function ClientTransactionsPage() {
           </p>
         </div>
         <button
-          onClick={load}
+          onClick={() => mutate('client-transactions')}
           className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
           <RefreshCw size={12} /> Refresh

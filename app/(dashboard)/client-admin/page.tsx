@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { supabase } from '@/lib/auth-client';
+import useSWR from 'swr';
 import Link from 'next/link';
 import {
   Search, Edit, Archive, Eye, RefreshCw,
@@ -112,6 +113,81 @@ interface NotificationLogData {
 
 // REMOVED: 'dashboard' from type — CMS only handles clients, pets, appointments
 type ActiveTab = 'clients' | 'pets' | 'appointments' | 'regular_appointments' | 'outreach_appointments' | 'notifications';
+
+const fetchClients = async (showArchived: boolean) => {
+  const res = await fetch('/api/client-admin/clients');
+  if (!res.ok) return [];
+  const data = await res.json();
+  const mapped = (data || []).map((c: any) => ({
+    id: c.id,
+    user_id: c.user_id,
+    first_name: c.first_name,
+    last_name: c.last_name,
+    email: c.users?.email || c.email || '',
+    phone: c.phone,
+    address_line1: c.address_line1,
+    city: c.city,
+    state: c.state,
+    zip_code: c.zip_code,
+    account_status: c.users?.account_status || c.account_status || 'active',
+    created_at: c.created_at,
+    last_login_at: c.users?.last_login_at || c.last_login_at,
+    pet_count: c.pet_count || 0,
+    appointment_count: c.appointment_count || 0,
+    deleted_at: c.users?.deleted_at || null,
+  }));
+  return showArchived
+    ? mapped.filter((c: any) => c.deleted_at)
+    : mapped.filter((c: any) => !c.deleted_at);
+};
+
+const fetchPets = async () => {
+  const res = await fetch('/api/client-admin/pets');
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data || []).map((p: any) => ({
+    id: p.id,
+    name: p.name,
+    species: p.species,
+    breed: p.breed || 'Unknown',
+    owner_id: p.owner_id,
+    owner_name: p.client_profiles
+      ? `${p.client_profiles.first_name} ${p.client_profiles.last_name}`
+      : 'Unknown',
+    owner_phone: p.client_profiles?.phone || '',
+    date_of_birth: p.date_of_birth,
+    weight: p.weight,
+    is_active: p.is_active,
+    created_at: p.created_at,
+  }));
+};
+
+const fetchAllAppointments = async () => {
+  const res = await fetch('/api/client-admin/appointments');
+  if (!res.ok) return [];
+  return await res.json() || [];
+};
+
+const fetchNotificationLogs = async () => {
+  const { data } = await supabase
+    .from('notification_logs')
+    .select('*')
+    .order('sent_at', { ascending: false })
+    .limit(200);
+
+  return (data || []).map((n: any) => ({
+    id: n.id,
+    recipient_id: n.recipient_id,
+    notification_type: n.notification_type,
+    subject: n.subject,
+    content: n.content,
+    delivery_status: n.delivery_status,
+    is_read: n.is_read ?? false,
+    sent_at: n.sent_at,
+    related_entity_type: n.related_entity_type,
+    related_entity_id: n.related_entity_id,
+  }));
+};
 
 // ── CSV helpers ────────────────────────────────────────────────────────────────
 
@@ -234,13 +310,6 @@ function ClientAdminPageInner() {
 
   // DEFAULT TO 'clients' instead of 'dashboard' — CMS has no dashboard
   const [activeTab, setActiveTab] = useState<ActiveTab>(tabParam || 'clients');
-  const [clients, setClients] = useState<ClientData[]>([]);
-  const [pets, setPets] = useState<PetData[]>([]);
-  const [appointments, setAppointments] = useState<AppointmentData[]>([]);
-  const [regularAppointments, setRegularAppointments] = useState<RegularAppointmentData[]>([]);
-  const [outreachAppointments, setOutreachAppointments] = useState<OutreachAppointmentData[]>([]);
-  const [notificationLogs, setNotificationLogs] = useState<NotificationLogData[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [showArchived, setShowArchived] = useState(false);
@@ -264,82 +333,54 @@ function ClientAdminPageInner() {
     if (tabParam && tabParam !== activeTab) setActiveTab(tabParam);
   }, [tabParam, activeTab]);
 
-  // ── Fetch ──────────────────────────────────────────────────────────────────
-
-  const fetchClients = useCallback(async () => {
-    try {
-      const res = await fetch('/api/client-admin/clients');
-      if (!res.ok) return;
-      const data = await res.json();
-
-      const mapped = (data || []).map((c: any) => ({
-        id: c.id,
-        user_id: c.user_id,
-        first_name: c.first_name,
-        last_name: c.last_name,
-        email: c.users?.email || c.email || '',
-        phone: c.phone,
-        address_line1: c.address_line1,
-        city: c.city,
-        state: c.state,
-        zip_code: c.zip_code,
-        account_status: c.users?.account_status || c.account_status || 'active',
-        created_at: c.created_at,
-        last_login_at: c.users?.last_login_at || c.last_login_at,
-        pet_count: c.pet_count || 0,
-        appointment_count: c.appointment_count || 0,
-        deleted_at: c.users?.deleted_at || null,
-      }));
-
-      const filtered = showArchived
-        ? mapped.filter((c: any) => c.deleted_at)
-        : mapped.filter((c: any) => !c.deleted_at);
-
-      setClients(filtered);
-    } catch (e) {
-      console.error(e);
+  const {
+    data: clients = [],
+    isLoading: clientsLoading,
+    mutate: mutateClients,
+  } = useSWR(
+    activeTab === 'clients'
+      ? ['cms-clients', showArchived]
+      : null,
+    () => fetchClients(showArchived),
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 30000,
     }
-  }, [showArchived]);
+  );
 
-  const fetchPets = useCallback(async () => {
-    try {
-      const res = await fetch('/api/client-admin/pets');
-      if (!res.ok) return;
-      const data = await res.json();
-      const mapped = (data || []).map((p: any) => ({
-        id: p.id,
-        name: p.name,
-        species: p.species,
-        breed: p.breed || 'Unknown',
-        owner_id: p.owner_id,
-        owner_name: p.client_profiles
-          ? `${p.client_profiles.first_name} ${p.client_profiles.last_name}`
-          : 'Unknown',
-        owner_phone: p.client_profiles?.phone || '',
-        date_of_birth: p.date_of_birth,
-        weight: p.weight,
-        is_active: p.is_active,
-        created_at: p.created_at,
-      }));
-      setPets(mapped);
-    } catch (e) {
-      console.error(e);
+  const {
+    data: pets = [],
+    isLoading: petsLoading,
+    mutate: mutatePets,
+  } = useSWR(
+    activeTab === 'pets' ? 'cms-pets' : null,
+    fetchPets,
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 30000,
     }
-  }, []);
+  );
 
-  const fetchAppointments = useCallback(async () => {
-    try {
-      const res = await fetch('/api/client-admin/appointments');
-      if (!res.ok) return;
-      const data = await res.json();
-      setAppointments(data || []);
-    } catch (e) {
-      console.error(e);
+  const {
+    data: appointments = [],
+    isLoading: appointmentsLoading,
+    mutate: mutateAppointments,
+  } = useSWR(
+    activeTab === 'appointments' ? 'cms-appointments' : null,
+    fetchAllAppointments,
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 30000,
     }
-  }, []);
+  );
 
-  const fetchRegularAppointments = useCallback(async () => {
-    try {
+  const {
+    data: regularAppointments = [],
+    isLoading: regularLoading,
+    mutate: mutateRegular,
+  } = useSWR(
+    activeTab === 'regular_appointments' ? 'cms-regular' : null,
+    async () => {
       const { data } = await supabase
         .from('appointments')
         .select(`
@@ -354,7 +395,8 @@ function ClientAdminPageInner() {
         `)
         .eq('appointment_type_detail', 'regular')
         .order('scheduled_start', { ascending: false });
-      const mapped = (data || []).map((a: any) => ({
+
+      return (data || []).map((a: any) => ({
         id: a.id,
         appointment_number: a.appointment_number,
         scheduled_start: a.scheduled_start,
@@ -371,12 +413,20 @@ function ClientAdminPageInner() {
           ? `${a.pets.client_profiles.first_name} ${a.pets.client_profiles.last_name}`
           : '—',
       }));
-      setRegularAppointments(mapped);
-    } catch (e) { console.error(e); }
-  }, []);
+    },
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 30000,
+    }
+  );
 
-  const fetchOutreachAppointments = useCallback(async () => {
-    try {
+  const {
+    data: outreachAppointments = [],
+    isLoading: outreachLoading,
+    mutate: mutateOutreach,
+  } = useSWR(
+    activeTab === 'outreach_appointments' ? 'cms-outreach' : null,
+    async () => {
       const { data } = await supabase
         .from('appointments')
         .select(`
@@ -393,7 +443,8 @@ function ClientAdminPageInner() {
         `)
         .eq('appointment_type_detail', 'outreach')
         .order('scheduled_start', { ascending: false });
-      const mapped = (data || []).map((a: any) => ({
+
+      return (data || []).map((a: any) => ({
         id: a.id,
         appointment_number: a.appointment_number,
         scheduled_start: a.scheduled_start,
@@ -411,51 +462,35 @@ function ClientAdminPageInner() {
           ? `${a.pets.client_profiles.first_name} ${a.pets.client_profiles.last_name}`
           : '—',
       }));
-      setOutreachAppointments(mapped);
-    } catch (e) { console.error(e); }
-  }, []);
-
-  const fetchNotificationLogs = useCallback(async () => {
-    try {
-      const { data } = await supabase
-        .from('notification_logs')
-        .select('*')
-        .order('sent_at', { ascending: false })
-        .limit(200);
-      setNotificationLogs((data || []).map((n: any) => ({
-        id: n.id,
-        recipient_id: n.recipient_id,
-        notification_type: n.notification_type,
-        subject: n.subject,
-        content: n.content,
-        delivery_status: n.delivery_status,
-        is_read: n.is_read ?? false,
-        sent_at: n.sent_at,
-        related_entity_type: n.related_entity_type,
-        related_entity_id: n.related_entity_id,
-      })));
-    } catch (e) { console.error(e); }
-  }, []);
-
-  const loadTab = useCallback(async () => {
-    setLoading(true);
-    try {
-      if (activeTab === 'clients') await fetchClients();
-      else if (activeTab === 'pets') await fetchPets();
-      else if (activeTab === 'appointments') await fetchAppointments();
-      else if (activeTab === 'regular_appointments') await fetchRegularAppointments();
-      else if (activeTab === 'outreach_appointments') await fetchOutreachAppointments();
-      else if (activeTab === 'notifications') await fetchNotificationLogs();
-    } finally {
-      setLoading(false);
+    },
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 30000,
     }
-  }, [activeTab, fetchClients, fetchPets, fetchAppointments, fetchRegularAppointments, fetchOutreachAppointments, fetchNotificationLogs]);
+  );
+
+  const {
+    data: notificationLogs = [],
+    isLoading: notificationsLoading,
+    mutate: mutateNotifications,
+  } = useSWR(
+    activeTab === 'notifications' ? 'cms-notifications' : null,
+    fetchNotificationLogs,
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 30000,
+    }
+  );
+
+  const loading =
+    clientsLoading || petsLoading ||
+    appointmentsLoading || regularLoading ||
+    outreachLoading || notificationsLoading;
 
   useEffect(() => {
-    loadTab();
     setSearchTerm('');
     setStatusFilter('all');
-  }, [activeTab, showArchived, loadTab]);
+  }, [activeTab, showArchived]);
 
   // ── Filtered data ─────────────────────────────────────────────────────────
 
@@ -543,7 +578,7 @@ function ClientAdminPageInner() {
           );
           if (!res.ok) { showToast('Failed to archive client', 'error'); return; }
           showToast(`${name} archived successfully`);
-          await fetchClients();
+          await mutateClients();
         } catch {
           showToast('Failed to archive client', 'error');
         }
@@ -572,7 +607,7 @@ function ClientAdminPageInner() {
           );
           if (!res.ok) { showToast('Failed to unarchive client', 'error'); return; }
           showToast(`${name} has been restored successfully`);
-          await fetchClients();
+          await mutateClients();
         } catch {
           showToast('Failed to unarchive client', 'error');
         }
@@ -582,6 +617,15 @@ function ClientAdminPageInner() {
 
   const goTab = (tab: ActiveTab) => {
     router.push(`/client-admin?tab=${tab}`);
+  };
+
+  const handleRefresh = () => {
+    if (activeTab === 'clients') mutateClients();
+    else if (activeTab === 'pets') mutatePets();
+    else if (activeTab === 'appointments') mutateAppointments();
+    else if (activeTab === 'regular_appointments') mutateRegular();
+    else if (activeTab === 'outreach_appointments') mutateOutreach();
+    else if (activeTab === 'notifications') mutateNotifications();
   };
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -793,7 +837,7 @@ function ClientAdminPageInner() {
             )}
 
             <button 
-              onClick={loadTab}
+              onClick={handleRefresh}
               className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-border bg-background text-muted-foreground hover:border-primary/50 hover:bg-primary/5 transition-all duration-200 font-semibold text-sm"
             >
               <RefreshCw size={16} /> 
