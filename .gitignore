@@ -58,3 +58,6 @@ supabase/
 # packages
 package-lock.json
 package.json
+
+# agent skills
+.agents/
