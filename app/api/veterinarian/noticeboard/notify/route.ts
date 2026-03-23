@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
+import { sendSms } from "@/utils/sms";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +36,7 @@ export async function POST(request: NextRequest) {
       if (noticeError || !notice) {
         return NextResponse.json({ error: "Notice not found" }, { status: 404 });
       }
-      
+
       subject = `New Announcement: ${notice.title}`;
       content = notice.content;
       relatedId = notice.id;
@@ -44,7 +45,7 @@ export async function POST(request: NextRequest) {
     // Fetch all client user IDs
     const { data: clients, error: clientsError } = await supabaseAdmin
       .from("client_profiles")
-      .select("user_id");
+      .select("user_id, phone");
 
     if (clientsError) {
       throw clientsError;
@@ -76,16 +77,26 @@ export async function POST(request: NextRequest) {
       throw insertError;
     }
 
-    return NextResponse.json({ 
-      success: true, 
-      message: `Notified ${clients.length} clients successfully` 
+    // sending sms to all clients concurrently
+    await Promise.all(
+      clients.map((client) => {
+        if (client.phone) {
+          return sendSms(client.phone, content);
+        }
+        return Promise.resolve(false);
+      })
+    );
+
+    return NextResponse.json({
+      success: true,
+      message: `Notified ${clients.length} clients successfully`
     });
 
   } catch (error: any) {
     console.error("[POST /api/veterinarian/noticeboard/notify] error:", error);
     return NextResponse.json(
-        { error: "Internal server error", details: error.message },
-        { status: 500 }
+      { error: "Internal server error", details: error.message },
+      { status: 500 }
     );
   }
 }
