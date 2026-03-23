@@ -3,11 +3,11 @@
 import useSWR from 'swr';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { 
+import {
   Aperture,
   ChartArea,
-  SquareLibrary
- } from 'lucide-react';
+  Send
+} from 'lucide-react';
 import Link from 'next/link';
 import { Fetcher } from '@/lib/fetcher';
 
@@ -93,9 +93,9 @@ export default function VeterinarianDashboardPage() {
             </Link>
           </Button>
           <Button asChild variant="outline" className="h-auto flex-col py-6 bg-transparent" size="lg">
-            <Link href="/veterinarian/medical-records">
-              <span className="text-2xl mb-2"><SquareLibrary /></span>
-              <span>Pet Medical Records</span>
+            <Link href="/veterinarian/send-sms">
+              <span className="text-2xl mb-2"><Send /></span>
+              <span>Send SMS</span>
             </Link>
           </Button>
           <Button asChild variant="outline" className="h-auto flex-col py-6 bg-transparent" size="lg">
