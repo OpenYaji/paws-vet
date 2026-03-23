@@ -9,7 +9,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Save, Image as ImageIcon, Building2, Bell, Shield } from "lucide-react";
-import { Asul } from "next/font/google";
 import { createClient } from "@/utils/supabase/client";
 import { toast } from "@/components/ui/use-toast";
 
@@ -21,7 +20,6 @@ export default function ClinicProfilePage() {
   const [formData, setFormData] = useState<any>({});
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingPolicy, setIsSavingPolicy] = useState(false);
-  const [linkData, setLinkData ] = useState(false);
   const [logoFile, setLogoFile] = useState<File | null>(null);
 
   useEffect(() => {
@@ -55,52 +53,52 @@ export default function ClinicProfilePage() {
   };
 
   const handleSaveBranding = async () => {
-  setIsSaving(true);
-  try {
-    const supabase = createClient();
-    let finalLogoUrl = formData.logo_url;
+    setIsSaving(true);
+    try {
+      const supabase = createClient();
+      let finalLogoUrl = formData.logo_url;
 
-    // upload the file if a new one was selected
-    if (logoFile) {
-      const fileExt = logoFile.name.split('.').pop();
-      const fileName = `logo-${Date.now()}.${fileExt}`;
-      
-      const { error: uploadError } = await supabase.storage
-        .from('clinic-logo') // replace with your actual bucket name
-        .upload(fileName, logoFile);
+      // upload the file if a new one was selected
+      if (logoFile) {
+        const fileExt = logoFile.name.split('.').pop();
+        const fileName = `logo-${Date.now()}.${fileExt}`;
 
-      if (uploadError) throw uploadError;
+        const { error: uploadError } = await supabase.storage
+          .from('clinic-logo') // replace with your actual bucket name
+          .upload(fileName, logoFile);
 
-      // get the public link
-      const { data: urlData } = supabase.storage
-        .from('clinic-logo')
-        .getPublicUrl(fileName);
+        if (uploadError) throw uploadError;
 
-      finalLogoUrl = urlData.publicUrl;
+        // get the public link
+        const { data: urlData } = supabase.storage
+          .from('clinic-logo')
+          .getPublicUrl(fileName);
+
+        finalLogoUrl = urlData.publicUrl;
+      }
+
+      // update the form data with the new url
+      const updatedData = { ...formData, logo_url: finalLogoUrl };
+
+      // send the json to your exact existing PATCH route
+      const res = await fetch('/api/veterinarian/admin', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedData),
+      });
+
+      if (res.ok) {
+        toast({ title: 'Settings Saved', description: 'Branding settings have been saved.' });
+      } else {
+        toast({ title: 'Error', description: 'Failed to save settings.', variant: 'destructive' });
+      }
+    } catch (error) {
+      console.error(error);
+      toast({ title: 'Error', description: 'Error saving settings.', variant: 'destructive' });
+    } finally {
+      setIsSaving(false);
     }
-
-    // update the form data with the new url
-    const updatedData = { ...formData, logo_url: finalLogoUrl };
-
-    // send the json to your exact existing PATCH route
-    const res = await fetch('/api/veterinarian/admin', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updatedData),
-    });
-
-    if (res.ok) {
-      toast({ title: 'Settings Saved', description: 'Branding settings have been saved.' });
-    } else {
-      toast({ title: 'Error', description: 'Failed to save settings.', variant: 'destructive' });
-    }
-  } catch (error) {
-    console.error(error);
-    toast({ title: 'Error', description: 'Error saving settings.', variant: 'destructive' });
-  } finally {
-    setIsSaving(false);
-  }
-};
+  };
 
   const handleAnnounce = async (activate: boolean) => {
     setIsAnnouncing(true);
@@ -123,7 +121,7 @@ export default function ClinicProfilePage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           // Note: make sure you use announcement_text, not announcement
-          body: JSON.stringify({ message: formData.announcement_text }), 
+          body: JSON.stringify({ message: formData.announcement_text }),
         });
 
         if (!notify.ok) throw new Error("Failed to send notification");
@@ -133,7 +131,7 @@ export default function ClinicProfilePage() {
         title: activate ? 'Announcement Published' : 'Announcement Removed',
         description: activate ? 'Clients have been notified.' : 'Announcement has been removed.',
       });
-      
+
       // Update local state
       if (!activate) {
         setFormData((prev: any) => ({ ...prev, announcement_text: "", is_announcement_active: false }));
@@ -145,7 +143,7 @@ export default function ClinicProfilePage() {
       console.error(error);
       toast({ title: 'Error', description: 'Error updating announcement.', variant: 'destructive' });
     } finally {
-      setIsAnnouncing(false); 
+      setIsAnnouncing(false);
     }
   };
   if (isLoading) return <div className="p-8 text-muted-foreground">Loading clinic profile...</div>;
@@ -341,12 +339,12 @@ export default function ClinicProfilePage() {
                 />
               </div>
               <Button
-                  disabled={isAnnouncing || !formData.announcement_text}
-                  onClick={() => handleSavePolicy()}
-                  className="bg-primary hover:bg-primary/90">
-                  <Save className="h-4 w-4 mr-2" />
-                  {isSavingPolicy ? "Saving..." : "Save Policies"}
-                </Button>
+                disabled={isAnnouncing || !formData.announcement_text}
+                onClick={() => handleSavePolicy()}
+                className="bg-primary hover:bg-primary/90">
+                <Save className="h-4 w-4 mr-2" />
+                {isSavingPolicy ? "Saving..." : "Save Policies"}
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>
