@@ -6,6 +6,10 @@ import {
   Bell, Calendar, PawPrint, RefreshCw,
   CheckCheck, Info, AlertTriangle, Plus,
 } from 'lucide-react';
+import { CmsPageHeader } from '@/components/client/cms-page-header';
+import { CmsEmptyState } from '@/components/client/cms-empty-state';
+import { CmsCard } from '@/components/client/cms-card';
+import { CmsBreadcrumb } from '@/components/client/cms-breadcrumb';
 
 interface AdminNotif {
   id: string;
@@ -111,30 +115,16 @@ export default function AdminNotificationsPage() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-6 py-8">
+    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-primary/10
-            flex items-center justify-center">
-            <Bell size={20} className="text-primary" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold bg-gradient-to-r
-              from-primary to-primary/70 bg-clip-text
-              text-transparent flex items-center gap-2">
-              Notifications
-              {unreadCount > 0 && (
-                <span className="bg-primary text-primary-foreground
-                  text-xs font-bold px-2 py-0.5 rounded-full ml-1">
-                  {unreadCount}
-                </span>
-              )}
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Client activity — bookings and pet updates
-            </p>
-          </div>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <CmsBreadcrumb items={[{ label: 'CMS', href: '/client-admin?tab=clients' }, { label: 'Notifications' }]} />
+          <CmsPageHeader
+            title="Notifications"
+            description="Client activity for bookings and pet updates"
+            count={unreadCount > 0 ? unreadCount : undefined}
+          />
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -173,28 +163,19 @@ export default function AdminNotificationsPage() {
           <span className="text-sm">Loading notifications…</span>
         </div>
       ) : notifs.length === 0 ? (
-        <div className="flex flex-col items-center justify-center
-          py-20 gap-4 text-center">
-          <div className="w-16 h-16 rounded-2xl bg-primary/10
-            flex items-center justify-center">
-            <Bell size={28} className="text-primary/60" />
-          </div>
-          <div>
-            <h3 className="font-semibold text-foreground mb-1">
-              No notifications yet
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              Client bookings and pet updates will appear here
-            </p>
-          </div>
-        </div>
+        <CmsEmptyState
+          icon={Bell}
+          title="No notifications yet"
+          description="Client bookings and pet updates will appear here"
+        />
       ) : (
         <div className="flex flex-col gap-2">
           {notifs.map(notif => {
             const href = linkForNotif(notif);
             const Wrapper = href ? 'a' : 'button';
             return (
-              <Wrapper
+              <CmsCard key={notif.id} className="overflow-hidden">
+                <Wrapper
                 key={notif.id}
                 href={href ?? undefined}
                 onClick={() => markRead(notif)}
@@ -210,7 +191,7 @@ export default function AdminNotificationsPage() {
                     ? 'bg-primary/[0.03] dark:bg-primary/[0.06]'
                     : '',
                 ].join(' ')}
-              >
+                >
                 <div className="mt-0.5">
                   <NotifIcon type={notif.notification_type} />
                 </div>
@@ -248,7 +229,8 @@ export default function AdminNotificationsPage() {
                     </span>
                   )}
                 </div>
-              </Wrapper>
+                </Wrapper>
+              </CmsCard>
             );
           })}
         </div>

@@ -8,6 +8,11 @@ import {
   CheckCircle, XCircle, Eye, Download, AlertTriangle,
   MoreVertical, Loader2, ToggleLeft, ToggleRight, Edit, Trash2,
 } from 'lucide-react';
+import { CmsCard } from '@/components/client/cms-card';
+import { CmsPageHeader } from '@/components/client/cms-page-header';
+import { CmsEmptyState } from '@/components/client/cms-empty-state';
+import { CmsStatusBadge } from '@/components/client/cms-status-badge';
+import { CmsBreadcrumb } from '@/components/client/cms-breadcrumb';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -48,23 +53,9 @@ interface Registration {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function programStatusBadge(p: OutreachProgram) {
-  if (p.is_full)
-    return (
-      <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
-        Full
-      </span>
-    );
-  if (p.is_open)
-    return (
-      <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-        Open
-      </span>
-    );
-  return (
-    <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold bg-muted text-muted-foreground">
-      Closed
-    </span>
-  );
+  if (p.is_full) return <CmsStatusBadge status="full" />;
+  if (p.is_open) return <CmsStatusBadge status="open" />;
+  return <CmsStatusBadge status="closed" />;
 }
 
 function payBadge(status?: string | null) {
@@ -360,7 +351,7 @@ export default function OutreachManagementPage() {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="max-w-[1400px] mx-auto px-6 py-8">
+    <div className="mx-auto max-w-[1500px] px-4 py-8 sm:px-6 lg:px-8">
       {/* Toast */}
       {toast && (
         <div className={`fixed bottom-6 right-6 z-[9999] px-5 py-3 rounded-xl shadow-lg text-sm font-semibold text-white ${toast.type === 'success' ? 'bg-emerald-600' : 'bg-destructive'}`}>
@@ -369,14 +360,18 @@ export default function OutreachManagementPage() {
       )}
 
       {/* Header */}
-      <div className="flex items-start justify-between mb-7 gap-4 flex-wrap">
+      <div className="mb-7 flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-center gap-3">
-          <Link href="/client-admin" className="p-2 rounded-lg border border-border bg-card hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-150">
+          <Link href="/client-admin" className="rounded-lg border border-border bg-card p-2 text-muted-foreground transition-all duration-150 hover:border-primary/40 hover:bg-accent hover:text-foreground">
             <ArrowLeft size={16} />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Outreach Programs</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Manage PAWS outreach events and registrations</p>
+            <CmsBreadcrumb items={[{ label: 'CMS', href: '/client-admin?tab=clients' }, { label: 'Outreach Programs' }]} />
+            <CmsPageHeader
+              title="Outreach Programs"
+              description="Manage PAWS outreach events and registrations"
+              count={programs.length}
+            />
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -393,21 +388,19 @@ export default function OutreachManagementPage() {
       </div>
 
       {/* Programs table */}
-      <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+      <CmsCard className="overflow-hidden">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
             <Loader2 size={28} className="animate-spin" />
             <span className="text-sm">Loading programs…</span>
           </div>
         ) : programs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-3 text-center px-6">
-            <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
-              <Calendar size={26} className="text-primary" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-foreground mb-1">No outreach programs yet</h3>
-              <p className="text-sm text-muted-foreground">Create a program to start accepting bookings</p>
-            </div>
+          <div className="px-6 py-10">
+            <CmsEmptyState
+              icon={Calendar}
+              title="No outreach programs yet"
+              description="Create a program to start accepting bookings"
+            />
             <button
               onClick={() => setShowCreate(true)}
               className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold bg-primary text-primary-foreground hover:opacity-90 transition-all duration-150"
@@ -421,13 +414,13 @@ export default function OutreachManagementPage() {
               <thead className="bg-muted/50 border-b border-border">
                 <tr>
                   {['Program', 'Date', 'Status', 'Registrations', 'Registration Window', 'Actions'].map(h => (
-                    <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{h}</th>
+                    <th key={h} className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90 whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {programs.map(p => (
-                  <tr key={p.id} className="hover:bg-primary/5 transition-colors duration-150">
+                  <tr key={p.id} className="hover:bg-primary/[0.08] transition-colors duration-150">
                     <td className="px-5 py-4">
                       <div className="font-semibold text-foreground">{p.title}</div>
                       {p.description && <div className="text-xs text-muted-foreground mt-0.5 max-w-xs truncate">{p.description}</div>}
@@ -506,7 +499,7 @@ export default function OutreachManagementPage() {
             </table>
           </div>
         )}
-      </div>
+      </CmsCard>
 
       {/* ── Edit Program Modal ───────────────────────────────────────────── */}
       {showEdit && editProgram && (

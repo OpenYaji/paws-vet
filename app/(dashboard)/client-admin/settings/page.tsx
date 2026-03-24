@@ -8,6 +8,8 @@ import {
   RefreshCw, CheckCircle, AlertCircle, Megaphone,
   HandPlatter, CalendarOff,
 } from 'lucide-react';
+import { CmsPageHeader } from '@/components/client/cms-page-header';
+import { CmsBreadcrumb } from '@/components/client/cms-breadcrumb';
 
 // ── Types ──────────────────────────────────────
 
@@ -368,7 +370,7 @@ export default function CMSSettingsPage() {
   );
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-8">
+    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
 
       {/* Toast */}
       {toast && (
@@ -382,23 +384,20 @@ export default function CMSSettingsPage() {
 
       {/* Header */}
       <div className="mb-6">
-        <div className="flex items-center gap-3 mb-1">
-          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-            <Settings size={20} className="text-primary" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
-              CMS Settings
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Control what your clients see and manage information in the client portal
-            </p>
-          </div>
-        </div>
+        <CmsBreadcrumb items={[{ label: 'CMS', href: '/client-admin?tab=clients' }, { label: 'Settings' }]} />
+        <CmsPageHeader
+          title="CMS Settings"
+          description="Control what your clients see and manage information in the client portal"
+          actions={
+            <div className="hidden rounded-xl border border-primary/20 bg-primary/10 p-2 text-primary md:flex">
+              <Settings size={16} />
+            </div>
+          }
+        />
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-border mb-6">
+      <div className="mb-6 flex gap-1 overflow-x-auto rounded-xl border border-border/80 bg-card p-1">
         {([
           { key: 'clinic', label: 'Clinic Info', icon: Globe },
           { key: 'navigation', label: 'Navigation', icon: Navigation },
@@ -412,10 +411,10 @@ export default function CMSSettingsPage() {
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors duration-150 ${
+              className={`flex items-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-semibold whitespace-nowrap transition-colors duration-150 ${
                 activeTab === tab.key
-                  ? 'text-primary border-primary'
-                  : 'text-muted-foreground border-transparent hover:text-foreground'
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted-foreground hover:bg-accent hover:text-foreground'
               }`}
             >
               <Icon size={15} />{tab.label}
@@ -429,7 +428,7 @@ export default function CMSSettingsPage() {
         <div className="flex flex-col gap-5">
 
           {/* Announcement Banner */}
-          <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+          <div className="rounded-2xl border border-border/80 bg-card/95 shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-border flex items-center gap-3">
               <Megaphone size={18} className="text-primary" />
               <div>
@@ -466,7 +465,7 @@ export default function CMSSettingsPage() {
           </div>
 
           {/* Basic Info */}
-          <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+          <div className="rounded-2xl border border-border/80 bg-card/95 shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-border">
               <h2 className="text-base font-bold">Basic Information</h2>
             </div>
@@ -540,7 +539,7 @@ export default function CMSSettingsPage() {
       {/* ── NAVIGATION TAB ── */}
       {activeTab === 'navigation' && navSettings && (
         <div className="flex flex-col gap-5">
-          <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+          <div className="rounded-2xl border border-border/80 bg-card/95 shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-border">
               <h2 className="text-base font-bold">Client Sidebar Navigation</h2>
               <p className="text-xs text-muted-foreground mt-0.5">
@@ -661,7 +660,7 @@ export default function CMSSettingsPage() {
           ) : (
             <div className="flex flex-col gap-3">
               {faqs.map((faq, idx) => (
-                <div key={faq.id} className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+                <div key={faq.id} className="rounded-2xl border border-border/80 bg-card/95 shadow-sm overflow-hidden">
                   {editingFaq?.id === faq.id ? (
                     <div className="p-5 flex flex-col gap-3">
                       <div className="flex flex-col gap-1.5">
@@ -743,7 +742,7 @@ export default function CMSSettingsPage() {
       {/* ── PRODUCTS TAB ── */}
       {activeTab === 'products' && clinicSettings && (
         <div className="flex flex-col gap-5">
-          <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+          <div className="rounded-2xl border border-border/80 bg-card/95 shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-border">
               <h2 className="text-base font-bold">Products Page Content</h2>
               <p className="text-xs text-muted-foreground mt-0.5">
@@ -899,7 +898,7 @@ export default function CMSSettingsPage() {
               return acc;
             }, {} as Record<string, Service[]>)
           ).map(([category, items]) => (
-            <div key={category} className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+            <div key={category} className="rounded-2xl border border-border/80 bg-card/95 shadow-sm overflow-hidden">
               <div className="px-5 py-3 border-b border-border bg-accent/30 flex items-center justify-between">
                 <h3 className="text-sm font-bold">{category}</h3>
                 <span className="text-xs text-muted-foreground">
@@ -1030,7 +1029,7 @@ export default function CMSSettingsPage() {
         <div className="flex flex-col gap-5">
 
           {/* Add new closed date */}
-          <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+          <div className="rounded-2xl border border-border/80 bg-card/95 shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-border">
               <h2 className="text-base font-bold">
                 Close a Specific Date
@@ -1083,7 +1082,7 @@ export default function CMSSettingsPage() {
           </div>
 
           {/* List of closed dates */}
-          <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+          <div className="rounded-2xl border border-border/80 bg-card/95 shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-border flex items-center justify-between">
               <div>
                 <h2 className="text-base font-bold">
@@ -1175,3 +1174,4 @@ export default function CMSSettingsPage() {
     </div>
   );
 }
+

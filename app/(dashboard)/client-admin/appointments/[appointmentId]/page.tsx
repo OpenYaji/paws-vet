@@ -505,7 +505,7 @@ export default function AppointmentDetailPage() {
 
       <div className="flex flex-col gap-5">
         {/* Date & Time */}
-        <div className="bg-card rounded-2xl border border-border shadow-sm">
+        <div className="rounded-2xl border border-border/80 bg-card/95 shadow-sm">
           <div className="px-6 py-4 border-b border-border flex items-center gap-2">
             <Calendar size={18} className="text-primary" />
             <h2 className="text-[17px] font-bold">Schedule</h2>
@@ -529,7 +529,7 @@ export default function AppointmentDetailPage() {
         {/* Client & Pet */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           {/* Client */}
-          <div className="bg-card rounded-2xl border border-border shadow-sm">
+          <div className="rounded-2xl border border-border/80 bg-card/95 shadow-sm">
             <div className="px-6 py-4 border-b border-border flex items-center gap-2">
               <User size={18} className="text-primary" />
               <h2 className="text-[17px] font-bold">Client</h2>
@@ -563,7 +563,7 @@ export default function AppointmentDetailPage() {
           </div>
 
           {/* Pet */}
-          <div className="bg-card rounded-2xl border border-border shadow-sm">
+          <div className="rounded-2xl border border-border/80 bg-card/95 shadow-sm">
             <div className="px-6 py-4 border-b border-border flex items-center gap-2">
               <PawPrint size={18} className="text-primary" />
               <h2 className="text-[17px] font-bold">Pet</h2>
@@ -598,7 +598,7 @@ export default function AppointmentDetailPage() {
         </div>
 
         {/* Visit Details */}
-        <div className="bg-card rounded-2xl border border-border shadow-sm">
+        <div className="rounded-2xl border border-border/80 bg-card/95 shadow-sm">
           <div className="px-6 py-4 border-b border-border flex items-center gap-2">
             <FileText size={18} className="text-primary" />
             <h2 className="text-[17px] font-bold">Visit Details</h2>
@@ -630,7 +630,7 @@ export default function AppointmentDetailPage() {
 
         {/* Payment */}
         {(appointment.payment_amount != null || appointment.payment_method) && (
-          <div className="bg-card rounded-2xl border border-border shadow-sm">
+          <div className="rounded-2xl border border-border/80 bg-card/95 shadow-sm">
             <div className="px-6 py-4 border-b border-border flex items-center gap-2">
               <CreditCard size={18} className="text-primary" />
               <h2 className="text-[17px] font-bold">Payment</h2>
@@ -745,7 +745,7 @@ export default function AppointmentDetailPage() {
         )}
 
         {/* Status Management */}
-        <div className="bg-card rounded-2xl border border-border shadow-sm">
+        <div className="rounded-2xl border border-border/80 bg-card/95 shadow-sm">
           <div className="px-6 py-4 border-b border-border">
             <h2 className="text-[17px] font-bold">Manage Status</h2>
           </div>

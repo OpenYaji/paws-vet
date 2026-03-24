@@ -1,14 +1,14 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import { useSearchParams, useRouter, usePathname } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/auth-client';
 import useSWR from 'swr';
 import Link from 'next/link';
 import {
   Search, Edit, Archive, Eye, RefreshCw,
   MoreVertical, Users, PawPrint, Calendar, Bell,
-  AlertTriangle, Download, ClipboardList, MapPin, Heart, Filter,
+  AlertTriangle, Download, ClipboardList, MapPin, Filter,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -16,6 +16,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { CmsCard } from '@/components/client/cms-card';
+import { CmsPageHeader } from '@/components/client/cms-page-header';
+import { CmsEmptyState } from '@/components/client/cms-empty-state';
+import { CmsStatusBadge } from '@/components/client/cms-status-badge';
+import { CmsBreadcrumb } from '@/components/client/cms-breadcrumb';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -308,8 +313,6 @@ function ActionsDropdown({ items }: {
 
 function ClientAdminPageInner() {
   const searchParams = useSearchParams();
-  const router = useRouter();
-  const pathname = usePathname();
   const tabParam = searchParams.get('tab') as ActiveTab;
 
   // DEFAULT TO 'clients' instead of 'dashboard' — CMS has no dashboard
@@ -622,10 +625,6 @@ function ClientAdminPageInner() {
     });
   };
 
-  const goTab = (tab: ActiveTab) => {
-    router.push(`/client-admin?tab=${tab}`);
-  };
-
   const handleRefresh = () => {
     if (activeTab === 'clients') mutateClients();
     else if (activeTab === 'pets') mutatePets();
@@ -711,74 +710,24 @@ function ClientAdminPageInner() {
 
       <div className="animate-in fade-in duration-300">
         {/* Sticky tab bar */}
-        <div className="sticky top-[60px] z-10 bg-background border-b border-border shadow-sm">
-          <div className="max-w-[1400px] mx-auto px-6 py-3">
+        <div className="sticky top-[64px] z-10 border-b border-border/70 bg-background/95 shadow-sm backdrop-blur-xl">
+          <div className="mx-auto max-w-[1500px] px-4 py-4 sm:px-6 lg:px-8">
             {/* Page header — compact, above tabs */}
-            <div className="mb-2.5">
-              <div className="flex items-center gap-2.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-primary inline-block flex-shrink-0" />
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent leading-tight">
-                  {tabLabel[activeTab]}
-                </h1>
-                <span className="bg-primary/10 text-primary text-xs font-bold px-2.5 py-0.5 rounded-full">
-                  {totalCount}
-                </span>
-              </div>
-              <p className="text-sm text-muted-foreground mt-0.5">{tabDesc[activeTab]}</p>
-            </div>
+            <CmsBreadcrumb items={[{ label: 'CMS', href: '/client-admin?tab=clients' }, { label: tabLabel[activeTab] }]} />
+            <CmsPageHeader
+              className="mb-3"
+              title={tabLabel[activeTab]}
+              description={tabDesc[activeTab]}
+              count={totalCount}
+            />
 
-            {/* Tab navigation */}
-            <div className="flex gap-1 overflow-x-auto pb-0.5 -mb-px">
-              {([
-                { value: 'clients' as const, label: 'Clients', icon: Users },
-                { value: 'pets' as const, label: 'Pets', icon: PawPrint },
-                { value: 'appointments' as const, label: 'All Appointments', icon: Calendar },
-                { value: 'regular_appointments' as const, label: 'Regular', icon: ClipboardList },
-                { value: 'outreach_appointments' as const, label: 'Outreach', icon: MapPin },
-              ] as const).map(tab => {
-                const Icon = tab.icon;
-                return (
-                  <button
-                    key={tab.value}
-                    onClick={() => goTab(tab.value)}
-                    className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all duration-150 ${
-                      activeTab === tab.value
-                        ? 'bg-primary/10 text-primary font-bold border-b-2 border-primary -mb-px'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-                    }`}
-                  >
-                    <Icon size={14} />{tab.label}
-                  </button>
-                );
-              })}
-              <button
-                onClick={() => router.push('/client-admin/outreach')}
-                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all duration-150 ${
-                  pathname === '/client-admin/outreach'
-                    ? 'bg-primary/10 text-primary font-bold border-b-2 border-primary -mb-px'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-                }`}
-              >
-                <Heart size={14} />Outreach Programs
-              </button>
-              <button
-                onClick={() => goTab('notifications')}
-                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all duration-150 ${
-                  activeTab === 'notifications'
-                    ? 'bg-primary/10 text-primary font-bold border-b-2 border-primary -mb-px'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-                }`}
-              >
-                <Bell size={14} />Notifications
-              </button>
-            </div>
           </div>
         </div>
 
-        <div className="max-w-[1400px] mx-auto px-6 py-6">
+        <div className="mx-auto max-w-[1500px] px-4 py-6 sm:px-6 lg:px-8">
 
         {/* Filters */}
-        <div className="mb-6 p-6 rounded-2xl border border-border border-l-4 border-l-primary/30 bg-card shadow-sm transition-all duration-200">
+        <CmsCard className="mb-6 border-l-4 border-l-primary/40 p-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:flex-wrap">
             {/* Search */}
             <div className="relative flex-1 min-w-[200px] md:min-w-[280px]">
@@ -900,15 +849,15 @@ function ClientAdminPageInner() {
             </button>
 
             <div className="flex-1 md:flex-none text-right">
-              <span className="bg-accent px-3 py-1 rounded-full text-xs font-bold text-foreground">
+              <span className="rounded-full border border-border bg-accent px-3 py-1 text-xs font-bold text-foreground">
                 {activeCount} of {totalCount}
               </span>
             </div>
           </div>
-        </div>
+        </CmsCard>
 
         {/* Table */}
-        <div className="rounded-xl border border-border bg-card overflow-hidden shadow-sm">
+        <CmsCard className="overflow-hidden">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-16 gap-4 bg-gradient-to-br from-primary/5 to-transparent">
               <div className="relative w-16 h-16">
@@ -923,32 +872,28 @@ function ClientAdminPageInner() {
               {/* CLIENTS TABLE */}
               {activeTab === 'clients' && (
                 filteredClients.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 px-6 gap-4 text-center">
-                    <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10">
-                      <Users size={28} className="text-primary" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-lg text-foreground mb-1">No clients found</h3>
-                      <p className="text-muted-foreground text-sm">Try adjusting your search or filters</p>
-                    </div>
-                  </div>
+                  <CmsEmptyState
+                    icon={Users}
+                    title="No clients found"
+                    description="Try adjusting your search or filters"
+                  />
                 ) : (
                   <table className="w-full">
                     <thead className="bg-primary/5 border-t border-b border-border">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Client</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Contact</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Location</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
-                        <th className="px-6 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pets</th>
-                        <th className="px-6 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wide">Apts</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Last Login</th>
-                        <th className="px-6 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">Actions</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Client</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Contact</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Location</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Status</th>
+                        <th className="px-6 py-3 text-center text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Pets</th>
+                        <th className="px-6 py-3 text-center text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Apts</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Last Login</th>
+                        <th className="px-6 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
                       {filteredClients.map((c: ClientData) => (
-                        <tr key={c.id} className="hover:bg-primary/5 transition-colors duration-150">
+                        <tr key={c.id} className="hover:bg-primary/[0.08] transition-colors duration-150">
                           <td className="px-6 py-4">
                             <div className="flex items-center">
                               <div className="w-8 h-8 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center flex-shrink-0 mr-3">
@@ -968,13 +913,7 @@ function ClientAdminPageInner() {
                             <div className="text-xs text-muted-foreground">{c.phone}</div>
                           </td>
                           <td className="px-6 py-4 text-sm text-muted-foreground">{c.city}, {c.state}</td>
-                          <td className="px-6 py-4"><span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
-                            c.account_status === 'active' 
-                              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
-                              : c.account_status === 'inactive'
-                              ? 'bg-muted text-muted-foreground'
-                              : 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300'
-                          }`}>{c.account_status}</span></td>
+                          <td className="px-6 py-4"><CmsStatusBadge status={c.account_status} /></td>
                           <td className="px-6 py-4 text-center font-semibold text-foreground">{c.pet_count ?? '—'}</td>
                           <td className="px-6 py-4 text-center font-semibold text-foreground">{c.appointment_count ?? '—'}</td>
                           <td className="px-6 py-4 text-sm text-muted-foreground">{formatDate(c.last_login_at)}</td>
@@ -1003,15 +942,11 @@ function ClientAdminPageInner() {
               {/* PETS TABLE */}
               {activeTab === 'pets' && (
                 filteredPets.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 px-6 gap-4 text-center">
-                    <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10">
-                      <PawPrint size={28} className="text-primary" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-lg text-foreground mb-1">No pets found</h3>
-                      <p className="text-muted-foreground text-sm">Try adjusting your search</p>
-                    </div>
-                  </div>
+                  <CmsEmptyState
+                    icon={PawPrint}
+                    title="No pets found"
+                    description="Try adjusting your search"
+                  />
                 ) : petsView === 'cards' ? (
                   <div className="p-6 md:p-7">
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 md:gap-7">
@@ -1109,20 +1044,20 @@ function ClientAdminPageInner() {
                   <table className="w-full">
                     <thead className="bg-primary/5 border-t border-b border-border">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pet</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Species</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Breed</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Age</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Owner</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Phone</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Kapon</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
-                        <th className="px-6 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">Actions</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Pet</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Species</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Breed</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Age</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Owner</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Phone</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Kapon</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Status</th>
+                        <th className="px-6 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
                       {filteredPets.map((p: PetData) => (
-                        <tr key={p.id} className="hover:bg-primary/5 transition-colors duration-150">
+                        <tr key={p.id} className="hover:bg-primary/[0.08] transition-colors duration-150">
                           <td className="px-6 py-4">
                             <div className="font-semibold text-foreground">{p.name}</div>
                             {p.weight && <div className="text-xs text-muted-foreground mt-1">{p.weight} kg</div>}
@@ -1178,30 +1113,26 @@ function ClientAdminPageInner() {
               {/* APPOINTMENTS TABLE */}
               {activeTab === 'appointments' && (
                 filteredAppointments.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 px-6 gap-4 text-center">
-                    <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10">
-                      <Calendar size={28} className="text-primary" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-lg text-foreground mb-1">No appointments found</h3>
-                      <p className="text-muted-foreground text-sm">Try adjusting your search or filters</p>
-                    </div>
-                  </div>
+                  <CmsEmptyState
+                    icon={Calendar}
+                    title="No appointments found"
+                    description="Try adjusting your search or filters"
+                  />
                 ) : (
                   <table className="w-full">
                     <thead className="bg-primary/5 border-t border-b border-border">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Date & Time</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Client</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pet</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Reason</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
-                        <th className="px-6 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">Actions</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Date & Time</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Client</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Pet</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Reason</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Status</th>
+                        <th className="px-6 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
                       {filteredAppointments.map((a: AppointmentData) => (
-                        <tr key={a.id} className="hover:bg-primary/5 transition-colors duration-150">
+                        <tr key={a.id} className="hover:bg-primary/[0.08] transition-colors duration-150">
                           <td className="px-6 py-4">
                             <div className="font-semibold text-foreground">{formatDate(a.appointment_date)}</div>
                             <div className="text-xs text-muted-foreground mt-1">{a.appointment_time}</div>
@@ -1264,13 +1195,13 @@ function ClientAdminPageInner() {
                     <thead className="bg-primary/5 border-t border-b border-border">
                       <tr>
                         {['Date', 'Client', 'Pet', 'Breed', 'Gender', 'Duration', 'Payment', 'Status', 'Actions'].map(h => (
-                          <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{h}</th>
+                          <th key={h} className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90 whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
                       {filteredRegular.map(a => (
-                        <tr key={a.id} className="hover:bg-primary/5 transition-colors duration-150">
+                        <tr key={a.id} className="hover:bg-primary/[0.08] transition-colors duration-150">
                           <td className="px-5 py-4">
                             <div className="text-sm font-semibold text-foreground whitespace-nowrap">
                               {formatDate(a.scheduled_start)}
@@ -1346,13 +1277,13 @@ function ClientAdminPageInner() {
                     <thead className="bg-primary/5 border-t border-b border-border">
                       <tr>
                         {['Date', 'Client', 'Pet', 'Breed', 'Aspin/Puspin', 'Program', 'Amount', 'Payment', 'Status', 'Actions'].map(h => (
-                          <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{h}</th>
+                          <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90 whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
                       {filteredOutreach.map(a => (
-                        <tr key={a.id} className="hover:bg-primary/5 transition-colors duration-150">
+                        <tr key={a.id} className="hover:bg-primary/[0.08] transition-colors duration-150">
                           <td className="px-4 py-4">
                             <div className="text-sm font-semibold text-foreground whitespace-nowrap">
                               {formatDate(a.scheduled_start)}
@@ -1442,17 +1373,17 @@ function ClientAdminPageInner() {
                   <table className="w-full">
                     <thead className="bg-primary/5 border-t border-b border-border">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Sent</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Type</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Subject</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Content</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Delivery</th>
-                        <th className="px-6 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wide">Read</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Sent</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Type</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Subject</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Content</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Delivery</th>
+                        <th className="px-6 py-3 text-center text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Read</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
                       {filteredNotifications.map(n => (
-                        <tr key={n.id} className="hover:bg-primary/5 transition-colors duration-150">
+                        <tr key={n.id} className="hover:bg-primary/[0.08] transition-colors duration-150">
                           <td className="px-6 py-4">
                             <div className="text-sm font-semibold text-foreground whitespace-nowrap">{formatDate(n.sent_at)}</div>
                             <div className="text-xs text-muted-foreground mt-0.5">
@@ -1505,7 +1436,7 @@ function ClientAdminPageInner() {
 
             </div>
           )}
-        </div>
+        </CmsCard>
         </div>{/* max-w container */}
       </div>
       {confirmModal && (
@@ -1554,3 +1485,4 @@ export default function ClientAdminPage() {
     </Suspense>
   );
 }
+
