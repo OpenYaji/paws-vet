@@ -43,6 +43,8 @@ interface PetData {
   name: string;
   species: string;
   breed: string;
+  photo_url?: string | null;
+  allow_repeat_kapon_booking: boolean;
   owner_id: string;
   owner_name: string;
   owner_phone: string;
@@ -150,6 +152,8 @@ const fetchPets = async () => {
     name: p.name,
     species: p.species,
     breed: p.breed || 'Unknown',
+    photo_url: p.photo_url || null,
+    allow_repeat_kapon_booking: p.allow_repeat_kapon_booking ?? false,
     owner_id: p.owner_id,
     owner_name: p.client_profiles
       ? `${p.client_profiles.first_name} ${p.client_profiles.last_name}`
@@ -310,6 +314,8 @@ function ClientAdminPageInner() {
 
   // DEFAULT TO 'clients' instead of 'dashboard' — CMS has no dashboard
   const [activeTab, setActiveTab] = useState<ActiveTab>(tabParam || 'clients');
+  const [petsView, setPetsView] = useState<'cards' | 'table'>('cards');
+  const [updatingPetId, setUpdatingPetId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [showArchived, setShowArchived] = useState(false);
@@ -357,6 +363,7 @@ function ClientAdminPageInner() {
     fetchPets,
     {
       revalidateOnFocus: false,
+      refreshInterval: activeTab === 'pets' ? 5000 : 0,
       dedupingInterval: 30000,
     }
   );
@@ -494,7 +501,7 @@ function ClientAdminPageInner() {
 
   // ── Filtered data ─────────────────────────────────────────────────────────
 
-  const filteredClients = clients.filter(c => {
+  const filteredClients = clients.filter((c: ClientData) => {
     const q = searchTerm.toLowerCase();
     const matchesSearch = !q ||
       c.first_name.toLowerCase().includes(q) ||
@@ -505,7 +512,7 @@ function ClientAdminPageInner() {
     return matchesSearch && matchesStatus;
   });
 
-  const filteredPets = pets.filter(p => {
+  const filteredPets = pets.filter((p: PetData) => {
     const q = searchTerm.toLowerCase();
     return !q ||
       p.name.toLowerCase().includes(q) ||
@@ -513,7 +520,7 @@ function ClientAdminPageInner() {
       p.owner_name.toLowerCase().includes(q);
   });
 
-  const filteredAppointments = appointments.filter(a => {
+  const filteredAppointments = appointments.filter((a: AppointmentData) => {
     const q = searchTerm.toLowerCase();
     const matchesSearch = !q ||
       a.client_name.toLowerCase().includes(q) ||
@@ -626,6 +633,29 @@ function ClientAdminPageInner() {
     else if (activeTab === 'regular_appointments') mutateRegular();
     else if (activeTab === 'outreach_appointments') mutateOutreach();
     else if (activeTab === 'notifications') mutateNotifications();
+  };
+
+  const handleToggleKaponAccess = async (pet: PetData, nextValue: boolean) => {
+    setUpdatingPetId(pet.id);
+    try {
+      const res = await fetch(`/api/client-admin/pets?pet_id=${pet.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ allow_repeat_kapon_booking: nextValue }),
+      });
+
+      if (!res.ok) {
+        showToast('Failed to update pet booking access', 'error');
+        return;
+      }
+
+      showToast(nextValue ? 'Repeat kapon booking enabled (one-time)' : 'Repeat kapon booking disabled');
+      await mutatePets();
+    } catch {
+      showToast('Failed to update pet booking access', 'error');
+    } finally {
+      setUpdatingPetId(null);
+    }
   };
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -822,6 +852,31 @@ function ClientAdminPageInner() {
               </button>
             )}
 
+            {activeTab === 'pets' && (
+              <div className="inline-flex items-center rounded-lg border border-border bg-background p-1">
+                <button
+                  onClick={() => setPetsView('cards')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all duration-150 ${
+                    petsView === 'cards'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Cards
+                </button>
+                <button
+                  onClick={() => setPetsView('table')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all duration-150 ${
+                    petsView === 'table'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Table
+                </button>
+              </div>
+            )}
+
             {/* Export CSV button for new tabs */}
             {(activeTab === 'regular_appointments' || activeTab === 'outreach_appointments') && (
               <button
@@ -892,7 +947,7 @@ function ClientAdminPageInner() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {filteredClients.map(c => (
+                      {filteredClients.map((c: ClientData) => (
                         <tr key={c.id} className="hover:bg-primary/5 transition-colors duration-150">
                           <td className="px-6 py-4">
                             <div className="flex items-center">
@@ -957,6 +1012,99 @@ function ClientAdminPageInner() {
                       <p className="text-muted-foreground text-sm">Try adjusting your search</p>
                     </div>
                   </div>
+                ) : petsView === 'cards' ? (
+                  <div className="p-6 md:p-7">
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 md:gap-7">
+                      {filteredPets.map((p: PetData) => (
+                        <div
+                          key={p.id}
+                          className="group rounded-2xl border border-border/80 bg-card/95 shadow-sm hover:shadow-xl hover:-translate-y-0.5 hover:border-primary/30 transition-all duration-200 overflow-hidden"
+                        >
+                          <div className="h-48 bg-gradient-to-br from-accent/30 via-accent/15 to-transparent border-b border-border/70 overflow-hidden">
+                            {p.photo_url ? (
+                              <img
+                                src={p.photo_url}
+                                alt={p.name}
+                                className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <div className="w-20 h-20 rounded-full bg-primary/10 text-primary flex items-center justify-center ring-1 ring-primary/20">
+                                  <PawPrint size={30} />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="p-5 space-y-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <h3 className="font-bold text-foreground text-lg leading-tight tracking-tight">{p.name}</h3>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {p.species} • {p.breed}
+                                </p>
+                              </div>
+                              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold ${
+                                p.is_active
+                                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
+                                  : 'bg-muted text-muted-foreground'
+                              }`}>
+                                {p.is_active ? 'Active' : 'Inactive'}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3 text-xs">
+                              <div className="rounded-xl border border-border/70 bg-background/70 px-3 py-2.5">
+                                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Age</p>
+                                <p className="font-semibold text-foreground mt-0.5">{calcAge(p.date_of_birth)}</p>
+                              </div>
+                              <div className="rounded-xl border border-border/70 bg-background/70 px-3 py-2.5">
+                                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Weight</p>
+                                <p className="font-semibold text-foreground mt-0.5">{p.weight ? `${p.weight} kg` : '—'}</p>
+                              </div>
+                            </div>
+
+                            <div className="rounded-xl border border-border/70 bg-background/70 px-3.5 py-3">
+                              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Owner</p>
+                              <Link href={`/client-admin/clients/${p.owner_id}`} className="text-sm text-primary hover:underline font-semibold transition-colors">
+                                {p.owner_name}
+                              </Link>
+                              <p className="text-xs text-muted-foreground mt-0.5">{p.owner_phone || '—'}</p>
+                            </div>
+
+                            <div className="rounded-xl border border-border/70 bg-background/70 px-3.5 py-3 flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Repeat Kapon Booking</p>
+                                <p className="text-xs font-semibold text-foreground mt-0.5">
+                                  {p.allow_repeat_kapon_booking ? 'Allowed once' : 'Disabled'}
+                                </p>
+                              </div>
+                              <button
+                                disabled={updatingPetId === p.id}
+                                onClick={() => handleToggleKaponAccess(p, !p.allow_repeat_kapon_booking)}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 disabled:opacity-55 ${
+                                  p.allow_repeat_kapon_booking
+                                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
+                                    : 'bg-muted text-muted-foreground hover:bg-accent'
+                                }`}
+                              >
+                                {updatingPetId === p.id ? 'Saving...' : p.allow_repeat_kapon_booking ? 'Allow' : 'Disabled'}
+                              </button>
+                            </div>
+
+                            <div className="flex items-center justify-end gap-2 pt-1">
+                              <Link href={`/client-admin/pets/${p.id}`} className="p-2.5 rounded-xl border border-border/70 hover:border-primary/30 hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-150" title="View Pet">
+                                <Eye size={16} />
+                              </Link>
+                              <Link href={`/client-admin/clients/${p.owner_id}`} className="p-2.5 rounded-xl border border-border/70 hover:border-primary/30 hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-150" title="View Owner">
+                                <Users size={16} />
+                              </Link>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 ) : (
                   <table className="w-full">
                     <thead className="bg-primary/5 border-t border-b border-border">
@@ -967,12 +1115,13 @@ function ClientAdminPageInner() {
                         <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Age</th>
                         <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Owner</th>
                         <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Phone</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Kapon</th>
                         <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
                         <th className="px-6 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {filteredPets.map(p => (
+                      {filteredPets.map((p: PetData) => (
                         <tr key={p.id} className="hover:bg-primary/5 transition-colors duration-150">
                           <td className="px-6 py-4">
                             <div className="font-semibold text-foreground">{p.name}</div>
@@ -987,6 +1136,19 @@ function ClientAdminPageInner() {
                             </Link>
                           </td>
                           <td className="px-6 py-4 text-sm text-muted-foreground">{p.owner_phone || '—'}</td>
+                          <td className="px-6 py-4">
+                            <button
+                              disabled={updatingPetId === p.id}
+                              onClick={() => handleToggleKaponAccess(p, !p.allow_repeat_kapon_booking)}
+                              className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all duration-150 disabled:opacity-55 ${
+                                p.allow_repeat_kapon_booking
+                                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
+                                  : 'bg-muted text-muted-foreground hover:bg-accent'
+                              }`}
+                            >
+                              {updatingPetId === p.id ? 'Saving...' : p.allow_repeat_kapon_booking ? 'Allow' : 'Disabled'}
+                            </button>
+                          </td>
                           <td className="px-6 py-4">
                             <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
                               p.is_active
@@ -1038,7 +1200,7 @@ function ClientAdminPageInner() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {filteredAppointments.map(a => (
+                      {filteredAppointments.map((a: AppointmentData) => (
                         <tr key={a.id} className="hover:bg-primary/5 transition-colors duration-150">
                           <td className="px-6 py-4">
                             <div className="font-semibold text-foreground">{formatDate(a.appointment_date)}</div>

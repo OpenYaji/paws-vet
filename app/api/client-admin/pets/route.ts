@@ -79,7 +79,7 @@ export async function PATCH(request: Request) {
     const { data: existingPet, error: fetchError } = await supabaseAdmin
       .from('pets')
       .select(`
-        id, name, is_archived, deleted_at,
+        id, name, is_archived, deleted_at, allow_repeat_kapon_booking,
         client_profiles!pets_owner_id_fkey (
           user_id
         )
@@ -112,18 +112,38 @@ export async function PATCH(request: Request) {
       const isBeingArchived =
         (body.is_archived === true && !existingPet.is_archived) ||
         (body.deleted_at && !existingPet.deleted_at);
+      const hasKaponToggleChange = Object.prototype.hasOwnProperty.call(body, 'allow_repeat_kapon_booking');
 
-      const action = isBeingArchived ? 'archived' : 'updated';
-      const { type, subject, content } = getPetNotificationPayload(action, existingPet.name);
+      // Kapon switch behavior:
+      // - enabled  => send a specific "can book again" notification
+      // - disabled => no notification
+      if (hasKaponToggleChange) {
+        const nextValue = Boolean(body.allow_repeat_kapon_booking);
+        const wasEnabled = Boolean((existingPet as any).allow_repeat_kapon_booking);
 
-      await sendClientNotification({
-        recipient_id: ownerUserId,
-        notification_type: type,
-        subject,
-        content,
-        related_entity_type: 'pets',
-        related_entity_id: petId,
-      });
+        if (nextValue && !wasEnabled) {
+          await sendClientNotification({
+            recipient_id: ownerUserId,
+            notification_type: 'general',
+            subject: `${existingPet.name} Can Book Again`,
+            content: `Your pet ${existingPet.name} can now book kapon again.`,
+            related_entity_type: 'pets',
+            related_entity_id: petId,
+          });
+        }
+      } else {
+        const action = isBeingArchived ? 'archived' : 'updated';
+        const { type, subject, content } = getPetNotificationPayload(action, existingPet.name);
+
+        await sendClientNotification({
+          recipient_id: ownerUserId,
+          notification_type: type,
+          subject,
+          content,
+          related_entity_type: 'pets',
+          related_entity_id: petId,
+        });
+      }
     } else {
       console.warn(`[notify] Could not resolve owner user_id for pet ${petId} — notification skipped`);
     }

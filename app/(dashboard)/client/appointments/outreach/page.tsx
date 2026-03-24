@@ -337,43 +337,38 @@ export default function OutreachAppointmentPage() {
         is_emergency:            false,
       };
 
-      const { data: appt, error: insertErr } = await supabase
-        .from('appointments')
-        .insert(payload)
-        .select('id, appointment_number')
-        .single();
+      const createRes = await fetch('/api/client/appointments/outreach', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
 
-      if (insertErr) throw insertErr;
+      const createJson = await createRes.json().catch(() => null);
+      if (!createRes.ok) {
+        const errorToken = createJson?.error || '';
+        const message = createJson?.message || 'Something went wrong. Please try again.';
+
+        if (errorToken === 'program_full_or_closed') {
+          setSubmitError('Sorry, this outreach program is now full or closed. Please check back for future programs.');
+          setSubmitting(false);
+          return;
+        }
+
+        if (errorToken === 'duplicate_booking') {
+          setSubmitError('This pet is already registered for this outreach program.');
+          setSubmitting(false);
+          return;
+        }
+
+        setSubmitError(message);
+        setSubmitting(false);
+        return;
+      }
+
+      const appt = createJson as { id: string; appointment_number: string };
 
       // Update slot status — also syncs outreach_programs capacity internally
       await checkAndUpdateSlotStatus(selectedProgram.program_date, 'outreach');
-
-      // Get the real current count from DB (avoids stale selectedProgram value)
-      const { count: liveCount, error: countErr } = await supabase
-        .from('appointments')
-        .select('id', { count: 'exact', head: true })
-        .eq('outreach_program_id', selectedProgram.id)
-        .neq('appointment_status', 'cancelled');
-
-      if (countErr) {
-        console.error('[outreach] Failed to get live count:', countErr.message);
-      }
-
-      const realCount = liveCount ?? 0;
-      const nowFull = realCount >= selectedProgram.max_capacity;
-
-      const { error: updateErr } = await supabase
-        .from('outreach_programs')
-        .update({
-          current_bookings: realCount,
-          is_full:          nowFull,
-          is_open:          nowFull ? false : selectedProgram.is_open,
-        })
-        .eq('id', selectedProgram.id);
-
-      if (updateErr) {
-        console.error('[outreach] Failed to update program bookings:', updateErr.message);
-      }
 
       setAppointmentNumber(appt.appointment_number);
 

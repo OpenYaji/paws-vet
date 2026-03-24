@@ -43,6 +43,7 @@ interface Pet {
   species: string;
   breed: string | null;
   gender: 'male' | 'female' | 'unknown' | null;
+  allow_repeat_kapon_booking?: boolean;
 }
 
 interface ClientProfile {
@@ -202,7 +203,7 @@ export default function RegularAppointmentPage() {
 
         const profileId = profileRes.data?.id;
         const petsRes = profileId
-          ? await supabase.from('pets').select('id,name,species,breed,gender').eq('owner_id', profileId).eq('is_active', true)
+          ? await supabase.from('pets').select('id,name,species,breed,gender,allow_repeat_kapon_booking').eq('owner_id', profileId).eq('is_active', true)
           : { data: [], error: null };
         if (petsRes.error) throw petsRes.error;
         setPets((petsRes.data ?? []) as Pet[]);
@@ -274,6 +275,27 @@ export default function RegularAppointmentPage() {
         return;
       }
 
+      // Block repeat kapon bookings unless admin enabled a one-time override.
+      const [{ data: priorRegular }, { data: latestPet }] = await Promise.all([
+        supabase
+          .from('appointments')
+          .select('id')
+          .eq('pet_id', selectedPet.id)
+          .eq('appointment_type_detail', 'regular')
+          .limit(1),
+        supabase
+          .from('pets')
+          .select('allow_repeat_kapon_booking')
+          .eq('id', selectedPet.id)
+          .maybeSingle(),
+      ]);
+
+      if ((priorRegular?.length ?? 0) > 0 && !latestPet?.allow_repeat_kapon_booking) {
+        setSubmitError('This pet is currently disabled for repeat kapon booking. Please contact the clinic/admin to enable "Allow Again".');
+        setSubmitting(false);
+        return;
+      }
+
       // Bug 1 fix: calculate actual next available start time
       const nextStart = await getNextAvailableTime(selectedDate, 'regular');
       if (!nextStart) {
@@ -305,8 +327,27 @@ export default function RegularAppointmentPage() {
           : null,
         is_emergency: false,
       };
-      const { data: appt, error: insertErr } = await supabase.from('appointments').insert(payload).select('id, appointment_number').single();
-      if (insertErr) throw insertErr;
+      const createRes = await fetch('/api/client/appointments/regular', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const createJson = await createRes.json().catch(() => null);
+      if (!createRes.ok) {
+        const errorToken = createJson?.error || '';
+        const message = createJson?.message || 'Something went wrong. Please try again.';
+        if (errorToken === 'kapon_repeat_blocked') {
+          setSubmitError('This pet is currently disabled for repeat kapon booking. Please contact the clinic/admin to enable "Allow Again".');
+          setSubmitting(false);
+          return;
+        }
+        setSubmitError(message);
+        setSubmitting(false);
+        return;
+      }
+
+      const appt = createJson as { id: string; appointment_number: string };
       await checkAndUpdateSlotStatus(selectedDate, 'regular');
       setAppointmentNumber(appt.appointment_number);
 

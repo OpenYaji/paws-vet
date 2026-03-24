@@ -108,6 +108,7 @@ export interface Pet {
   special_needs?: string;
   behavioral_notes?: string;
   current_medical_status?: string;
+  allow_repeat_kapon_booking: boolean;
   is_active: boolean;
   created_at: string;
   updated_at: string;

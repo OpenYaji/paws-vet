@@ -86,6 +86,7 @@ export async function POST(request: NextRequest) {
       special_needs,
       behavioral_notes,
       current_medical_status,
+      allow_repeat_kapon_booking,
       photo_url,
     } = body;
 
@@ -122,6 +123,7 @@ export async function POST(request: NextRequest) {
           special_needs: special_needs ?? null,
           behavioral_notes: behavioral_notes ?? null,
           current_medical_status: current_medical_status ?? null,
+          allow_repeat_kapon_booking: allow_repeat_kapon_booking ?? false,
           photo_url: photo_url ?? null,
           is_active: true,
         },
@@ -190,7 +192,7 @@ export async function PATCH(request: NextRequest) {
       'name', 'species', 'breed', 'date_of_birth', 'gender',
       'color', 'weight', 'microchip_number', 'is_spayed_neutered',
       'special_needs', 'behavioral_notes', 'current_medical_status',
-      'photo_url', 'is_active',
+      'allow_repeat_kapon_booking', 'photo_url', 'is_active',
     ];
 
     const updatePayload: Record<string, any> = { updated_at: new Date().toISOString() };
