@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
-import { sendSms } from "@/utils/sms";
+import { sendSms } from "@/utils/httpSms"; // Swapped to utilize your new HttpSms logic!
 
 export const dynamic = "force-dynamic";
 
