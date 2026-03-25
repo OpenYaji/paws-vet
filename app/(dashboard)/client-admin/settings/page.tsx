@@ -70,6 +70,35 @@ interface ClosedDate {
   created_at: string;
 }
 
+const defaultClinicSettings: ClinicSettings = {
+  id: 1,
+  clinic_name: '',
+  email: '',
+  phone: '',
+  address: '',
+  facebook_url: '',
+  instagram_url: '',
+  announcement_text: '',
+  is_announcement_active: false,
+  shopee_url: '',
+  products_page_title: 'Our Products',
+  products_page_description: '',
+  dashboard_about_text: '',
+};
+
+const defaultNavSettings: NavSettings = {
+  id: 1,
+  show_dashboard: true,
+  show_appointments: true,
+  show_history: true,
+  show_pets: true,
+  show_products: true,
+  show_services: true,
+  show_transactions: true,
+  show_faq: true,
+  show_settings: true,
+};
+
 // ── Component ──────────────────────────────────
 
 export default function CMSSettingsPage() {
@@ -95,6 +124,7 @@ export default function CMSSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const [loadWarning, setLoadWarning] = useState<string | null>(null);
 
   const [editingFaq, setEditingFaq] = useState<FaqItem | null>(null);
   const [newFaq, setNewFaq] = useState({ question: '', answer: '' });
@@ -112,10 +142,11 @@ export default function CMSSettingsPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadWarning(null);
     try {
       const [clinicRes, navRes, faqRes, closedRes, servicesRes] = await Promise.all([
-        supabase.from('clinic_settings').select('*').eq('id', 1).single(),
-        supabase.from('nav_settings').select('*').eq('id', 1).single(),
+        supabase.from('clinic_settings').select('*').order('id', { ascending: true }).limit(1).maybeSingle(),
+        supabase.from('nav_settings').select('*').order('id', { ascending: true }).limit(1).maybeSingle(),
         supabase.from('faqs').select('*').eq('is_active', true).order('display_order', { ascending: true }),
         supabase
           .from('closed_dates')
@@ -124,13 +155,21 @@ export default function CMSSettingsPage() {
           .order('closed_date', { ascending: true }),
         supabase.from('services').select('*').order('service_category', { ascending: true }).order('service_name', { ascending: true }),
       ]);
-      if (clinicRes.data) setClinicSettings(clinicRes.data);
-      if (navRes.data) setNavSettings(navRes.data);
+
+      if (clinicRes.error || navRes.error) {
+        setLoadWarning('Some settings could not be loaded from the database. Showing default values for now.');
+      }
+
+      setClinicSettings(clinicRes.data ?? defaultClinicSettings);
+      setNavSettings(navRes.data ?? defaultNavSettings);
       if (faqRes.data) setFaqs(faqRes.data);
       setClosedDates(closedRes.data ?? []);
       setServices(servicesRes.data ?? []);
     } catch (e) {
       console.error(e);
+      setLoadWarning('Failed to load settings from the database. Showing default values.');
+      setClinicSettings(defaultClinicSettings);
+      setNavSettings(defaultNavSettings);
     } finally {
       setLoading(false);
     }
@@ -144,7 +183,7 @@ export default function CMSSettingsPage() {
     if (!clinicSettings) return;
     setSaving(true);
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('clinic_settings')
         .update({
           clinic_name: clinicSettings.clinic_name,
@@ -161,9 +200,19 @@ export default function CMSSettingsPage() {
           dashboard_about_text: clinicSettings.dashboard_about_text,
           updated_at: new Date().toISOString(),
         })
-        .eq('id', 1);
+        .eq('id', clinicSettings.id)
+        .select('id')
+        .maybeSingle();
+
       if (error) throw error;
+
+      if (!data) {
+        showToast('Clinic settings row is missing. Please ask an admin to seed clinic_settings.', 'error');
+        return;
+      }
+
       showToast('Clinic settings saved!');
+      await load();
     } catch (e: any) {
       showToast(e.message || 'Failed to save', 'error');
     } finally {
@@ -177,12 +226,22 @@ export default function CMSSettingsPage() {
     if (!navSettings) return;
     setSaving(true);
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('nav_settings')
         .update({ ...navSettings, updated_at: new Date().toISOString() })
-        .eq('id', 1);
+        .eq('id', navSettings.id)
+        .select('id')
+        .maybeSingle();
+
       if (error) throw error;
+
+      if (!data) {
+        showToast('Navigation settings row is missing. Please ask an admin to seed nav_settings.', 'error');
+        return;
+      }
+
       showToast('Navigation settings saved!');
+      await load();
     } catch (e: any) {
       showToast(e.message || 'Failed to save', 'error');
     } finally {
@@ -362,6 +421,8 @@ export default function CMSSettingsPage() {
 
   const inp = 'w-full px-3 py-2 border border-border rounded-lg text-sm bg-card text-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all';
   const textarea = `${inp} resize-vertical min-h-[80px]`;
+  const currentClinicSettings = clinicSettings ?? defaultClinicSettings;
+  const currentNavSettings = navSettings ?? defaultNavSettings;
 
   if (loading) return (
     <div className="flex items-center justify-center py-20">
@@ -423,8 +484,14 @@ export default function CMSSettingsPage() {
         })}
       </div>
 
+      {loadWarning && (
+        <div className="mb-6 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
+          {loadWarning}
+        </div>
+      )}
+
       {/* ── CLINIC INFO TAB ── */}
-      {activeTab === 'clinic' && clinicSettings && (
+      {activeTab === 'clinic' && (
         <div className="flex flex-col gap-5">
 
           {/* Announcement Banner */}
@@ -442,13 +509,13 @@ export default function CMSSettingsPage() {
                   {clinicSettings.is_announcement_active ? 'Active' : 'Inactive'}
                 </span>
                 <button
-                  onClick={() => setClinicSettings(s => s ? { ...s, is_announcement_active: !s.is_announcement_active } : s)}
+                  onClick={() => setClinicSettings(s => ({ ...(s ?? defaultClinicSettings), is_announcement_active: !(s ?? defaultClinicSettings).is_announcement_active }))}
                   className={`w-11 h-6 rounded-full transition-colors duration-200 relative ${
-                    clinicSettings.is_announcement_active ? 'bg-primary' : 'bg-muted'
+                    currentClinicSettings.is_announcement_active ? 'bg-primary' : 'bg-muted'
                   }`}
                 >
                   <span className={`absolute top-0.5 left-0 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${
-                    clinicSettings.is_announcement_active ? 'translate-x-5' : 'translate-x-0.5'
+                    currentClinicSettings.is_announcement_active ? 'translate-x-5' : 'translate-x-0.5'
                   }`} />
                 </button>
               </div>
@@ -456,8 +523,8 @@ export default function CMSSettingsPage() {
             <div className="p-6">
               <textarea
                 className={textarea}
-                value={clinicSettings.announcement_text ?? ''}
-                onChange={e => setClinicSettings(s => s ? { ...s, announcement_text: e.target.value } : s)}
+                value={currentClinicSettings.announcement_text ?? ''}
+                onChange={e => setClinicSettings(s => ({ ...(s ?? defaultClinicSettings), announcement_text: e.target.value }))}
                 placeholder="Announcement message..."
                 rows={2}
               />
@@ -473,50 +540,50 @@ export default function CMSSettingsPage() {
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-semibold">Clinic Name</label>
                 <input className={inp}
-                  value={clinicSettings.clinic_name ?? ''}
-                  onChange={e => setClinicSettings(s => s ? { ...s, clinic_name: e.target.value } : s)}
+                  value={currentClinicSettings.clinic_name ?? ''}
+                  onChange={e => setClinicSettings(s => ({ ...(s ?? defaultClinicSettings), clinic_name: e.target.value }))}
                 />
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-semibold">Phone Number</label>
                 <input className={inp}
-                  value={clinicSettings.phone ?? ''}
-                  onChange={e => setClinicSettings(s => s ? { ...s, phone: e.target.value } : s)}
+                  value={currentClinicSettings.phone ?? ''}
+                  onChange={e => setClinicSettings(s => ({ ...(s ?? defaultClinicSettings), phone: e.target.value }))}
                 />
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-semibold">Email Address</label>
                 <input className={inp} type="email"
-                  value={clinicSettings.email ?? ''}
-                  onChange={e => setClinicSettings(s => s ? { ...s, email: e.target.value } : s)}
+                  value={currentClinicSettings.email ?? ''}
+                  onChange={e => setClinicSettings(s => ({ ...(s ?? defaultClinicSettings), email: e.target.value }))}
                 />
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-semibold">Address</label>
                 <input className={inp}
-                  value={clinicSettings.address ?? ''}
-                  onChange={e => setClinicSettings(s => s ? { ...s, address: e.target.value } : s)}
+                  value={currentClinicSettings.address ?? ''}
+                  onChange={e => setClinicSettings(s => ({ ...(s ?? defaultClinicSettings), address: e.target.value }))}
                 />
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-semibold">Facebook URL</label>
                 <input className={inp}
-                  value={clinicSettings.facebook_url ?? ''}
-                  onChange={e => setClinicSettings(s => s ? { ...s, facebook_url: e.target.value } : s)}
+                  value={currentClinicSettings.facebook_url ?? ''}
+                  onChange={e => setClinicSettings(s => ({ ...(s ?? defaultClinicSettings), facebook_url: e.target.value }))}
                 />
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-semibold">Instagram URL</label>
                 <input className={inp}
-                  value={clinicSettings.instagram_url ?? ''}
-                  onChange={e => setClinicSettings(s => s ? { ...s, instagram_url: e.target.value } : s)}
+                  value={currentClinicSettings.instagram_url ?? ''}
+                  onChange={e => setClinicSettings(s => ({ ...(s ?? defaultClinicSettings), instagram_url: e.target.value }))}
                 />
               </div>
               <div className="flex flex-col gap-1.5 sm:col-span-2">
                 <label className="text-sm font-semibold">Dashboard &ldquo;About PAWS&rdquo; Text</label>
                 <textarea className={textarea}
-                  value={clinicSettings.dashboard_about_text ?? ''}
-                  onChange={e => setClinicSettings(s => s ? { ...s, dashboard_about_text: e.target.value } : s)}
+                  value={currentClinicSettings.dashboard_about_text ?? ''}
+                  onChange={e => setClinicSettings(s => ({ ...(s ?? defaultClinicSettings), dashboard_about_text: e.target.value }))}
                   rows={3}
                 />
               </div>
@@ -537,7 +604,7 @@ export default function CMSSettingsPage() {
       )}
 
       {/* ── NAVIGATION TAB ── */}
-      {activeTab === 'navigation' && navSettings && (
+      {activeTab === 'navigation' && (
         <div className="flex flex-col gap-5">
           <div className="rounded-2xl border border-border/80 bg-card/95 shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-border">
@@ -560,20 +627,20 @@ export default function CMSSettingsPage() {
               ] as const).map(item => (
                 <div key={item.key} className="flex items-center justify-between p-4 bg-accent/30 rounded-xl border border-border">
                   <div className="flex items-center gap-3">
-                    <div className={`w-2 h-2 rounded-full ${navSettings[item.key] ? 'bg-emerald-500' : 'bg-muted-foreground'}`} />
+                    <div className={`w-2 h-2 rounded-full ${currentNavSettings[item.key] ? 'bg-emerald-500' : 'bg-muted-foreground'}`} />
                     <div>
                       <p className="text-sm font-semibold">{item.label}</p>
                       <p className="text-xs text-muted-foreground">{item.desc}</p>
                     </div>
                   </div>
                   <button
-                    onClick={() => setNavSettings(s => s ? { ...s, [item.key]: !s[item.key] } : s)}
+                    onClick={() => setNavSettings(s => ({ ...(s ?? defaultNavSettings), [item.key]: !(s ?? defaultNavSettings)[item.key] }))}
                     className={`w-11 h-6 rounded-full transition-colors duration-200 relative flex-shrink-0 ${
-                      navSettings[item.key] ? 'bg-primary' : 'bg-muted'
+                      currentNavSettings[item.key] ? 'bg-primary' : 'bg-muted'
                     }`}
                   >
                     <span className={`absolute top-0.5 left-0 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${
-                      navSettings[item.key] ? 'translate-x-5' : 'translate-x-0.5'
+                      currentNavSettings[item.key] ? 'translate-x-5' : 'translate-x-0.5'
                     }`} />
                   </button>
                 </div>
@@ -740,7 +807,7 @@ export default function CMSSettingsPage() {
       )}
 
       {/* ── PRODUCTS TAB ── */}
-      {activeTab === 'products' && clinicSettings && (
+      {activeTab === 'products' && (
         <div className="flex flex-col gap-5">
           <div className="rounded-2xl border border-border/80 bg-card/95 shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-border">
@@ -753,8 +820,8 @@ export default function CMSSettingsPage() {
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-semibold">Shopee Store URL</label>
                 <input className={inp}
-                  value={clinicSettings.shopee_url ?? ''}
-                  onChange={e => setClinicSettings(s => s ? { ...s, shopee_url: e.target.value } : s)}
+                  value={currentClinicSettings.shopee_url ?? ''}
+                  onChange={e => setClinicSettings(s => ({ ...(s ?? defaultClinicSettings), shopee_url: e.target.value }))}
                   placeholder="https://ph.shp.ee/..."
                 />
                 <p className="text-xs text-muted-foreground">The link the &ldquo;Shop Now&rdquo; button opens</p>
@@ -762,15 +829,15 @@ export default function CMSSettingsPage() {
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-semibold">Page Title</label>
                 <input className={inp}
-                  value={clinicSettings.products_page_title ?? ''}
-                  onChange={e => setClinicSettings(s => s ? { ...s, products_page_title: e.target.value } : s)}
+                  value={currentClinicSettings.products_page_title ?? ''}
+                  onChange={e => setClinicSettings(s => ({ ...(s ?? defaultClinicSettings), products_page_title: e.target.value }))}
                 />
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-semibold">Page Description</label>
                 <textarea className={textarea}
-                  value={clinicSettings.products_page_description ?? ''}
-                  onChange={e => setClinicSettings(s => s ? { ...s, products_page_description: e.target.value } : s)}
+                  value={currentClinicSettings.products_page_description ?? ''}
+                  onChange={e => setClinicSettings(s => ({ ...(s ?? defaultClinicSettings), products_page_description: e.target.value }))}
                   rows={3}
                 />
               </div>

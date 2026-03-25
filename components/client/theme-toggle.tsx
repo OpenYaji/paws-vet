@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { Moon, Sun, Monitor } from "lucide-react"
 import { useTheme } from "./theme-provider"
 import {
@@ -13,6 +14,25 @@ import { Button } from "@/components/ui/button"
 
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) {
+    return (
+      <Button
+        variant="ghost"
+        size="icon"
+        className="relative h-9 w-9 rounded-lg hover:bg-accent transition-colors duration-200"
+        aria-label="Theme menu loading"
+      >
+        <Sun className="h-[1.2rem] w-[1.2rem]" />
+        <span className="sr-only">Theme menu loading</span>
+      </Button>
+    )
+  }
 
   return (
     <DropdownMenu>
