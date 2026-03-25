@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
     if (insertResult.error) return handleError(insertResult.error, "POST /api/pets");
     if (auditResult.error) throw auditResult.error;
 
-    return NextResponse.json(insertResult.data, { status: 201 });
+    return NextResponse.json({ success: true }, { status: 201 });
   } catch (error: any) {
     // Unexpected JS error — centralized handler
     return handleError(error, "POST /api/pets");
@@ -178,7 +178,7 @@ export async function PATCH(request: NextRequest) {
     if (updateResult.error) return handleError(updateResult.error, "PATCH /api/pets");
     if (auditResult.error) throw auditResult.error;
 
-    return NextResponse.json(updateResult.data, { status: 200 });
+    return NextResponse.json({ success: true });
   } catch (error: any) {
     // Unexpected JS error — centralized handler
     return handleError(error, "PATCH /api/pets");

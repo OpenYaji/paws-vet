@@ -30,7 +30,7 @@ export async function PATCH(request: Request) {
         user_id: body.updated_by,
         action_type: "update",
         table_name: "clinic_settings",
-        details: `Updated clinic settings with data: ${JSON.stringify(body)}`,
+        details: `Updated clinic settings with new data`,
         old_values: oldRecord ?? null,
         new_values: body,
       }),

@@ -201,7 +201,7 @@ export async function POST(request: NextRequest) {
     if (prescriptionResult.error) return handleError(prescriptionResult.error, "POST /api/prescriptions");
     if (auditResult.error) throw auditResult.error;
 
-    return NextResponse.json(prescriptionResult.data, { status: 201 });
+    return NextResponse.json({ success: true }, { status: 201 });
   } catch (error) {
     // Unexpected JS/DB error — centralized handler
     return handleError(error, "POST /api/prescriptions");
@@ -379,7 +379,7 @@ export async function PATCH(request: NextRequest) {
 
     if (updateResult.error) return handleError(updateResult.error, "PATCH /api/prescriptions");
     if (auditResult.error) throw auditResult.error;
-    return NextResponse.json(updateResult.data, { status: 200 });
+    return NextResponse.json({ success: true });
   } catch (error: any) {
     return handleError(error, "PATCH /api/prescriptions");
   }

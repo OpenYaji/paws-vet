@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
 
     if (insertResult.error) return handleError(insertResult.error, "POST /api/vaccinations (insert)");
     if (auditResult.error) throw auditResult.error;
-    return NextResponse.json(insertResult.data, { status: 201 });
+    return NextResponse.json({ success: true }, { status: 201 });
   } catch (error: any) {
     return handleError(error, "POST /api/vaccinations");
   }
@@ -144,7 +144,7 @@ export async function PATCH(request: NextRequest) {
     if (!updateResult.data || updateResult.data.length === 0)
       return NextResponse.json({ error: "Record not found or update not permitted" }, { status: 404 });
     if (auditResult.error) throw auditResult.error;
-    return NextResponse.json(updateResult.data[0]);
+    return NextResponse.json({ success: true });
   } catch (error: any) {
     return handleError(error, "PATCH /api/vaccinations");
   }

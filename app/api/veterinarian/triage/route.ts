@@ -184,7 +184,7 @@ export async function PATCH(request: NextRequest) {
 
     if (updateResult.error) return handleError(updateResult.error, "PATCH /api/triage");
     if (auditResult.error) throw auditResult.error;
-    return NextResponse.json(updateResult.data);
+    return NextResponse.json({ success: true });
   } catch (error: any) {
     return handleError(error, "PATCH /api/triage");
   }

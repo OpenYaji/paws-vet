@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
     ]);
     if (insertResult.error) return NextResponse.json({ error: insertResult.error.message }, { status: 400 });
     if (auditResult.error) throw auditResult.error;
-    return NextResponse.json(insertResult.data, { status: 201 });
+    return NextResponse.json({ success: true }, { status: 201 });
   } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
@@ -101,7 +101,7 @@ export async function PATCH(request: NextRequest) {
 
     if (updateResult.error) return NextResponse.json({ error: updateResult.error.message }, { status: 400 });
     if (auditResult.error) throw auditResult.error;
-    return NextResponse.json(updateResult.data);
+    return NextResponse.json({ success: true });
   } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

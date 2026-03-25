@@ -241,7 +241,7 @@ export async function POST(request: NextRequest) {
     if (petUpdateResult.error) throw petUpdateResult.error;
     if (apptUpdateResult.error) throw apptUpdateResult.error;
 
-    return NextResponse.json(neuterData, { status: 201 });
+    return NextResponse.json({ success: true }, { status: 201 });
   } catch (error: any) {
     return NextResponse.json(
       { error: error.message || "Failed to create neuter record" },

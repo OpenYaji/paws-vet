@@ -92,5 +92,5 @@ export async function POST(request: NextRequest) {
   if (insertResult.error) return jsonError(insertResult.error.message, 500);
   if (auditResult.error) throw auditResult.error;
 
-  return NextResponse.json(insertResult.data, { status: 201 });
+  return NextResponse.json({ success: true }, { status: 201 });
 }

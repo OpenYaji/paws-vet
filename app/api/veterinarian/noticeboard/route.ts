@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
       notifyAllVets(insertResult.data.id, body.title, body.content, priority);
     }
 
-    return NextResponse.json(insertResult.data, { status: 201 });
+    return NextResponse.json({ success: true }, { status: 201 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -116,7 +116,7 @@ export async function PATCH(request: NextRequest) {
 
     if (updateResult.error) throw updateResult.error;
     if (auditResult.error) throw auditResult.error;
-    return NextResponse.json(updateResult.data, { status: 200 });
+    return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -143,7 +143,7 @@ export async function DELETE(request: NextRequest) {
 
     if (deleteResult.error) throw deleteResult.error;
     if (auditResult.error) throw auditResult.error;
-    return NextResponse.json({ message: "Notice deleted" }, { status: 200 });
+    return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
