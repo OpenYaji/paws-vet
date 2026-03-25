@@ -244,7 +244,7 @@ export async function POST(request: NextRequest) {
     }
 
     console.log("[POST /api/appointments] Created:", data[0].id);
-    return NextResponse.json(data[0], { status: 201 });
+    return NextResponse.json({ success: true }, { status: 201 });
   } catch (error: any) {
     // Unexpected JS/network error — centralized handler
     return handleError(error, "POST /api/appointments");
@@ -323,7 +323,7 @@ export async function PATCH(request: NextRequest) {
       `[PATCH /api/appointments] id=${id} status: ${current?.appointment_status} → ${data[0].appointment_status}`,
     );
 
-    return NextResponse.json(data[0], { status: 200 });
+    return NextResponse.json({ success: true });
   } catch (error: any) {
     // Unexpected JS/network error — centralized handler
     return handleError(error, "PATCH /api/appointments");
