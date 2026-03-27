@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/use-toast";
+import getSafeUrl from "@/lib/get-safe-url";
 
 interface AddNewPetProps {
   onPetAdded: () => void;
@@ -185,7 +186,7 @@ export default function AddNewPet({ onPetAdded }: AddNewPetProps) {
             <div className="relative w-24 h-24 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center bg-gray-50 overflow-hidden group hover:border-green-500 transition-colors">
               {imagePreviewUrl ? (
                 <img
-                  src={imagePreviewUrl}
+                  src={getSafeUrl(imagePreviewUrl)}
                   alt="Preview"
                   className="w-full h-full object-cover"
                 />
