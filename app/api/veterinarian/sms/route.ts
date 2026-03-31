@@ -7,8 +7,40 @@ export const dynamic = "force-dynamic";
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } }
+  { auth: { autoRefreshToken: false, persistSession: false } },
 );
+
+export async function GET(request: NextRequest) {
+  try {
+    // search params
+    const { searchParams } = new URL(request.url);
+    const limit = searchParams.get("limit") || 10;
+    const offset = searchParams.get("offset") || 0;
+
+    // fetch all message history depending on limit and offset
+    const { data: clients, error } = await supabaseAdmin
+      .from("notification_logs")
+      .select(
+        "id, recipient_id, notification_type, subject, content, related_entity_type, delivery_status, is_read, created_at",
+      )
+      .eq("notification_type", "sms")
+      .limit(Number(limit))
+      .order("created_at", { ascending: false })
+      .range(Number(offset), Number(offset) + Number(limit) - 1);
+
+    if (error) {
+      throw error;
+    }
+
+    return NextResponse.json(clients);
+  } catch (error: any) {
+    console.error("[GET /api/veterinarian/sms] error:", error);
+    return NextResponse.json(
+      { error: "Internal server error", details: error.message },
+      { status: 500 },
+    );
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,7 +48,10 @@ export async function POST(request: NextRequest) {
     const { target, message } = body;
 
     if (!target || !message) {
-      return NextResponse.json({ error: "Target and message are required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Target and message are required" },
+        { status: 400 },
+      );
     }
 
     let clientsToNotify: any[] = [];
@@ -40,7 +75,10 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (clientError || !client) {
-        return NextResponse.json({ error: "Client not found" }, { status: 404 });
+        return NextResponse.json(
+          { error: "Client not found" },
+          { status: 404 },
+        );
       }
       clientsToNotify = [client];
     }
@@ -52,7 +90,7 @@ export async function POST(request: NextRequest) {
     // Prepare notifications for logging (optional but good practice)
     const notifications = clientsToNotify.map((client) => ({
       recipient_id: client.user_id,
-      notification_type: "general",
+      notification_type: "sms",
       subject: "SMS Broadcast",
       content: message,
       related_entity_type: "clinic_settings",
@@ -86,21 +124,20 @@ export async function POST(request: NextRequest) {
         } else {
           failCount++;
         }
-      })
+      }),
     );
 
     return NextResponse.json({
       success: true,
-      message: `Sent ${sentCount} SMS successfully${failCount > 0 ? ` (${failCount} failed)` : ''}`,
+      message: `Sent ${sentCount} SMS successfully${failCount > 0 ? ` (${failCount} failed)` : ""}`,
       sentCount,
-      failCount
+      failCount,
     });
-
   } catch (error: any) {
     console.error("[POST /api/veterinarian/sms] error:", error);
     return NextResponse.json(
       { error: "Internal server error", details: error.message },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
