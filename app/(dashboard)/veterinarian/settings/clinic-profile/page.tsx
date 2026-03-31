@@ -11,11 +11,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Save, Image as ImageIcon, Building2, Bell, Shield } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { toast } from "@/components/ui/use-toast";
-
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+import { Fetcher } from "@/lib/fetcher";
 
 export default function ClinicProfilePage() {
-  const { data: settings, isLoading } = useSWR('/api/veterinarian/admin', fetcher);
+  const { data: settings, isLoading } = useSWR('/api/veterinarian/admin', Fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 30000
+  });
   const [isAnnouncing, setIsAnnouncing] = useState(false);
   const [formData, setFormData] = useState<any>({});
   const [isSaving, setIsSaving] = useState(false);
