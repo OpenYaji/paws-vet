@@ -4,15 +4,6 @@ import { handleError } from "@/utils/error-handler";
 
 export async function GET(request: Request) {
   const supabase = await createClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-
-  if (error || !user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   try {
     const { searchParams } = new URL(request.url);
     const searchQuery = searchParams.get("q");

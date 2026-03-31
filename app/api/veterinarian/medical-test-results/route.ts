@@ -14,9 +14,6 @@ function jsonError(message: string, status: number) {
  */
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) return jsonError("Unauthorized", 401);
-
   const { searchParams } = new URL(request.url);
   const appointmentId = searchParams.get("appointment_id");
 

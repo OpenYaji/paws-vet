@@ -31,10 +31,6 @@ async function getAuthUser(request: NextRequest) {
 
 // GET /api/veterinarian/appointments/appointment-reports?date=2024-06-01
 export async function GET(request: NextRequest) {
-  const { user, role } = await getAuthUser(request);
-  if (!user || role !== "veterinarian") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
   try {
     const { searchParams } = new URL(request.url);
     const dateParam = searchParams.get("date");

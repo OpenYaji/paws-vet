@@ -13,14 +13,6 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const today = new Date().toISOString().split("T")[0];
 
     // Fetch all kapon/surgery appointments for today regardless of status
@@ -200,7 +192,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Insert the neuter record
-    const { data: neuterData, error: neuterError } = await supabase
+    const { error: neuterError } = await supabase
       .from("neuter_pet")
       .insert({
         pet_id,

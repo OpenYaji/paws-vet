@@ -31,10 +31,6 @@ async function getAuthUser(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  const { user } = await getAuthUser(request);
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
   try {
     const supabase = await createClient();
 
