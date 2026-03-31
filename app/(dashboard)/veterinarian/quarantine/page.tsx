@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { supabase } from '@/lib/auth-client';
 import useSWR, { mutate } from 'swr';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,20 +9,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from "@/components/ui/label";
 import { Badge } from '@/components/ui/badge';
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue
-} from "@/components/ui/select";
-import {
   ShieldAlert, Search, Clock, AlertTriangle, CheckCircle2, Plus,
   ChevronLeft, ChevronRight, Pencil, X,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Fetcher } from '@/lib/fetcher';
-import { Pet } from '@/types/pets';
 import { toast } from '@/components/ui/use-toast';
-
-type PetsResponse = {
-  pets: Pet[];
-}
 
 interface QuarantineRecord {
   id: string;
@@ -51,9 +42,12 @@ export default function QuarantinePage() {
   // Fetch quarantined pets
   const { data: quarantineRecords = [], error, isLoading } = useSWR<QuarantineRecord[]>(
     '/api/veterinarian/quarantine',
-    Fetcher
+    Fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 60000
+  }
   );
-  
+
   const [selectedRecord, setSelectedRecord] = useState<any | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -90,7 +84,6 @@ export default function QuarantinePage() {
       setIsSaving(false);
     }
   };
-  const [allPets, setAllPets] = useState<any[]>([]);
   const [page, setPage] = useState(1);
 
   // Left-side list search state
@@ -139,7 +132,7 @@ export default function QuarantinePage() {
           setResults([]);
           console.error("API returned a non-array:", data);
         }
-        
+
         setIsSearchDropdownOpen(true);
       } catch (error) {
         console.error("Failed to search pets:", error);
@@ -164,7 +157,7 @@ export default function QuarantinePage() {
     safeRecords.filter((r: any) =>
       r.status !== 'released' &&
       (r.pets?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-       r.reason?.toLowerCase().includes(searchTerm.toLowerCase()))
+        r.reason?.toLowerCase().includes(searchTerm.toLowerCase()))
     ),
     [safeRecords, searchTerm]
   );
@@ -262,9 +255,9 @@ export default function QuarantinePage() {
 
         {/* --- LEFT: QUARANTINE LIST --- */}
         <div className="md:col-span-4 lg:col-span-4 border-r overflow-y-auto space-y-3 pr-4">
-          
+
           {/* Main List Search Bar (If you have one, it uses searchTerm) */}
-          <Input 
+          <Input
             type="text"
             placeholder="Search active quarantines..."
             value={searchTerm}
@@ -301,11 +294,10 @@ export default function QuarantinePage() {
               <div
                 key={record.id}
                 onClick={() => { setSelectedRecord(record); setShowAddForm(false); }}
-                className={`p-4 rounded-lg border cursor-pointer transition-all hover:shadow-md ${
-                  selectedRecord?.id === record.id
-                    ? 'bg-destructive/10 border-destructive ring-1 ring-destructive'
-                    : 'bg-card border-border hover:border-destructive/40'
-                }`}
+                className={`p-4 rounded-lg border cursor-pointer transition-all hover:shadow-md ${selectedRecord?.id === record.id
+                  ? 'bg-destructive/10 border-destructive ring-1 ring-destructive'
+                  : 'bg-card border-border hover:border-destructive/40'
+                  }`}
               >
                 <div className="flex justify-between items-start mb-2">
                   <span className="font-bold text-foreground">{record.pets?.name}</span>
@@ -390,7 +382,7 @@ export default function QuarantinePage() {
                     <Textarea
                       placeholder="e.g. Suspected parvovirus, post-surgery isolation..."
                       value={form.reason}
-                      onChange={(e) => setForm({...form, reason: e.target.value})}
+                      onChange={(e) => setForm({ ...form, reason: e.target.value })}
                       className="min-h-[80px]"
                     />
                   </div>
@@ -401,7 +393,7 @@ export default function QuarantinePage() {
                       <Input
                         type="date"
                         value={form.start_date}
-                        onChange={(e) => setForm({...form, start_date: e.target.value})}
+                        onChange={(e) => setForm({ ...form, start_date: e.target.value })}
                       />
                     </div>
                     <div className="space-y-2">
@@ -409,7 +401,7 @@ export default function QuarantinePage() {
                       <Input
                         type="date"
                         value={form.expected_end_date}
-                        onChange={(e) => setForm({...form, expected_end_date: e.target.value})}
+                        onChange={(e) => setForm({ ...form, expected_end_date: e.target.value })}
                       />
                     </div>
                   </div>
@@ -419,7 +411,7 @@ export default function QuarantinePage() {
                     <Textarea
                       placeholder="Special instructions, medications, monitoring requirements..."
                       value={form.notes}
-                      onChange={(e) => setForm({...form, notes: e.target.value})}
+                      onChange={(e) => setForm({ ...form, notes: e.target.value })}
                       className="min-h-[60px]"
                     />
                   </div>
