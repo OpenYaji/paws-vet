@@ -17,6 +17,53 @@ function getSupabaseAdmin() {
     );
 }
 
+export async function sendSmsByName(clientName: string, message: string): Promise<boolean> {
+    const supabase = getSupabaseAdmin();
+
+    // split the name
+    const fullName = clientName.trim().split(/\s+/);
+    const firstName = fullName[0];
+    const lastName = fullName.slice(1).join(' ');
+
+    // use let query to build first
+    let query = supabase
+        .from('client_profiles')
+        .select('phone, first_name, last_name')
+        .eq('first_name', firstName);
+
+    if (lastName) {
+        query = query.ilike('last_name', lastName);
+    }
+
+    const { data: clients, error } = await query;
+
+    if (error) {
+        console.error(`[HttpSms] database error searching for ${clientName}:`, error.message);
+        return false;
+    }
+
+    if (!clients || clients.length === 0) {
+        console.error(`[HttpSms] could not find any client named "${clientName}".`);
+        return false;
+    }
+
+    // prevent texting the wrong person if duplicates exist
+    if (clients.length > 1) {
+        console.error(`[HttpSms] found multiple clients named "${clientName}". please use an ID instead.`);
+        return false;
+    }
+
+    const client = clients[0];
+
+    if (!client.phone) {
+        console.error(`[HttpSms] client ${client.first_name} ${client.last_name} has no phone number.`);
+        return false;
+    }
+
+    // dispatch using the original function you already wrote
+    return dispatch(client.phone, DEFAULT_FROM_NUMBER, message);
+}
+
 async function dispatch(to: string, from: string, content: string): Promise<boolean> {
     if (!to) { console.error('[HttpSms] Missing "to" phone number.'); return false; }
     if (!from) { console.error('[HttpSms] Missing "from" phone number. Set HTTPSMS_FROM_NUMBER in your .env file.'); return false; }
