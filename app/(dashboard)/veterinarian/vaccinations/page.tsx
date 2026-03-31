@@ -17,6 +17,7 @@ import {
 import { Syringe, Pencil, Loader2, ShieldCheck, Search, ChevronLeft, ChevronRight, AlertTriangle, Clock, Archive } from 'lucide-react';
 import { format, addYears, addDays, differenceInYears, differenceInMonths } from 'date-fns';
 import { toast } from '@/components/ui/use-toast';
+import { Fetcher } from '@/lib/fetcher';
 
 function BoosterTab({ history, isLoading }: { history: any[]; isLoading: boolean }) {
   const today = new Date();
@@ -43,9 +44,8 @@ function BoosterTab({ history, isLoading }: { history: any[]; isLoading: boolean
         Last given: {format(new Date(rec.administered_date), 'MMM dd, yyyy')}
       </div>
       <div className="col-span-2">
-        <span className={`px-2 py-1 rounded text-xs font-medium ${
-          overdue.includes(rec) ? 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400'
-        }`}>
+        <span className={`px-2 py-1 rounded text-xs font-medium ${overdue.includes(rec) ? 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400'
+          }`}>
           {format(new Date(rec.next_due_date), 'MMM dd, yyyy')}
         </span>
       </div>
@@ -104,14 +104,13 @@ function BoosterTab({ history, isLoading }: { history: any[]; isLoading: boolean
   );
 }
 
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
-
 export default function VaccinationsPage() {
   const [recordFilter, setRecordFilter] = useState<'active' | 'archived'>('active');
 
   const swrKey = `/api/veterinarian/vaccinations${recordFilter === 'archived' ? '?archived=true' : ''}`;
 
-  const { data = {}, isLoading } = useSWR(swrKey, fetcher, {
+  // swr with type safety
+  const { data = {} as { history: any[]; pets: any[] }, isLoading } = useSWR<{ history: any[]; pets: any[] }>(swrKey, Fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 30000,
   });
