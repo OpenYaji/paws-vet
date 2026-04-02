@@ -59,5 +59,8 @@ supabase/
 package-lock.json
 package.json
 
-# agent skills
+# claude and agent skills
 .agents/
+.claude/
+CLAUDE.md
+skills-lock.json
