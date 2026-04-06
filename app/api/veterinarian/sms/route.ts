@@ -1,24 +1,21 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
-import { sendSms } from "@/utils/httpSms"; // Swapped to utilize your new HttpSms logic!
+import { sendSms } from "@/utils/sms";
+import { createAdminClient } from "@/utils/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } },
-);
-
 export async function GET(request: NextRequest) {
   try {
+    const supabase = await createAdminClient();
+
     // search params
     const { searchParams } = new URL(request.url);
     const limit = searchParams.get("limit") || 10;
     const offset = searchParams.get("offset") || 0;
 
     // fetch all message history depending on limit and offset
-    const { data: clients, error } = await supabaseAdmin
+    const { data: clients, error } = await supabase
       .from("notification_logs")
       .select(
         "id, recipient_id, notification_type, subject, content, related_entity_type, delivery_status, is_read, created_at",
@@ -44,6 +41,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const supabase = await createAdminClient();
     const body = await request.json();
     const { target, message } = body;
 
@@ -58,7 +56,7 @@ export async function POST(request: NextRequest) {
 
     if (target === "all") {
       // Fetch all client user IDs and phones
-      const { data: clients, error: clientsError } = await supabaseAdmin
+      const { data: clients, error: clientsError } = await supabase
         .from("client_profiles")
         .select("user_id, phone, first_name, last_name");
 
@@ -68,7 +66,7 @@ export async function POST(request: NextRequest) {
       clientsToNotify = clients || [];
     } else {
       // Fetch specific client
-      const { data: client, error: clientError } = await supabaseAdmin
+      const { data: client, error: clientError } = await supabase
         .from("client_profiles")
         .select("user_id, phone, first_name, last_name")
         .eq("id", target)
@@ -83,6 +81,7 @@ export async function POST(request: NextRequest) {
       clientsToNotify = [client];
     }
 
+    // if no clients to notify
     if (clientsToNotify.length === 0) {
       return NextResponse.json({ message: "No clients to notify" });
     }
@@ -100,7 +99,7 @@ export async function POST(request: NextRequest) {
     }));
 
     // Batch insert notifications
-    const { error: insertError } = await supabaseAdmin
+    const { error: insertError } = await supabase
       .from("notification_logs")
       .insert(notifications);
 
