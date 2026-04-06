@@ -5,10 +5,10 @@ export async function GET() {
   try {
     const supabase = await createClient();
     const { data, error } = await supabase
-      .from('clinic_settings')
-      .select('*')
-      .eq('id', 1)
-      .single();
+      .from("clinic_settings")
+      .select("*")
+      .eq("id", 1)
+      .maybeSingle(); // safer than single() if no record is found
 
     if (error) throw error;
     return NextResponse.json(data);
@@ -22,10 +22,17 @@ export async function PATCH(request: Request) {
     const supabase = await createClient();
     const body = await request.json();
 
-    const { data: oldRecord } = await supabase.from('clinic_settings').select().eq('id', 1).single();
+    const { data: oldRecord } = await supabase
+      .from("clinic_settings")
+      .select()
+      .eq("id", 1)
+      .single();
 
     const [updateResult, logResult] = await Promise.all([
-      supabase.from('clinic_settings').update({ ...body, updated_at: new Date().toISOString() }).eq('id', 1),
+      supabase
+        .from("clinic_settings")
+        .update({ ...body, updated_at: new Date().toISOString() })
+        .eq("id", 1),
       supabase.from("audit_logs").insert({
         user_id: body.updated_by,
         action_type: "update",
