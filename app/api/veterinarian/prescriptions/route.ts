@@ -1,14 +1,11 @@
-import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { handleError } from "@/utils/error-handler";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-  process.env.SUPABASE_SERVICE_ROLE_KEY || "",
-);
+import { createClient } from "@/utils/supabase/server";
+import { sendSms } from "@/utils/sms";
 
 export async function GET(request: NextRequest) {
   try {
+    const supabase = await createClient();
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search");
 
@@ -37,7 +34,8 @@ export async function GET(request: NextRequest) {
     const { data: prescriptionsData, error: prescriptionsError } = await query;
 
     // Delegate fetch error to centralized handler
-    if (prescriptionsError) return handleError(prescriptionsError, "GET /api/prescriptions");
+    if (prescriptionsError)
+      return handleError(prescriptionsError, "GET /api/prescriptions");
 
     // Fetch pet data for each prescription
     const prescriptionsWithPets = await Promise.all(
@@ -77,37 +75,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const cookieStore = await cookies();
-
-    const authClient = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return cookieStore.getAll();
-          },
-          setAll(cookiesToSet) {
-            try {
-              cookiesToSet.forEach(({ name, value, options }) =>
-                cookieStore.set(name, value, options),
-              );
-            } catch (error) {
-              console.error("Error setting cookies:", error);
-            }
-          },
-        },
-      },
-    );
-
-    const {
-      data: { user },
-      error: authError,
-    } = await authClient.auth.getUser();
-
-    if (authError || !user || user.user_metadata.role !== "veterinarian") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const supabase = await createClient();
 
     const body = await request.json();
     const { medical_record_id, prescribed_by, medication_name } = body;
@@ -142,20 +110,46 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const [prescriptionResult, auditResult] = await Promise.all([
-      supabase.from("prescriptions").insert([{
-        medical_record_id,
-        prescribed_by,
-        medication_name,
-        dosage: body.dosage,
-        frequency: body.frequency,
-        duration: body.duration,
-        instructions: body.instructions,
-        form: body.form || null,
-        quantity: body.quantity || null,
-        refills_allowed: body.refills_allowed || 0,
-        is_controlled_substance: body.is_controlled_substance || false,
-      }]).select().single(),
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const user = session?.user;
+    if (!user)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const { data: petData } = await supabase
+      .from("pets")
+      .select("name, owner_id")
+      .eq("id", medicalRecord.pet_id)
+      .single();
+
+    const [clientPhone, prescriptionResult, auditResult] = await Promise.all([
+      petData?.owner_id
+        ? supabase
+            .from("client_profiles")
+            .select("phone")
+            .eq("id", petData.owner_id)
+            .single()
+        : Promise.resolve({ data: null, error: null }),
+      supabase
+        .from("prescriptions")
+        .insert([
+          {
+            medical_record_id,
+            prescribed_by,
+            medication_name,
+            dosage: body.dosage,
+            frequency: body.frequency,
+            duration: body.duration,
+            instructions: body.instructions,
+            form: body.form || null,
+            quantity: body.quantity || null,
+            refills_allowed: body.refills_allowed || 0,
+            is_controlled_substance: body.is_controlled_substance || false,
+          },
+        ])
+        .select()
+        .single(),
       supabase.from("audit_logs").insert({
         user_id: user.id,
         action_type: "create",
@@ -164,10 +158,23 @@ export async function POST(request: NextRequest) {
       }),
     ]);
 
-    if (prescriptionResult.error) return handleError(prescriptionResult.error, "POST /api/prescriptions");
+    if (clientPhone.error)
+      return handleError(clientPhone.error, "POST /api/prescriptions");
+    if (prescriptionResult.error)
+      return handleError(prescriptionResult.error, "POST /api/prescriptions");
     if (auditResult.error) throw auditResult.error;
 
-    return NextResponse.json({ success: true }, { status: 201 });
+    if (petData?.name && clientPhone.data?.phone) {
+      const message = `A PAWS Veterinarian has issued a prescription for your pet named ${petData.name}.`;
+      sendSms(clientPhone.data.phone, message).catch((err) =>
+        console.error("[Prescriptions SMS] Failed to notify client:", err),
+      );
+    }
+
+    return NextResponse.json(
+      { success: true, data: prescriptionResult.data },
+      { status: 201 },
+    );
   } catch (error) {
     // Unexpected JS/DB error — centralized handler
     return handleError(error, "POST /api/prescriptions");
@@ -176,38 +183,7 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const cookieStore = await cookies();
-
-    const authClient = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return cookieStore.getAll();
-          },
-          setAll(cookiesToSet) {
-            try {
-              cookiesToSet.forEach(({ name, value, options }) =>
-                cookieStore.set(name, value, options),
-              );
-            } catch (error) {
-              console.error("Error setting cookies:", error);
-            }
-          },
-        },
-      },
-    );
-
-    const {
-      data: { user },
-      error: authError,
-    } = await authClient.auth.getUser();
-
-    if (authError || !user || user.user_metadata.role !== "veterinarian") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
+    const supabase = await createClient();
     const body = await request.json();
 
     if (!body.name || !body.owner_id || !body.species) {
@@ -243,18 +219,8 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (user?.user_metadata.role !== "veterinarian") {
-    return NextResponse.json(
-      { error: "Unauthorized, Vets only" },
-      { status: 403 },
-    );
-  }
-
   try {
+    const supabase = await createClient();
     const searchParams = new URL(request.url).searchParams;
     const id = searchParams.get("id");
 
@@ -285,37 +251,23 @@ export async function DELETE(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const cookieStore = await cookies();
+    const supabase = await createClient();
 
-    const authClient = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() { return cookieStore.getAll(); },
-          setAll(cookiesToSet) {
-            try {
-              cookiesToSet.forEach(({ name, value, options }) =>
-                cookieStore.set(name, value, options),
-              );
-            } catch (error) {
-              console.error("Error setting cookies:", error);
-            }
-          },
-        },
-      },
-    );
-
-    const { data: { user }, error: authError } = await authClient.auth.getUser();
-    if (authError || !user || user.user_metadata.role !== "veterinarian") {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const user = session?.user;
+    if (!user)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
 
     const body = await request.json();
     const { id, mark_dispensed, ...edits } = body;
 
     if (!id) {
-      return NextResponse.json({ error: "Prescription ID is required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Prescription ID is required" },
+        { status: 400 },
+      );
     }
 
     const patch: Record<string, any> = {};
@@ -324,15 +276,44 @@ export async function PATCH(request: NextRequest) {
       patch.dispensed_date = new Date().toISOString();
     }
 
-    const editableFields = ["medication_name", "dosage", "frequency", "duration", "instructions", "form", "quantity", "refills_allowed"];
+    const editableFields = [
+      "medication_name",
+      "dosage",
+      "frequency",
+      "duration",
+      "instructions",
+      "form",
+      "quantity",
+      "refills_allowed",
+    ];
     for (const field of editableFields) {
       if (field in edits) patch[field] = edits[field];
     }
 
-    const { data: oldRecord } = await supabase.from("prescriptions").select().eq("id", id).single();
+    const { data: oldRecord } = await supabase
+      .from("prescriptions")
+      .select()
+      .eq("id", id)
+      .single();
 
-    const [updateResult, auditResult] = await Promise.all([
-      supabase.from("prescriptions").update(patch).eq("id", id).select().single(),
+    const { data: petData } = await supabase
+      .from("pets")
+      .select("name, owner_id")
+      .eq("id", oldRecord?.pet_id)
+      .single();
+
+    const [clientPhone, updateResult, auditResult] = await Promise.all([
+      supabase
+        .from("client_profiles")
+        .select("phone")
+        .eq("id", petData?.owner_id)
+        .single(),
+      supabase
+        .from("prescriptions")
+        .update(patch)
+        .eq("id", id)
+        .select()
+        .single(),
       supabase.from("audit_logs").insert({
         user_id: user.id,
         action_type: "update",
@@ -343,8 +324,17 @@ export async function PATCH(request: NextRequest) {
       }),
     ]);
 
-    if (updateResult.error) return handleError(updateResult.error, "PATCH /api/prescriptions");
+    if (updateResult.error)
+      return handleError(updateResult.error, "PATCH /api/prescriptions");
     if (auditResult.error) throw auditResult.error;
+
+    if (petData?.name && clientPhone.data?.phone) {
+      const message = `A PAWS Veterinarian has dispensed your pet's medication.`;
+      sendSms(clientPhone.data.phone, message).catch((err) =>
+        console.error("[Prescriptions SMS] Failed to notify client:", err),
+      );
+    }
+
     return NextResponse.json({ success: true });
   } catch (error: any) {
     return handleError(error, "PATCH /api/prescriptions");
