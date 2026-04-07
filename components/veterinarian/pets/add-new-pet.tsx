@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Plus, Upload } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
   DialogContent,
@@ -33,6 +34,7 @@ interface AddNewPetProps {
 export default function AddNewPet({ onPetAdded }: AddNewPetProps) {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const { toast } = useToast();
 
   // Pet Form State
   const [newPet, setNewPet] = useState({
@@ -130,7 +132,7 @@ export default function AddNewPet({ onPetAdded }: AddNewPetProps) {
         throw new Error(result.error || "Failed to add pet");
       }
 
-      toast({ title: 'Pet Added', description: 'The new pet has been saved.' });
+      toast({ title: 'Pet Added', description: `${newPet.name} has been successfully added.` });
       onPetAdded();
       setIsAddOpen(false);
       setNewPet({
@@ -153,7 +155,7 @@ export default function AddNewPet({ onPetAdded }: AddNewPetProps) {
       setImagePreviewUrl(null);
       mutate('/api/veterinarian/pets'); // Refresh pet list after adding
     } catch (error: any) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      toast({ title: 'Error', description: error.message || 'Failed to add pet.', variant: 'destructive' });
     } finally {
       setIsSaving(false);
     }

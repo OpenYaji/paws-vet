@@ -5,7 +5,8 @@
       "Bash(xargs:*)",
       "Bash(npx next build)",
       "Bash(npx tsc:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(grep -r alert\\\\\\(/c/Users/sachiishimi/Downloads/paws-vet/components/veterinarian/ --include=*.tsx)"
     ]
   }
 }

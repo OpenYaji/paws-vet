@@ -18,6 +18,7 @@ import { Syringe, Pencil, Loader2, ShieldCheck, Search, ChevronLeft, ChevronRigh
 import { format, addYears, addDays, differenceInYears, differenceInMonths } from 'date-fns';
 import { toast } from '@/components/ui/use-toast';
 import { Fetcher } from '@/lib/fetcher';
+import { CORE_ESSENTIAL_VACCINES, getCoreVaccineByName, type CoreVaccine } from '@/lib/core-vaccines';
 
 function BoosterTab({ history, isLoading }: { history: any[]; isLoading: boolean }) {
   const today = new Date();
@@ -152,6 +153,11 @@ export default function VaccinationsPage() {
     notes: '',
   });
 
+  // Series / core vaccine state (Log modal)
+  const [selectedCoreVaccine, setSelectedCoreVaccine] = useState<CoreVaccine | null>(null);
+  const [seriesDates, setSeriesDates] = useState<string[]>([]);
+  const [logError, setLogError] = useState('');
+
   // Pet search (log dialog)
   const [petQuery, setPetQuery] = useState('');
   const [petResults, setPetResults] = useState<any[]>([]);
@@ -196,6 +202,25 @@ export default function VaccinationsPage() {
   const [isArchiveOpen, setIsArchiveOpen] = useState(false);
   const [archiveRecord, setArchiveRecord] = useState<any>(null);
   const [isArchiving, setIsArchiving] = useState(false);
+
+  function handleVaccineTypeChange(val: string) {
+    setFormData(f => ({ ...f, vaccine_type: val, vaccine_name: '' }));
+    setSelectedCoreVaccine(null);
+    setSeriesDates([]);
+    setLogError('');
+  }
+
+  function handleCoreVaccineSelect(name: string) {
+    const vaccine = getCoreVaccineByName(name);
+    setSelectedCoreVaccine(vaccine ?? null);
+    setFormData(f => ({ ...f, vaccine_name: name }));
+    setSeriesDates(vaccine ? Array(vaccine.doseLabels.length).fill('') : []);
+    setLogError('');
+  }
+
+  function handleSeriesDateChange(index: number, value: string) {
+    setSeriesDates(prev => prev.map((d, i) => (i === index ? value : d)));
+  }
 
   const handleEdit = (rec: any) => {
     setEditRecord(rec);
@@ -278,13 +303,40 @@ export default function VaccinationsPage() {
 
   // Handle Log Form Submit
   const handleLogVaccine = async () => {
-    if (!formData.pet_id || !formData.vaccine_name) return;
+    setLogError('');
+    if (!formData.pet_id) { setLogError('Please select a patient.'); return; }
+    if (!formData.vaccine_name) { setLogError('Please select or enter a vaccine name.'); return; }
+
+    // Validate series dates for core essential vaccines
+    if (selectedCoreVaccine) {
+      const emptyIndex = seriesDates.findIndex(d => !d);
+      if (emptyIndex !== -1) {
+        setLogError(`"${selectedCoreVaccine.doseLabels[emptyIndex]}" is required.`);
+        return;
+      }
+    }
+
+    // Build next_due_date and encode series schedule into notes
+    const nextDueDate = selectedCoreVaccine
+      ? seriesDates[0]
+      : formData.next_due_date;
+
+    let combinedNotes = formData.notes;
+    if (selectedCoreVaccine && seriesDates.length > 1) {
+      const scheduleLines = seriesDates
+        .slice(1)
+        .map((d, i) => `${selectedCoreVaccine.doseLabels[i + 1]}: ${format(new Date(d), 'MMM d, yyyy')}`)
+        .join(', ');
+      const seriesNote = `[Series: ${selectedCoreVaccine.doseLabels[0]}: ${format(new Date(seriesDates[0]), 'MMM d, yyyy')}, ${scheduleLines}]`;
+      combinedNotes = [seriesNote, formData.notes].filter(Boolean).join(' ');
+    }
+
     setIsSaving(true);
     try {
       const response = await fetch('/api/veterinarian/vaccinations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, next_due_date: nextDueDate, notes: combinedNotes }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Failed to log vaccination');
@@ -311,7 +363,11 @@ export default function VaccinationsPage() {
         {/* --- LOG NEW VACCINATION DIALOG --- */}
         <Dialog open={isModalOpen} onOpenChange={(open) => {
           setIsModalOpen(open);
-          if (!open) { setPetQuery(''); setPetResults([]); setSelectedPet(null); }
+          if (!open) {
+            setPetQuery(''); setPetResults([]); setSelectedPet(null);
+            setSelectedCoreVaccine(null); setSeriesDates([]); setLogError('');
+            setFormData({ pet_id: '', vaccine_name: '', vaccine_type: 'Core', batch_number: '', administered_date: new Date().toISOString().split('T')[0], next_due_date: format(addYears(new Date(), 1), 'yyyy-MM-dd'), notes: '' });
+          }
         }}>
           <DialogTrigger asChild>
             <Button className="bg-green-600 hover:bg-green-700 gap-2">
@@ -323,6 +379,8 @@ export default function VaccinationsPage() {
               <DialogTitle>Log New Vaccination</DialogTitle>
             </DialogHeader>
             <div className="grid gap-4 py-4">
+
+              {/* Patient search */}
               <div className="space-y-2">
                 <Label>Search Patient</Label>
                 {selectedPet ? (
@@ -367,7 +425,6 @@ export default function VaccinationsPage() {
                               ? `${ageYears}y ${ageMonths}m`
                               : `${differenceInMonths(now, dob)}m`
                             : null;
-
                           return (
                             <button
                               key={pet.id}
@@ -380,9 +437,7 @@ export default function VaccinationsPage() {
                                 {pet.species && <span className="capitalize">{pet.species}</span>}
                                 {pet.breed && <span>{pet.breed}</span>}
                                 {ageLabel && <span>{ageLabel} old</span>}
-                                {owner && (
-                                  <span>Owner: {owner.first_name} {owner.last_name}</span>
-                                )}
+                                {owner && <span>Owner: {owner.first_name} {owner.last_name}</span>}
                               </div>
                             </button>
                           );
@@ -393,30 +448,42 @@ export default function VaccinationsPage() {
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Vaccine Name</Label>
-                  <Input
-                    placeholder="e.g. Rabies, DHPP"
-                    value={formData.vaccine_name}
-                    onChange={e => setFormData({ ...formData, vaccine_name: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Type</Label>
-                  <Select
-                    defaultValue="Core"
-                    onValueChange={(val) => setFormData({ ...formData, vaccine_type: val })}
-                  >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Core">Core (Essential)</SelectItem>
-                      <SelectItem value="Non-Core">Non-Core (Lifestyle)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              {/* Vaccine Type */}
+              <div className="space-y-2">
+                <Label>Vaccine Type</Label>
+                <Select value={formData.vaccine_type} onValueChange={handleVaccineTypeChange}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Core">Core (Essential)</SelectItem>
+                    <SelectItem value="Non-Core">Non-Core (Lifestyle)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
+              {/* Vaccine Name — dropdown for Core, free text for Non-Core */}
+              <div className="space-y-2">
+                <Label>Vaccine Name <span className="text-destructive">*</span></Label>
+                {formData.vaccine_type === 'Core' ? (
+                  <Select value={formData.vaccine_name} onValueChange={handleCoreVaccineSelect}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a core vaccine…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CORE_ESSENTIAL_VACCINES.map(v => (
+                        <SelectItem key={v.name} value={v.name}>{v.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    placeholder="e.g. Bordetella, Lyme"
+                    value={formData.vaccine_name}
+                    onChange={e => setFormData(f => ({ ...f, vaccine_name: e.target.value }))}
+                  />
+                )}
+              </div>
+
+              {/* Batch number */}
               <div className="space-y-2">
                 <Label>Batch / Lot Number</Label>
                 <Input
@@ -426,15 +493,41 @@ export default function VaccinationsPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Date Administered</Label>
-                  <Input
-                    type="date"
-                    value={formData.administered_date}
-                    onChange={e => setFormData({ ...formData, administered_date: e.target.value })}
-                  />
+              {/* Date Administered (always 1st dose) */}
+              <div className="space-y-2">
+                <Label>
+                  {selectedCoreVaccine ? '1st Dose Date (Administered Today)' : 'Date Administered'}
+                  <span className="text-destructive"> *</span>
+                </Label>
+                <Input
+                  type="date"
+                  value={formData.administered_date}
+                  onChange={e => setFormData({ ...formData, administered_date: e.target.value })}
+                />
+              </div>
+
+              {/* Series due dates for Core Essential vaccines */}
+              {selectedCoreVaccine ? (
+                <div className="space-y-3 rounded-md border border-green-500/30 bg-green-500/5 p-3">
+                  <p className="text-xs font-semibold text-green-700 dark:text-green-400 uppercase tracking-wide">
+                    Series Schedule — {selectedCoreVaccine.totalDoses} doses total
+                  </p>
+                  {selectedCoreVaccine.doseLabels.map((label, i) => (
+                    <div key={i} className="space-y-1">
+                      <Label className="text-sm">
+                        {label} <span className="text-destructive">*</span>
+                      </Label>
+                      <Input
+                        type="date"
+                        className="border-green-500/40 focus-visible:ring-green-500/40"
+                        value={seriesDates[i] ?? ''}
+                        onChange={e => handleSeriesDateChange(i, e.target.value)}
+                      />
+                    </div>
+                  ))}
                 </div>
+              ) : (
+                /* Single next due date for Non-Core */
                 <div className="space-y-2">
                   <Label className="text-green-600 font-semibold">Next Due Date</Label>
                   <Input
@@ -444,8 +537,9 @@ export default function VaccinationsPage() {
                     onChange={e => setFormData({ ...formData, next_due_date: e.target.value })}
                   />
                 </div>
-              </div>
+              )}
 
+              {/* Notes */}
               <div className="space-y-2">
                 <Label>Notes / Side Effects</Label>
                 <Input
@@ -454,10 +548,13 @@ export default function VaccinationsPage() {
                   onChange={e => setFormData({ ...formData, notes: e.target.value })}
                 />
               </div>
+
+              {/* Inline form error */}
+              {logError && <p className="text-sm text-destructive">{logError}</p>}
             </div>
             <DialogFooter>
               <Button disabled={isSaving} onClick={handleLogVaccine} className="bg-green-600">
-                {isSaving ? 'Saving...' : 'Save Record'}
+                {isSaving ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Saving...</> : 'Save Record'}
               </Button>
             </DialogFooter>
           </DialogContent>

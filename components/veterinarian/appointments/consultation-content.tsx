@@ -10,11 +10,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from "@/components/ui/label";
 import { Badge } from '@/components/ui/badge';
 import {
-  Stethoscope, FileText, ClipboardCheck
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+} from '@/components/ui/dialog';
+import {
+  Stethoscope, FileText, ClipboardCheck, Weight, AlertCircle,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Fetcher } from '@/lib/fetcher';
-import { toast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/use-toast';
 
 export default function ConsultationContent() {
   // SWR for fetching the consultation queue (appointments ready for exam)
@@ -24,9 +27,12 @@ export default function ConsultationContent() {
   const isLoading = false;
   const [selectedAppt, setSelectedAppt] = useState<any | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const { toast } = useToast();
 
   // Form state for the medical record being created/edited
   const [record, setRecord] = useState({
+    weight_kg: '',
     chief_complaint: '',
     examination_findings: '',
     diagnosis: '',
@@ -39,6 +45,7 @@ export default function ConsultationContent() {
   const handleSelectPatient = (appt: any) => {
     setSelectedAppt(appt);
     setRecord({
+      weight_kg: appt.pets?.weight != null ? String(appt.pets.weight) : '',
       chief_complaint: appt.reason_for_visit || '',
       examination_findings: '',
       diagnosis: '',
@@ -49,8 +56,8 @@ export default function ConsultationContent() {
   };
 
   // Submit Consultation: Used Promise to allow parallel DB operations and centralized error handling
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleFinalize = async () => {
+    setShowConfirm(false);
     setIsSaving(true);
 
     try {
@@ -86,11 +93,11 @@ export default function ConsultationContent() {
       if (!res.ok) {
         throw new Error(result.error || 'Failed to save consultation');
       }
-      toast({ title: 'Consultation Saved', description: 'Medical record has been created.' });
-      mutate('api/veterinarian/consultations');
+      toast({ title: 'Consultation Saved', description: `Medical record for ${selectedAppt.pets.name} has been finalized.` });
+      mutate('/api/veterinarian/consultations');
       setSelectedAppt(null);
     } catch (error: any) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      toast({ title: 'Error', description: error.message || 'Failed to save record.', variant: 'destructive' });
     } finally {
       setIsSaving(false);
     }
@@ -154,14 +161,33 @@ export default function ConsultationContent() {
                     </div>
                     <Stethoscope size={32} className="opacity-20" />
                   </div>
-                  <div className="mt-4 pt-4 border-t border-blue-700/50 flex gap-6 text-sm">
+                  <div className="mt-4 pt-4 border-t border-blue-700/50 flex flex-wrap gap-6 text-sm items-end">
                     <div>
                       <span className="block opacity-60 text-xs">Owner</span>
                       {selectedAppt.pets.client_profiles?.first_name} {selectedAppt.pets.client_profiles?.last_name}
                     </div>
                     <div>
-                       <span className="block opacity-60 text-xs">Date</span>
-                       {format(new Date(), 'MMM dd, yyyy')}
+                      <span className="block opacity-60 text-xs">Date</span>
+                      {format(new Date(), 'MMM dd, yyyy')}
+                    </div>
+                    <div>
+                      <span className="flex items-center gap-1 opacity-60 text-xs mb-1">
+                        <Weight size={11} /> Weight (kg)
+                        {selectedAppt.pets?.weight != null && (
+                          <span className="ml-1 text-[10px] text-green-300 bg-green-900/40 border border-green-600/40 px-1.5 py-0.5 rounded-full">
+                            Auto-filled
+                          </span>
+                        )}
+                      </span>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        value={record.weight_kg}
+                        onChange={(e) => setRecord({ ...record, weight_kg: e.target.value })}
+                        placeholder="0.0"
+                        className="w-24 bg-blue-800/50 border border-blue-600/50 rounded-md px-2 py-1 text-white text-sm placeholder:text-blue-300/50 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                      />
                     </div>
                   </div>
                 </CardContent>
@@ -175,7 +201,7 @@ export default function ConsultationContent() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <form onSubmit={handleSubmit} className="space-y-6">
+                  <div className="space-y-6">
 
                     <div className="space-y-2">
                       <Label className="text-blue-800 font-semibold">Chief Complaint / History (Subjective)</Label>
@@ -238,12 +264,17 @@ export default function ConsultationContent() {
 
                     <div className="pt-4 flex justify-end gap-3 border-t">
                       <Button type="button" variant="outline">Save Draft</Button>
-                      <Button type="submit" className="bg-blue-600 hover:bg-blue-700 min-w-[200px]" disabled={isSaving}>
+                      <Button
+                        type="button"
+                        className="bg-blue-600 hover:bg-blue-700 min-w-50"
+                        disabled={isSaving}
+                        onClick={() => setShowConfirm(true)}
+                      >
                         {isSaving ? 'Finalizing...' : 'Finalize Record'}
                       </Button>
                     </div>
 
-                  </form>
+                  </div>
                 </CardContent>
               </Card>
 
@@ -258,6 +289,62 @@ export default function ConsultationContent() {
         </div>
 
       </div>
+
+      {/* Finalize Confirmation Modal */}
+      <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-blue-600" />
+              Finalize Medical Record
+            </DialogTitle>
+            <DialogDescription>
+              You are about to finalize the medical record for{' '}
+              <span className="font-semibold text-foreground">{selectedAppt?.pets?.name}</span>.
+              This will mark the appointment as completed and save the record permanently.
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedAppt && (
+            <div className="rounded-lg border bg-muted/40 p-4 space-y-1 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Patient</span>
+                <span className="font-medium">{selectedAppt.pets.name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Diagnosis</span>
+                <span className="font-medium">{record.diagnosis || '—'}</span>
+              </div>
+              {record.weight_kg && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Weight</span>
+                  <span className="font-medium">{record.weight_kg} kg</span>
+                </div>
+              )}
+              {record.next_appointment && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Next Appointment</span>
+                  <span className="font-medium">{format(new Date(record.next_appointment), 'MMM dd, yyyy')}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setShowConfirm(false)} disabled={isSaving}>
+              Go Back
+            </Button>
+            <Button
+              className="bg-blue-600 hover:bg-blue-700"
+              onClick={handleFinalize}
+              disabled={isSaving}
+            >
+              {isSaving ? 'Finalizing...' : 'Yes, Finalize'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }

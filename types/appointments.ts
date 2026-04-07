@@ -13,6 +13,31 @@ export type {
   AppointmentType
 };
 
+// Type that matches the shape returned by /api/appointments
+// (uses Supabase query aliases: pet, veterinarian, pet.client)
+export interface AppointmentApiResponse extends Appointment {
+  pet?: {
+    id: string;
+    name: string;
+    species: string;
+    breed?: string;
+    owner_id: string;
+    client?: {
+      id: string;
+      first_name: string;
+      last_name: string;
+      phone: string;
+      email?: { email: string }; // nested from users join
+    };
+  };
+  veterinarian?: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    specializations?: string[];
+  };
+}
+
 // Additional appointment-specific utility types
 export interface AppointmentCalendarEvent {
   id: string;

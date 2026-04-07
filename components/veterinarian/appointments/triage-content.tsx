@@ -62,7 +62,11 @@ export default function TriageContent() {
 
   const handleSelect = (appt: any) => {
     setSelectedAppt(appt);
-    setVitals((prev) => ({ ...prev, chief_complaint: appt.reason_for_visit || '' }));
+    setVitals((prev) => ({
+      ...prev,
+      chief_complaint: appt.reason_for_visit || '',
+      weight: appt.pets?.weight != null ? String(appt.pets.weight) : '',
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -244,6 +248,11 @@ export default function TriageContent() {
                     <div className="space-y-2">
                       <Label className="flex items-center gap-1 text-xs uppercase text-muted-foreground">
                         <Weight size={13} /> Weight (kg) <span className="text-red-500">*</span>
+                        {selectedAppt?.pets?.weight != null && (
+                          <span className="ml-1 text-[10px] normal-case font-normal text-green-600 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded-full">
+                            Auto-filled
+                          </span>
+                        )}
                       </Label>
                       <Input
                         type="number" step="0.1" required

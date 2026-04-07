@@ -95,8 +95,7 @@ export async function GET(request: NextRequest) {
         )
       `,
       )
-      .order("scheduled_start", { ascending: false })
-      .limit(10);
+      .order("scheduled_start", { ascending: false });
 
     if (status && status !== "all") {
       query = query.eq("appointment_status", status);
