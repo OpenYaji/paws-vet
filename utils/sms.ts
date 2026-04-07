@@ -15,7 +15,7 @@ const gateways: sms_provider[] = [
   {
     url: process.env.SECONDARY_SMS_GATEWAY_URL || "",
     token: process.env.SECONDARY_SMS_GATEWAY_TOKEN || "",
-  }
+  },
 ];
 
 export async function sendSms(to: string, message: string): Promise<boolean> {
@@ -31,17 +31,21 @@ export async function sendSms(to: string, message: string): Promise<boolean> {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": gateway.token, // Traccar SMS Gateway directly parses the token without "Bearer"
+          Authorization: gateway.token, // Traccar SMS Gateway directly parses the token without "Bearer"
         },
         body: JSON.stringify({ to, message }),
       });
 
-      console.log(`[SMS Gateway Debug] POST to ${gateway.url} returned status: ${response.status}`);
+      console.log(
+        `[SMS Gateway Debug] POST to ${gateway.url} returned status: ${response.status}`,
+      );
 
       if (response.ok) {
         return true;
       } else {
-        console.error(`[SMS Gateway Error] Failed to send to ${gateway.url}: HTTP ${response.status}`);
+        console.error(
+          `[SMS Gateway Error] Failed to send to ${gateway.url}: HTTP ${response.status}`,
+        );
         const text = await response.text();
         console.error(`[SMS Gateway Body] ${text}`);
       }
