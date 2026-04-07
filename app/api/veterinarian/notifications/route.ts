@@ -79,14 +79,13 @@ const notifSelect = `
 
 // GET: fetch vet-specific notifications with optional unread + pagination filters
 export async function GET(request: NextRequest) {
-  const { user, role, supabase } = await getAuthUser(request);
-  if (!user) return jsonError("Unauthorized", 401);
-
-  // Only veterinarians may access this endpoint
-  const authorized = await isVet(supabase, user!.id);
-  if (!authorized) return jsonError("Forbidden: veterinarians only", 403);
-
   try {
+    const supabase = await createClient();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const user = session?.user;
+    if (!user) return jsonError("Unauthorized", 401);
     const params = request.nextUrl.searchParams;
     const limit = Math.min(parseInt(params.get("limit") || "20", 10), 100);
     const unreadOnly = (params.get("is_read") ?? "false") === "false";
@@ -105,20 +104,27 @@ export async function GET(request: NextRequest) {
     const { data, error } = await query;
 
     if (error) {
-      console.error("[GET /api/veterinarian/notifications] db error", { userId: user!.id, error });
+      console.error("[GET /api/veterinarian/notifications] db error", {
+        userId: user!.id,
+        error,
+      });
       return jsonError("Failed to fetch notifications", 500);
     }
 
     return NextResponse.json(data ?? []);
   } catch (err) {
-    console.error("[GET /api/veterinarian/notifications] unexpected", { userId: user!.id, err });
+    console.error("[GET /api/veterinarian/notifications] unexpected", err);
     return jsonError("Internal server error", 500);
   }
 }
 
 // PATCH: mark a notification as read
 export async function PATCH(request: NextRequest) {
-  const { user, role, supabase } = await getAuthUser(request);
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const user = session?.user;
   if (!user) return jsonError("Unauthorized", 401);
 
   const authorized = await isVet(supabase, user!.id);
