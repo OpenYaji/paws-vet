@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { handleError } from "@/utils/error-handler";
+import { sendSms } from "@/utils/sms";
 
 export async function GET(request: NextRequest) {
   try {
@@ -98,7 +99,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const [insertResult, auditResult] = await Promise.all([
+    const [petAndOwner, insertResult, auditResult] = await Promise.all([
+      supabase
+        .from("pets")
+        .select(
+          `
+          id,
+          name,
+          client_profiles(id, first_name, last_name, phone)
+          `,
+        )
+        .eq("id", body.pet_id)
+        .maybeSingle(),
       supabase
         .from("vaccination_records")
         .insert([
@@ -122,9 +134,28 @@ export async function POST(request: NextRequest) {
       }),
     ]);
 
-    if (insertResult.error)
-      return handleError(insertResult.error, "POST /api/vaccinations (insert)");
+    if (petAndOwner.error && petAndOwner.error.code !== "PGRST116") {
+      throw petAndOwner.error;
+    }
+    if (insertResult.error) throw insertResult.error;
     if (auditResult.error) throw auditResult.error;
+
+    // extract the exact data you need
+    const petAndOwnerData = petAndOwner.data;
+
+    // supabase returns an object but sometimes with arrays
+    const ownerData = Array.isArray(petAndOwnerData?.client_profiles)
+      ? petAndOwnerData?.client_profiles[0] // get the first element if it's an array
+      : petAndOwnerData?.client_profiles; // get the object if it's an object
+
+    if (ownerData?.phone) {
+      const petName = petAndOwnerData?.name;
+      const message = `Hi! This is Paws Vet Clinic. Just confirming that ${petName} has successfully received their ${body.vaccine_name} vaccination.`;
+      const smsSuccess = await sendSms(ownerData.phone, message);
+      if (!smsSuccess) {
+        console.error("Failed to send SMS, but vaccination was logged.");
+      }
+    }
     return NextResponse.json({ success: true }, { status: 201 });
   } catch (error: any) {
     return handleError(error, "POST /api/vaccinations");
