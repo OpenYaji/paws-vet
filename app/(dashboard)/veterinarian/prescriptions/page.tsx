@@ -1,8 +1,8 @@
 "use client";
-
 import { useState, useMemo } from 'react';
 import { supabase } from '@/lib/auth-client';
 import useSWR, { mutate } from 'swr';
+import { Fetcher } from '@/lib/fetcher';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
@@ -37,8 +37,6 @@ async function authedFetch(path: string, init?: RequestInit) {
 const itemsList = 20;
 const itemsTable = 20;
 
-const fetcher = (url: string) => fetch(url).then(res => res.json());
-
 function StatusBadge({ dispensedDate }: { dispensedDate: string | null }) {
   return (
     <Badge
@@ -53,7 +51,10 @@ function StatusBadge({ dispensedDate }: { dispensedDate: string | null }) {
 export default function PrescriptionsPage() {
   const { data: prescriptions = [], isLoading } = useSWR(
     "/api/veterinarian/prescriptions",
-    fetcher,
+    Fetcher,{
+      revalidateOnFocus: false,
+      dedupingInterval: 30000,
+    }
   );
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'table'>('list');
