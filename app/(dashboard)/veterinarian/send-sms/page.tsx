@@ -101,6 +101,12 @@ export default function SmsClientPage() {
         }),
       });
 
+      if (!res.ok) {
+        // Try to extract an error message from the backend if they provide one
+        const errorData = await res.json().catch(() => ({})); 
+        throw new Error(errorData.message || `Server error: ${res.status}`);
+      }
+  
       const data = await res.json();
 
       if (res.ok) {
