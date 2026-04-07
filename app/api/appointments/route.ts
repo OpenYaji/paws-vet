@@ -9,7 +9,6 @@ export const runtime = "nodejs";
 
 /** Service-role client — used for privileged DB operations (bypasses RLS). */
 
-
 // ── Response helpers ──────────────────────────────────────────────────────────
 
 /** Returns a consistent error JSON response. */
@@ -58,13 +57,6 @@ function requireRole(
 }
 
 export async function GET(request: NextRequest) {
-  // 1. Create cookie client + 2. Get user (auth)
-  const { user, response: authError } = await requireUser(request);
-  if (authError) return authError; // auth failed — response is already a 401
-
-  // 3. Authorize — any authenticated role may read appointments
-  //    (narrow by ownership/vet inside the query when needed)
-
   try {
     // DB query — service-role client to bypass RLS
     const supabase = await createClient();
@@ -152,7 +144,11 @@ export async function GET(request: NextRequest) {
       },
     }));
 
-    console.log("[GET /api/appointments] Fetched:", transformedData.length, "records");
+    console.log(
+      "[GET /api/appointments] Fetched:",
+      transformedData.length,
+      "records",
+    );
     return NextResponse.json(transformedData, { status: 200 });
   } catch (error: any) {
     // Unexpected JS/network error — centralized handler
@@ -240,7 +236,11 @@ export async function POST(request: NextRequest) {
 
     if (!data || data.length === 0) {
       console.error("[POST /api/appointments] No data returned after insert");
-      return jsonError("Failed to create appointment", 500, "No data returned from database");
+      return jsonError(
+        "Failed to create appointment",
+        500,
+        "No data returned from database",
+      );
     }
 
     console.log("[POST /api/appointments] Created:", data[0].id);
