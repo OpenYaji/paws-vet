@@ -1,34 +1,10 @@
 import { createClient } from "@/utils/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { handleError } from "@/utils/error-handler";
+import { sendSms } from "@/utils/sms";
 
 // Force dynamic rendering to ensure fresh data on each request
 export const dynamic = "force-dynamic";
-
-// get the authenticated user and role
-async function getAuthUser(request: NextRequest) {
-  const supabase = await createClient();
-
-  // check for manual token in headers (for fetcher)
-  const authHeader = request.headers.get("Authorization");
-  const token = authHeader ? authHeader.replace("Bearer ", "").trim() : null;
-
-  const {
-    data: { user },
-    error,
-  } = token
-    ? await supabase.auth.getUser(token)
-    : await supabase.auth.getUser();
-
-  if (error || !user) return { user: null, role: null, supabase };
-
-  const role =
-    user?.user_metadata?.role?.toLowerCase() ||
-    user?.app_metadata?.role?.toLowerCase() ||
-    "client";
-
-  return { user, role, supabase };
-}
 
 export async function GET(request: NextRequest) {
   try {
@@ -67,12 +43,15 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { user } = await getAuthUser(request);
+    const supabase = await createClient();
 
-    // verify authentication before creating quarantine records
-    if (!user) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const user = session?.user;
+
+    if (!user)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
 
     // Parse JSON request body
     const body = await request.json();
@@ -88,17 +67,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = await createClient();
-
     const [insertResult, auditResult] = await Promise.all([
-      supabase.from("quarantine_pets").insert({
-        pet_id,
-        reason,
-        notes: notes || null,
-        start_date,
-        expected_end_date,
-        status: "active",
-      }).select().single(),
+      supabase
+        .from("quarantine_pets")
+        .insert({
+          pet_id,
+          reason,
+          notes: notes || null,
+          start_date,
+          expected_end_date,
+          status: "active",
+        })
+        .select()
+        .single(),
       supabase.from("audit_logs").insert({
         user_id: user.id,
         action_type: "create",
@@ -107,7 +88,8 @@ export async function POST(request: NextRequest) {
       }),
     ]);
 
-    if (insertResult.error) return handleError(insertResult.error, "POST /api/quarantine");
+    if (insertResult.error)
+      return handleError(insertResult.error, "POST /api/quarantine");
     if (auditResult.error) throw auditResult.error;
     return NextResponse.json({ success: true }, { status: 201 });
   } catch (error) {
@@ -118,10 +100,15 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const { user } = await getAuthUser(request);
-    if (!user) {
+    const supabase = await createClient();
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const user = session?.user;
+
+    if (!user)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
 
     const body = await request.json();
     const { id, status, end_date, reason, notes, expected_end_date } = body;
@@ -138,14 +125,22 @@ export async function PATCH(request: NextRequest) {
     if (end_date !== undefined) patch.end_date = end_date || null;
     if (reason !== undefined) patch.reason = reason;
     if (notes !== undefined) patch.notes = notes;
-    if (expected_end_date !== undefined) patch.expected_end_date = expected_end_date;
+    if (expected_end_date !== undefined)
+      patch.expected_end_date = expected_end_date;
 
-    const supabase = await createClient();
-
-    const { data: oldRecord } = await supabase.from("quarantine_pets").select().eq("id", id).single();
+    const { data: oldRecord } = await supabase
+      .from("quarantine_pets")
+      .select()
+      .eq("id", id)
+      .single();
 
     const [updateResult, auditResult] = await Promise.all([
-      supabase.from("quarantine_pets").update(patch).eq("id", id).select().single(),
+      supabase
+        .from("quarantine_pets")
+        .update(patch)
+        .eq("id", id)
+        .select()
+        .single(),
       supabase.from("audit_logs").insert({
         user_id: user.id,
         action_type: "update",
@@ -156,7 +151,8 @@ export async function PATCH(request: NextRequest) {
       }),
     ]);
 
-    if (updateResult.error) return handleError(updateResult.error, "PATCH /api/quarantine");
+    if (updateResult.error)
+      return handleError(updateResult.error, "PATCH /api/quarantine");
     if (auditResult.error) throw auditResult.error;
 
     return NextResponse.json({ success: true });
