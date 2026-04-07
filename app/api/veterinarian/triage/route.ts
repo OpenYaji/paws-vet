@@ -8,7 +8,10 @@ async function getAuthUser(request: NextRequest) {
   const supabase = await createClient();
   const authHeader = request.headers.get("Authorization");
   const token = authHeader ? authHeader.replace("Bearer ", "").trim() : null;
-  const { data: { user }, error } = token
+  const {
+    data: { user },
+    error,
+  } = token
     ? await supabase.auth.getUser(token)
     : await supabase.auth.getUser();
   if (error || !user) return { user: null, role: null, supabase };
@@ -32,12 +35,29 @@ export async function GET(request: NextRequest) {
     // Return completed triage records for today (for vitals correction)
     if (completed === "true") {
       const now = new Date();
-      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-      const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+      const startOfDay = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+        0,
+        0,
+        0,
+        0,
+      );
+      const endOfDay = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+        23,
+        59,
+        59,
+        999,
+      );
 
       const { data, error } = await supabase
         .from("triage_records")
-        .select(`
+        .select(
+          `
           id,
           appointment_id,
           pet_id,
@@ -50,7 +70,8 @@ export async function GET(request: NextRequest) {
           chief_complaint,
           created_at,
           pets(id, name, species, breed)
-        `)
+        `,
+        )
         .gte("created_at", startOfDay.toISOString())
         .lte("created_at", endOfDay.toISOString())
         .order("created_at", { ascending: false });
@@ -61,18 +82,36 @@ export async function GET(request: NextRequest) {
 
     // Default: return waiting room queue (un-triaged)
     const now = new Date();
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    const startOfDay = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      0,
+      0,
+      0,
+      0,
+    );
+    const endOfDay = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      23,
+      59,
+      59,
+      999,
+    );
 
     // Run both queries in parallel — no reason to wait for one before starting the other
     const [{ data, error }, { data: triageRecords }] = await Promise.all([
       supabase
         .from("appointments")
-        .select(`
+        .select(
+          `
           id, appointment_number, appointment_type, scheduled_start, checked_in_at, reason_for_visit,
           pets(id, name, species, breed,
             client_profiles!pets_owner_id_fkey(first_name, last_name))
-        `)
+        `,
+        )
         .eq("appointment_status", "in_progress")
         .order("checked_in_at", { ascending: true, nullsFirst: false }),
 
@@ -89,7 +128,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json([], { status: 200 });
     }
 
-    const triageCompletedIds = new Set(triageRecords?.map((r) => r.appointment_id) || []);
+    const triageCompletedIds = new Set(
+      triageRecords?.map((r) => r.appointment_id) || [],
+    );
 
     const filteredData = (data || []).filter((appt: any) => {
       if (triageCompletedIds.has(appt.id)) return false;
@@ -111,28 +152,58 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { appointment_id, pet_id, weight, temperature, heart_rate, respiratory_rate, mucous_membrane, triage_level, chief_complaint } = body;
+    const {
+      appointment_id,
+      pet_id,
+      weight,
+      temperature,
+      heart_rate,
+      respiratory_rate,
+      mucous_membrane,
+      triage_level,
+      chief_complaint,
+    } = body;
 
     if (!appointment_id || !pet_id) {
-      return NextResponse.json({ error: "Appointment ID and Pet ID are required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Appointment ID and Pet ID are required" },
+        { status: 400 },
+      );
     }
     if (!weight || !temperature) {
-      return NextResponse.json({ error: "Weight and Temperature are required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Weight and Temperature are required" },
+        { status: 400 },
+      );
     }
 
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
     const [triageResult, , auditResult] = await Promise.all([
-      supabase.from("triage_records").insert({
-        appointment_id, pet_id,
-        weight: parseFloat(weight),
-        temperature: parseFloat(temperature),
-        heart_rate: heart_rate ? parseInt(heart_rate) : null,
-        respiratory_rate: respiratory_rate ? parseInt(respiratory_rate) : null,
-        mucous_membrane, triage_level, chief_complaint,
-      }).select().single(),
-      supabase.from("pets").update({ weight: parseFloat(weight) }).eq("id", pet_id),
+      supabase
+        .from("triage_records")
+        .insert({
+          appointment_id,
+          pet_id,
+          weight: parseFloat(weight),
+          temperature: parseFloat(temperature),
+          heart_rate: heart_rate ? parseInt(heart_rate) : null,
+          respiratory_rate: respiratory_rate
+            ? parseInt(respiratory_rate)
+            : null,
+          mucous_membrane,
+          triage_level,
+          chief_complaint,
+        })
+        .select()
+        .single(),
+      supabase
+        .from("pets")
+        .update({ weight: parseFloat(weight) })
+        .eq("id", pet_id),
       supabase.from("audit_logs").insert({
         user_id: user?.id ?? null,
         action_type: "create",
@@ -144,7 +215,11 @@ export async function POST(request: NextRequest) {
     if (triageResult.error) throw new Error(triageResult.error.message);
     if (auditResult.error) throw auditResult.error;
 
-    return NextResponse.json({ success: true, message: "Triage completed successfully", triage_id: triageResult.data.id });
+    return NextResponse.json({
+      success: true,
+      message: "Triage completed successfully",
+      triage_id: triageResult.data.id,
+    });
   } catch (error: any) {
     return handleError(error, "POST /api/triage");
   }
@@ -160,18 +235,36 @@ export async function PATCH(request: NextRequest) {
 
     const body = await request.json();
     const { id, ...updates } = body;
-    if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
+    if (!id)
+      return NextResponse.json({ error: "id is required" }, { status: 400 });
 
-    const allowed = ["weight", "temperature", "heart_rate", "respiratory_rate", "mucous_membrane", "triage_level", "chief_complaint"];
+    const allowed = [
+      "weight",
+      "temperature",
+      "heart_rate",
+      "respiratory_rate",
+      "mucous_membrane",
+      "triage_level",
+      "chief_complaint",
+    ];
     const patch: Record<string, any> = {};
     for (const key of allowed) {
       if (key in updates) patch[key] = updates[key];
     }
 
-    const { data: oldRecord } = await supabase.from("triage_records").select().eq("id", id).single();
+    const { data: oldRecord } = await supabase
+      .from("triage_records")
+      .select()
+      .eq("id", id)
+      .single();
 
     const [updateResult, auditResult] = await Promise.all([
-      supabase.from("triage_records").update(patch).eq("id", id).select().single(),
+      supabase
+        .from("triage_records")
+        .update(patch)
+        .eq("id", id)
+        .select()
+        .single(),
       supabase.from("audit_logs").insert({
         user_id: user.id,
         action_type: "update",
@@ -182,7 +275,8 @@ export async function PATCH(request: NextRequest) {
       }),
     ]);
 
-    if (updateResult.error) return handleError(updateResult.error, "PATCH /api/triage");
+    if (updateResult.error)
+      return handleError(updateResult.error, "PATCH /api/triage");
     if (auditResult.error) throw auditResult.error;
     return NextResponse.json({ success: true });
   } catch (error: any) {
