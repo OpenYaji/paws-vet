@@ -307,7 +307,6 @@ export default function VaccinationsPage() {
     if (!formData.pet_id) { setLogError('Please select a patient.'); return; }
     if (!formData.vaccine_name) { setLogError('Please select or enter a vaccine name.'); return; }
 
-    // Validate series dates for core essential vaccines
     if (selectedCoreVaccine) {
       const emptyIndex = seriesDates.findIndex(d => !d);
       if (emptyIndex !== -1) {
@@ -316,32 +315,70 @@ export default function VaccinationsPage() {
       }
     }
 
-    // Build next_due_date and encode series schedule into notes
-    const nextDueDate = selectedCoreVaccine
-      ? seriesDates[0]
-      : formData.next_due_date;
-
-    let combinedNotes = formData.notes;
-    if (selectedCoreVaccine && seriesDates.length > 1) {
-      const scheduleLines = seriesDates
-        .slice(1)
-        .map((d, i) => `${selectedCoreVaccine.doseLabels[i + 1]}: ${format(new Date(d), 'MMM d, yyyy')}`)
-        .join(', ');
-      const seriesNote = `[Series: ${selectedCoreVaccine.doseLabels[0]}: ${format(new Date(seriesDates[0]), 'MMM d, yyyy')}, ${scheduleLines}]`;
-      combinedNotes = [seriesNote, formData.notes].filter(Boolean).join(' ');
-    }
-
     setIsSaving(true);
+
     try {
-      const response = await fetch('/api/veterinarian/vaccinations', {
+      let endpoint = '/api/veterinarian/vaccinations';
+      let payload;
+
+      // It is a multi-dose series
+      if (selectedCoreVaccine && seriesDates.length > 0) {
+        endpoint = '/api/veterinarian/vaccinations/vaccine-batches';
+        
+        const vaccinesArray = [];
+
+        // 1st dose (administered today)
+        vaccinesArray.push({
+          pet_id: formData.pet_id,
+          vaccine_name: formData.vaccine_name,
+          vaccine_type: formData.vaccine_type,
+          batch_number: formData.batch_number || null,
+          administered_date: formData.administered_date,
+          next_due_date: seriesDates[0], // link to the 2nd dose
+          side_effects_noted: formData.notes || null,
+        });
+
+        // future scheduled doses
+        seriesDates.forEach((futureDate, index) => {
+          vaccinesArray.push({
+            pet_id: formData.pet_id,
+            vaccine_name: formData.vaccine_name,
+            vaccine_type: formData.vaccine_type,
+            batch_number: null, // unknown until actual visit
+            administered_date: futureDate, // not given yet
+            next_due_date: seriesDates[index + 1] || null, // link to next dose, null if it's the final booster
+            side_effects_noted: `${selectedCoreVaccine.doseLabels[index]} (Scheduled)`,
+          });
+        });
+
+        payload = { vaccines: vaccinesArray };
+      } 
+      // it is a single, normal shot
+      else {
+        payload = {
+          pet_id: formData.pet_id,
+          vaccine_name: formData.vaccine_name,
+          vaccine_type: formData.vaccine_type,
+          batch_number: formData.batch_number || null,
+          administered_date: formData.administered_date,
+          next_due_date: formData.next_due_date || null,
+          notes: formData.notes || null,
+        };
+      }
+
+      // send the request
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...formData, next_due_date: nextDueDate, notes: combinedNotes }),
+        body: JSON.stringify(payload),
       });
+
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Failed to log vaccination');
+      
       toast({ title: 'Vaccination Logged', description: 'Record has been saved.' });
       setIsModalOpen(false);
+      
     } catch (error: any) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } finally {

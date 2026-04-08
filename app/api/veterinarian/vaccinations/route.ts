@@ -32,11 +32,14 @@ export async function GET(request: NextRequest) {
     ]);
 
     if (petsResult.error)
-      return handleError(petsResult.error, "GET /api/vaccinations (pets)");
+      return NextResponse.json(
+        { error: petsResult.error.message },
+        { status: 500 },
+      );
     if (vaccinationHistoryResult.error)
-      return handleError(
-        vaccinationHistoryResult.error,
-        "GET /api/vaccinations (history)",
+      return NextResponse.json(
+        { error: vaccinationHistoryResult.error.message },
+        { status: 500 },
       );
 
     return NextResponse.json({
@@ -54,14 +57,17 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient();
 
     const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    if (authError || !user || user.user_metadata?.role !== "veterinarian") {
-      return NextResponse.json(
-        { error: "Unauthorized access" },
-        { status: 401 },
-      );
+      data: { session },
+      error,
+    } = await supabase.auth.getSession();
+    const user = session?.user;
+    if (
+      error ||
+      !session ||
+      !user ||
+      user.user_metadata?.role !== "veterinarian"
+    ) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { data: vetProfile, error: vetError } = await supabase
@@ -151,10 +157,15 @@ export async function POST(request: NextRequest) {
     if (ownerData?.phone) {
       const petName = petAndOwnerData?.name;
       const message = `Hi! This is Paws Vet Clinic. Just confirming that ${petName} has successfully received their ${body.vaccine_name} vaccination.`;
-      const smsSuccess = await sendSms(ownerData.phone, message);
-      if (!smsSuccess) {
-        console.error("Failed to send SMS, but vaccination was logged.");
-      }
+      
+      // Fire-and-forget the SMS to prevent blocking the API response
+      sendSms(ownerData.phone, message)
+        .then((smsSuccess) => {
+          if (!smsSuccess) {
+            console.error("Failed to send SMS, but vaccination was logged.");
+          }
+        })
+        .catch(err => console.error("Unhandled SMS error:", err));
     }
     return NextResponse.json({ success: true }, { status: 201 });
   } catch (error: any) {
@@ -167,10 +178,16 @@ export async function PATCH(request: NextRequest) {
     const supabase = await createClient();
 
     const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    if (authError || !user || user.user_metadata?.role !== "veterinarian") {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession();
+    const user = session?.user;
+    if (
+      error ||
+      !session ||
+      !user ||
+      user.user_metadata?.role !== "veterinarian"
+    ) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -224,10 +241,16 @@ export async function DELETE(request: NextRequest) {
     const supabase = await createClient();
 
     const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    if (authError || !user || user.user_metadata?.role !== "veterinarian") {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession();
+    const user = session?.user;
+    if (
+      error ||
+      !session ||
+      !user ||
+      user.user_metadata?.role !== "veterinarian"
+    ) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
