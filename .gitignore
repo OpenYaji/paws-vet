@@ -63,4 +63,5 @@ package.json
 .agents/
 .claude/
 CLAUDE.md
+GEMINI.md
 skills-lock.json
