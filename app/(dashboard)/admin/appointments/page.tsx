@@ -21,7 +21,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Search, Filter, Eye, Phone, Mail } from 'lucide-react';
-import { Appointment } from '@/types/appointments';
+import { AppointmentApiResponse as Appointment } from '@/types/appointments';
 
 import HeatmapCalendar from '@/components/appointments/heatmap-calendar';
 import DailyDetailPanel from '@/components/appointments/daily-detail-panel';
@@ -37,14 +37,13 @@ const statusColors: Record<string, string> = {
 };
 
 const appointmentTypes: Record<string, string> = {
-  checkup: 'Checkup',
+  wellness: 'Wellness',
   consultation: 'Consultation',
   vaccination: 'Vaccination',
   surgery: 'Surgery',
   emergency: 'Emergency',
   dental: 'Dental',
-  grooming: 'Grooming',
-  followup: 'Follow-up',
+  follow_up: 'Follow-up',
 };
 
 const SLOTS_PER_DAY = 17; // 9:00–17:00 in 30-min increments
@@ -369,7 +368,7 @@ export default function AppointmentsPage() {
                     <div>
                       <p className="font-medium">{appointment.pet?.name}</p>
                       <p className="text-sm text-muted-foreground">
-                        {appointment.client?.first_name} {appointment.client?.last_name}
+                        {appointment.pet?.client?.first_name} {appointment.pet?.client?.last_name}
                       </p>
                     </div>
                   </TableCell>
@@ -505,16 +504,16 @@ export default function AppointmentsPage() {
                 <div className="bg-secondary/20 rounded-xl p-4 space-y-2">
                   <p>
                     <span className="font-medium">Name:</span>{' '}
-                    {selectedAppointment.client?.first_name}{' '}
-                    {selectedAppointment.client?.last_name}
+                    {selectedAppointment.pet?.client?.first_name}{' '}
+                    {selectedAppointment.pet?.client?.last_name}
                   </p>
                   <div className="flex items-center gap-2">
                     <Phone className="w-4 h-4" />
-                    <span>{selectedAppointment.client?.phone}</span>
+                    <span>{selectedAppointment.pet?.client?.phone}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Mail className="w-4 h-4" />
-                    <span>{selectedAppointment.client?.email}</span>
+                    <span>{selectedAppointment.pet?.client?.email?.email}</span>
                   </div>
                 </div>
               </div>

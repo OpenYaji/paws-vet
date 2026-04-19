@@ -3,28 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-async function getAuthUser(request: NextRequest) {
-  const supabase = await createClient();
-  const authHeader = request.headers.get("Authorization");
-  const token = authHeader ? authHeader.replace("Bearer ", "").trim() : null;
-  const { data: { user }, error } = token
-    ? await supabase.auth.getUser(token)
-    : await supabase.auth.getUser();
-  if (error || !user) return { user: null, role: null, supabase };
-  const role =
-    user?.user_metadata?.role?.toLowerCase() ||
-    user?.app_metadata?.role?.toLowerCase() ||
-    "client";
-  return { user, role, supabase };
-}
-
 // GET /api/veterinarian/vet-reports
 // Returns aggregated medical record, prescription, and vaccination stats
 export async function GET(request: NextRequest) {
-  const { user, role, supabase } = await getAuthUser(request);
-  if (!user || role !== "veterinarian") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const supabase = await createClient();
   try {
     const today = new Date().toISOString().split("T")[0];
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)

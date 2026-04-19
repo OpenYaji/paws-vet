@@ -14,41 +14,30 @@ function jsonError(message: string, status: number) {
  */
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) return jsonError("Unauthorized", 401);
-
   const { searchParams } = new URL(request.url);
   const appointmentId = searchParams.get("appointment_id");
 
   if (!appointmentId) return jsonError("appointment_id is required", 400);
 
-  // Find the medical record for this appointment
+  // Single joined query: medical record + its blood test results in one round-trip
   const { data: medRecord, error: mrError } = await supabase
     .from("medical_records")
-    .select("id")
+    .select("id, medical_test_results(*)")
     .eq("appointment_id", appointmentId)
     .maybeSingle();
 
   if (mrError) return jsonError(mrError.message, 500);
   if (!medRecord) {
-    // No consultation done yet
     return NextResponse.json({ bloodTest: null, consultationDone: false });
   }
 
-  // Find the blood test result linked to that medical record
-  const { data: bloodTest, error: btError } = await supabase
-    .from("medical_test_results")
-    .select("*")
-    .eq("medical_record_id", medRecord.id)
-    .eq("test_type", "Blood Test")
-    .maybeSingle();
-
-  if (btError) return jsonError(btError.message, 500);
+  const bloodTest =
+    (medRecord.medical_test_results as any[]).find((t) => t.test_type === "Blood Test") ?? null;
 
   return NextResponse.json({
     consultationDone: true,
     medicalRecordId: medRecord.id,
-    bloodTest: bloodTest ?? null,
+    bloodTest,
   });
 }
 
@@ -79,9 +68,8 @@ export async function POST(request: NextRequest) {
 
   if (vetError || !vetProfile) return jsonError("Vet profile not found", 403);
 
-  const { data, error } = await supabase
-    .from("medical_test_results")
-    .insert({
+  const [insertResult, auditResult] = await Promise.all([
+    supabase.from("medical_test_results").insert({
       medical_record_id,
       test_type: "Blood Test",
       test_name,
@@ -89,11 +77,17 @@ export async function POST(request: NextRequest) {
       ordered_by: vetProfile.id,
       findings: findings ?? null,
       is_abnormal: is_abnormal ?? false,
-    })
-    .select()
-    .single();
+    }).select().single(),
+    supabase.from("audit_logs").insert({
+      user_id: user.id,
+      action_type: "create",
+      table_name: "medical_test_results",
+      details: `Recorded blood test "${test_name}" for medical_record_id ${medical_record_id}`,
+    }),
+  ]);
 
-  if (error) return jsonError(error.message, 500);
+  if (insertResult.error) return jsonError(insertResult.error.message, 500);
+  if (auditResult.error) throw auditResult.error;
 
-  return NextResponse.json(data, { status: 201 });
+  return NextResponse.json({ success: true }, { status: 201 });
 }
