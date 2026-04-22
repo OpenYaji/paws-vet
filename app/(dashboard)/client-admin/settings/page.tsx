@@ -623,7 +623,6 @@ export default function CMSSettingsPage() {
                 { key: 'show_services', label: 'Services', desc: 'Clinic services listing' },
                 { key: 'show_transactions', label: 'Transactions', desc: 'Payment history' },
                 { key: 'show_faq', label: 'FAQ', desc: 'Frequently asked questions' },
-                { key: 'show_settings', label: 'Settings', desc: 'Client account settings' },
               ] as const).map(item => (
                 <div key={item.key} className="flex items-center justify-between p-4 bg-accent/30 rounded-xl border border-border">
                   <div className="flex items-center gap-3">

@@ -319,7 +319,6 @@ export default function ClientAppointmentsPage() {
                 <Heart size={24} className="text-pink-500" />
               </div>
               <div className="flex flex-col items-end gap-1.5">
-                <span className="bg-pink-100 text-pink-700 text-xs font-bold px-2 py-0.5 rounded-full">Free / ₱500</span>
                 {!checkingOutreach && !outreachAvailable && (
                   <span className="text-xs font-semibold bg-muted text-muted-foreground rounded-full px-3 py-1">
                     Currently Unavailable

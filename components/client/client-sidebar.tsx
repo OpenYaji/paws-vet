@@ -1,13 +1,12 @@
 "use client"
 
-import React, { useState } from 'react';
+import React from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import Image from 'next/image';
-import { supabase } from '@/lib/auth-client';
 import {
   LayoutDashboard, Calendar, PawPrint, Wallet, HandPlatter,
-  Settings, ShoppingBasket, X, LogOut,
+  ShoppingBasket, X,
   Database, Clock, HelpCircle,
 } from "lucide-react";
 
@@ -50,18 +49,10 @@ const NAV_SETTING_KEY: Record<string, keyof NavSettings> = {
   'Services':     'show_services',
   'Transactions': 'show_transactions',
   'FAQ':          'show_faq',
-  'Settings':     'show_settings',
 };
 
 export default function ClientSidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen, profile, navSettings }: ClientSidebarProps) {
-  const [isLogoutModalOpen, setLogoutModalOpen] = useState(false);
   const pathname = usePathname();
-  const router = useRouter();
-
-  const handleConfirmLogout = async () => {
-    await supabase.auth.signOut();
-    router.push('/login');
-  };
 
   const menuItems: MenuItem[] = [
     { name: 'Dashboard',    icon: <LayoutDashboard size={20} />, path: '/client/dashboard' },
@@ -72,7 +63,6 @@ export default function ClientSidebar({ collapsed, setCollapsed, mobileOpen, set
     { name: 'Services',     icon: <HandPlatter size={20} />,     path: '/client/services' },
     { name: 'Transactions', icon: <Wallet size={20} />,          path: '/client/transactions' },
     { name: 'FAQ',          icon: <HelpCircle size={20} />,      path: '/client/faq' },
-    { name: 'Settings',     icon: <Settings size={20} />,        path: '/client/settings' },
     { name: 'Admin CMS',    icon: <Database size={20} />,        path: '/client-admin' },
   ];
 
@@ -153,16 +143,6 @@ export default function ClientSidebar({ collapsed, setCollapsed, mobileOpen, set
                 />
               ))}
             </div>
-
-            <button
-              onClick={() => setLogoutModalOpen(true)}
-              className={`mt-4 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-rose-600 transition hover:bg-rose-50 dark:hover:bg-rose-950/20 ${
-                isCollapsed ? 'justify-center' : ''
-              }`}
-            >
-              <LogOut size={20} />
-              {!isCollapsed && <span className="font-medium">Logout</span>}
-            </button>
           </nav>
         </div>
       </aside>
@@ -181,20 +161,6 @@ export default function ClientSidebar({ collapsed, setCollapsed, mobileOpen, set
 
       {mobileOpen && (
         <div className="fixed inset-0 z-30 bg-black/45 backdrop-blur-[1px] md:hidden" onClick={() => setMobileOpen(false)} />
-      )}
-
-      {/* Logout Modal */}
-      {isLogoutModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-card p-6 rounded-2xl border shadow-xl max-w-sm w-full">
-            <h3 className="text-lg font-bold mb-2">Logout</h3>
-            <p className="text-muted-foreground mb-6">Are you sure you want to log out of your account?</p>
-            <div className="flex gap-3 justify-end">
-              <button onClick={() => setLogoutModalOpen(false)} className="px-4 py-2 rounded-xl border hover:bg-accent">Cancel</button>
-              <button onClick={handleConfirmLogout} className="px-4 py-2 rounded-xl bg-destructive text-white hover:bg-destructive/90">Logout</button>
-            </div>
-          </div>
-        </div>
       )}
     </>
   );

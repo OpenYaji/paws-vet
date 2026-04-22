@@ -2,10 +2,18 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { supabase } from '@/lib/auth-client';
 import { ThemeToggle } from './theme-toggle';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   Bell,
   Calendar,
@@ -13,9 +21,14 @@ import {
   CreditCard,
   Info,
   AlertTriangle,
+  ChevronDown,
+  ChevronRight,
+  HelpCircle,
+  LogOut,
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
+  Settings,
 } from 'lucide-react';
 
 interface Notification {
@@ -242,6 +255,7 @@ function NotificationBell() {
 
 export default function ClientTopbar({ profile, collapsed, setCollapsed, setMobileOpen }: ClientTopbarProps) {
   const pathname = usePathname();
+  const router = useRouter();
 
   const pageTitle = useMemo(() => {
     if (pathname.includes('/appointments/history')) return 'Appointment History';
@@ -259,6 +273,11 @@ export default function ClientTopbar({ profile, collapsed, setCollapsed, setMobi
   }, [pathname]);
 
   const fullName = profile ? `${profile.first_name} ${profile.last_name}` : 'Pet Owner';
+
+  const handleSignOut = useCallback(async () => {
+    await supabase.auth.signOut();
+    router.push('/login');
+  }, [router]);
 
   return (
     <header className="fixed inset-x-0 top-0 z-40 h-16 border-b border-slate-200/70 bg-white/80 backdrop-blur-md dark:border-border dark:bg-background/80">
@@ -289,15 +308,56 @@ export default function ClientTopbar({ profile, collapsed, setCollapsed, setMobi
         <div className="flex items-center gap-2 sm:gap-3">
           <NotificationBell />
           <ThemeToggle />
-          <div className="hidden items-center gap-2 rounded-xl border border-slate-200 bg-white px-2 py-1.5 sm:flex dark:border-border dark:bg-card">
-            <div className="relative h-8 w-8 overflow-hidden rounded-lg bg-slate-100 dark:bg-accent">
-              <Image src="/images/image.png" alt="Profile" fill className="object-cover" />
-            </div>
-            <div className="min-w-0">
-              <p className="max-w-[140px] truncate text-xs font-semibold text-slate-800 dark:text-foreground">{fullName}</p>
-              <p className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-muted-foreground">Client</p>
-            </div>
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-2 py-1.5 transition hover:border-slate-300 hover:bg-slate-50 dark:border-border dark:bg-card dark:hover:bg-accent/70"
+                aria-label="Open profile menu"
+              >
+                <div className="relative h-8 w-8 overflow-hidden rounded-lg bg-slate-100 dark:bg-accent">
+                  <Image src="/images/image.png" alt="Profile" fill className="object-cover" />
+                </div>
+                <div className="hidden min-w-0 sm:block">
+                  <p className="max-w-[140px] truncate text-xs font-semibold text-slate-800 dark:text-foreground">{fullName}</p>
+                  <p className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-muted-foreground">Client</p>
+                </div>
+                <ChevronDown className="hidden h-4 w-4 text-slate-500 sm:block dark:text-muted-foreground" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-72 rounded-2xl p-2">
+              <DropdownMenuLabel className="rounded-xl px-3 py-2.5">
+                <div className="flex items-center gap-3">
+                  <div className="relative h-10 w-10 overflow-hidden rounded-xl bg-slate-100 dark:bg-accent">
+                    <Image src="/images/image.png" alt="Profile" fill className="object-cover" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-900 dark:text-foreground">{fullName}</p>
+                    <p className="text-xs text-slate-500 dark:text-muted-foreground">Client account</p>
+                  </div>
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild className="rounded-xl px-3 py-2">
+                <Link href="/client/settings" className="flex w-full items-center">
+                  <Settings className="h-4 w-4" />
+                  <span className="font-medium">Settings & account</span>
+                  <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" />
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild className="rounded-xl px-3 py-2">
+                <Link href="/client/faq" className="flex w-full items-center">
+                  <HelpCircle className="h-4 w-4" />
+                  <span className="font-medium">Help & support</span>
+                  <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" />
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive" className="rounded-xl px-3 py-2" onClick={handleSignOut}>
+                <LogOut className="h-4 w-4" />
+                <span className="font-medium">Log out</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </header>
