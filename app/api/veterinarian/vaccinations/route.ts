@@ -156,7 +156,10 @@ export async function POST(request: NextRequest) {
 
     if (ownerData?.phone) {
       const petName = petAndOwnerData?.name;
-      const message = `Hi! This is Paws Vet Clinic. Just confirming that ${petName} has successfully received their ${body.vaccine_name} vaccination.`;
+      const followUpText = body.next_due_date
+        ? ` Next follow-up schedule is on ${String(body.next_due_date).split("T")[0]}.`
+        : "";
+      const message = `Hi! This is Paws Vet Clinic. Just confirming that ${petName} has successfully received their ${body.vaccine_name} vaccination.${followUpText}`;
       
       // Fire-and-forget the SMS to prevent blocking the API response
       sendSms(ownerData.phone, message)
