@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     const { vaccines } = body;
     if (!Array.isArray(vaccines) || vaccines.length === 0) {
       return NextResponse.json(
-        { error: "Vaccines payload is required" },
+        { error: "Vaccines must be a non-empty array" },
         { status: 400 },
       );
     }

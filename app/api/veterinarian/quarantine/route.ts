@@ -173,7 +173,7 @@ export async function PATCH(request: NextRequest) {
       const firstName = (petData as any)?.client?.first_name || "Client";
       const petName = (petData as any)?.name || "your pet";
       if (phone) {
-        const smsMessage = `Hi ${firstName}, this is Paws Vet Clinic. ${petName} has completed its quarantine period and is ready for release.`;
+        const smsMessage = `Hi ${firstName}, this is Paws Vet Clinic. ${petName} has completed their quarantine period and is ready for release.`;
         sendSms(phone, smsMessage).catch((err) =>
           console.error("[Quarantine SMS] Failed to notify client:", err),
         );
