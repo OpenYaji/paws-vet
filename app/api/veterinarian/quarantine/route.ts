@@ -155,6 +155,31 @@ export async function PATCH(request: NextRequest) {
       return handleError(updateResult.error, "PATCH /api/quarantine");
     if (auditResult.error) throw auditResult.error;
 
+    const previousStatus = oldRecord?.status;
+    const newStatus = updateResult.data?.status;
+    if (
+      previousStatus !== newStatus &&
+      (newStatus === "completed" || newStatus === "released")
+    ) {
+      const { data: petData } = await supabase
+        .from("pets")
+        .select(
+          "name, client:client_profiles!pets_owner_id_fkey(user_id, first_name, phone)",
+        )
+        .eq("id", updateResult.data?.pet_id)
+        .maybeSingle();
+
+      const phone = (petData as any)?.client?.phone;
+      const firstName = (petData as any)?.client?.first_name || "Client";
+      const petName = (petData as any)?.name || "your pet";
+      if (phone) {
+        const smsMessage = `Hi ${firstName}, this is Paws Vet Clinic. ${petName} has completed their quarantine period and is ready for release.`;
+        sendSms(phone, smsMessage).catch((err) =>
+          console.error("[Quarantine SMS] Failed to notify client:", err),
+        );
+      }
+    }
+
     return NextResponse.json({ success: true });
   } catch (error) {
     // Unexpected error — centralized handler

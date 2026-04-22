@@ -14,7 +14,10 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const supabase = await createClient();
-    const today = new Date().toISOString().split("T")[0];
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(todayStart);
+    todayEnd.setDate(todayEnd.getDate() + 1);
 
     // Fetch all kapon/surgery appointments for today regardless of status
     const { data: appointments, error: apptError } = await supabase
@@ -44,6 +47,8 @@ export async function GET() {
         "in_progress",
         "completed",
       ])
+      .gte("scheduled_start", todayStart.toISOString())
+      .lt("scheduled_start", todayEnd.toISOString())
       .order("scheduled_start", { ascending: true });
 
     if (apptError) throw apptError;
