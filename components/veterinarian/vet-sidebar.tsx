@@ -74,7 +74,6 @@ const menuItems: MenuItem[] = [
     { name: 'Vaccinations', icon: <Syringe size={20} />, path: '/veterinarian/vaccinations' },
     { name: 'Reports', icon: <BarChart2 size={20} />, path: '/veterinarian/reports' },
     { name: 'Capture', icon: <Camera size={20} />, path: '/veterinarian/capture' },
-    { name: 'Messages', icon: <MessageSquare size={20} />, path: '/veterinarian/send-sms' },
     { name: 'Settings', icon: <Settings size={20} />, path: '/veterinarian/settings' },
     { name: 'Help Support', icon: <LifeBuoy size={20} />, path: '/veterinarian/help' },
 ];
