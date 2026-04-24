@@ -80,10 +80,10 @@ function TriggerBadge({ type }: { type: string | null }) {
 
 const ITEMS_PER_PAGE = 20;
 
-// ── Main Page ─────────────────────────────────────────────────────────────────
+// Main Page
 export default function SmsClientPage() {
 
-  // ── Send SMS state ──────────────────────────────────────────────────────────
+  // Send SMS state
   const [targetType, setTargetType]   = useState<"all" | "specific">("all");
   const [targetClientId, setTargetClientId] = useState("");
   const [message, setMessage]         = useState("");
