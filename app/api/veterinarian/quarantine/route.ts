@@ -1,7 +1,7 @@
 import { createClient } from "@/utils/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { handleError } from "@/utils/error-handler";
-import { sendSms } from "@/utils/sms";
+import { sendSms } from "@/utils/sms/sms";
 
 // Force dynamic rendering to ensure fresh data on each request
 export const dynamic = "force-dynamic";

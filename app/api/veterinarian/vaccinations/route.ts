@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { handleError } from "@/utils/error-handler";
-import { sendSms } from "@/utils/sms";
+import { sendSms } from "@/utils/sms/sms";
 
 export async function GET(request: NextRequest) {
   try {
@@ -160,7 +160,7 @@ export async function POST(request: NextRequest) {
         ? ` Next follow-up schedule is on ${String(body.next_due_date).split("T")[0]}.`
         : "";
       const message = `Hi! This is Paws Vet Clinic. Just confirming that ${petName} has successfully received their ${body.vaccine_name} vaccination.${followUpText}`;
-      
+
       // Fire-and-forget the SMS to prevent blocking the API response
       sendSms(ownerData.phone, message)
         .then((smsSuccess) => {
@@ -168,7 +168,7 @@ export async function POST(request: NextRequest) {
             console.error("Failed to send SMS, but vaccination was logged.");
           }
         })
-        .catch(err => console.error("Unhandled SMS error:", err));
+        .catch((err) => console.error("Unhandled SMS error:", err));
     }
     return NextResponse.json({ success: true }, { status: 201 });
   } catch (error: any) {

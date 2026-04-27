@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
-import { sendSms } from "@/utils/sms";
+import { sendSms } from "@/utils/sms/sms";
 
 // force dynamic rendering
 export const dynamic = "force-dynamic";
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } }
+  { auth: { autoRefreshToken: false, persistSession: false } },
 );
 
 export async function GET(request: NextRequest) {
@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     console.log("=== RUNNING DAILY SMS NOTIFICATIONS ===");
 
     const now = new Date();
-    
+
     // start of today and end of today
     const today_start = new Date(now);
     today_start.setHours(0, 0, 0, 0);
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
       { data: today_appointments },
       { data: three_days_appointments },
       { data: today_quarantines },
-      { data: three_days_quarantines }
+      { data: three_days_quarantines },
     ] = await Promise.all([
       // appointments for today
       supabaseAdmin
@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
         .gte("scheduled_start", today_start.toISOString())
         .lte("scheduled_start", today_end.toISOString())
         .in("appointment_status", ["confirmed", "pending"]),
-      
+
       // appointments for 3 days from now
       supabaseAdmin
         .from("appointments")
@@ -79,7 +79,13 @@ export async function GET(request: NextRequest) {
       for (const apt of today_appointments) {
         // @ts-ignore
         const phone = apt.pet?.client?.phone;
-        if (phone) sms_tasks.push(sendSms(phone, "Reminder: You have an appointment for your pet today."));
+        if (phone)
+          sms_tasks.push(
+            sendSms(
+              phone,
+              "Reminder: You have an appointment for your pet today.",
+            ),
+          );
       }
     }
 
@@ -88,12 +94,21 @@ export async function GET(request: NextRequest) {
       for (const apt of three_days_appointments) {
         // @ts-ignore
         const phone = apt.pet?.client?.phone;
-        if (phone) sms_tasks.push(sendSms(phone, "Reminder: You have an upcoming appointment for your pet in 3 days."));
+        if (phone)
+          sms_tasks.push(
+            sendSms(
+              phone,
+              "Reminder: You have an upcoming appointment for your pet in 3 days.",
+            ),
+          );
       }
     }
 
     // if there are quarantines, we need to notify the veterinarian
-    if ((today_quarantines && today_quarantines.length > 0) || (three_days_quarantines && three_days_quarantines.length > 0)) {
+    if (
+      (today_quarantines && today_quarantines.length > 0) ||
+      (three_days_quarantines && three_days_quarantines.length > 0)
+    ) {
       // fetch all vets who should receive the notification
       const { data: vets } = await supabaseAdmin
         .from("veterinarian_profiles")
@@ -108,7 +123,12 @@ export async function GET(request: NextRequest) {
             const pet_name = q.pet?.name || "A pet";
             for (const vet of vets) {
               if (vet.phone) {
-                sms_tasks.push(sendSms(vet.phone, `Quarantine Alert: Expected end date fulfilled today for monitored pet ${pet_name}.`));
+                sms_tasks.push(
+                  sendSms(
+                    vet.phone,
+                    `Quarantine Alert: Expected end date fulfilled today for monitored pet ${pet_name}.`,
+                  ),
+                );
               }
             }
           }
@@ -121,7 +141,12 @@ export async function GET(request: NextRequest) {
             const pet_name = q.pet?.name || "A pet";
             for (const vet of vets) {
               if (vet.phone) {
-                sms_tasks.push(sendSms(vet.phone, `Quarantine Alert: Expected end date is in 3 days for monitored pet ${pet_name}.`));
+                sms_tasks.push(
+                  sendSms(
+                    vet.phone,
+                    `Quarantine Alert: Expected end date is in 3 days for monitored pet ${pet_name}.`,
+                  ),
+                );
               }
             }
           }
@@ -132,7 +157,9 @@ export async function GET(request: NextRequest) {
     // execute all sms sending concurrently
     await Promise.all(sms_tasks);
 
-    console.log(`Successfully dispatched ${sms_tasks.length} SMS notifications.`);
+    console.log(
+      `Successfully dispatched ${sms_tasks.length} SMS notifications.`,
+    );
 
     return NextResponse.json({
       success: true,
@@ -142,7 +169,7 @@ export async function GET(request: NextRequest) {
     console.error("[GET /api/cron/notifications] error:", error);
     return NextResponse.json(
       { error: "Internal server error", details: error.message },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

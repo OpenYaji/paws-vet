@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { handleError } from "@/utils/error-handler";
 import { createClient } from "@/utils/supabase/server";
-import { sendSms } from "@/utils/sms";
+import { sendSms } from "@/utils/sms/sms";
 
 export async function GET(request: NextRequest) {
   try {
@@ -110,6 +110,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check for veterinarian by getSession()
     const {
       data: { session },
     } = await supabase.auth.getSession();

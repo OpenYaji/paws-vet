@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sendSms } from "@/utils/sms";
+import { sendSms } from "@/utils/sms/sms";
 import { createClient } from "@/utils/supabase/server";
 import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
 
@@ -18,7 +18,10 @@ export async function GET(request: NextRequest) {
   try {
     // Verify vet session first
     const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
     if (authError || !user || user.user_metadata?.role !== "veterinarian") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -26,7 +29,7 @@ export async function GET(request: NextRequest) {
     const admin = getAdminClient();
 
     const { searchParams } = new URL(request.url);
-    const limit  = Math.min(Number(searchParams.get("limit")  || 20), 100);
+    const limit = Math.min(Number(searchParams.get("limit") || 20), 100);
     const offset = Number(searchParams.get("offset") || 0);
     const status = searchParams.get("status");
     const search = searchParams.get("search");
@@ -42,7 +45,8 @@ export async function GET(request: NextRequest) {
       .range(offset, offset + limit - 1);
 
     if (status) query = query.eq("delivery_status", status);
-    if (search) query = query.or(`content.ilike.%${search}%,subject.ilike.%${search}%`);
+    if (search)
+      query = query.or(`content.ilike.%${search}%,subject.ilike.%${search}%`);
 
     const { data: logs, error, count } = await query;
     if (error) throw error;
@@ -50,17 +54,24 @@ export async function GET(request: NextRequest) {
     // Batch-fetch recipient names from client_profiles
     const recipientIds = [
       ...new Set(
-        (logs ?? []).map((l: any) => l.recipient_id).filter(Boolean) as string[],
+        (logs ?? [])
+          .map((l: any) => l.recipient_id)
+          .filter(Boolean) as string[],
       ),
     ];
 
-    let profileMap: Record<string, { first_name: string; last_name: string; phone: string | null }> = {};
+    let profileMap: Record<
+      string,
+      { first_name: string; last_name: string; phone: string | null }
+    > = {};
     if (recipientIds.length > 0) {
       const { data: profiles } = await admin
         .from("client_profiles")
         .select("user_id, first_name, last_name, phone")
         .in("user_id", recipientIds);
-      (profiles ?? []).forEach((p: any) => { profileMap[p.user_id] = p; });
+      (profiles ?? []).forEach((p: any) => {
+        profileMap[p.user_id] = p;
+      });
     }
 
     const enriched = (logs ?? []).map((log: any) => ({
@@ -115,7 +126,10 @@ export async function POST(request: NextRequest) {
         .eq("id", target)
         .single();
       if (clientError || !client) {
-        return NextResponse.json({ error: "Client not found" }, { status: 404 });
+        return NextResponse.json(
+          { error: "Client not found" },
+          { status: 404 },
+        );
       }
       clientsToNotify = [client];
     }

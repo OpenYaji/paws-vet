@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
-import { sendSms } from "@/utils/sms";
+import { sendSms } from "@/utils/sms/sms";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } }
+  { auth: { autoRefreshToken: false, persistSession: false } },
 );
 
 export async function POST(request: NextRequest) {
@@ -18,7 +18,10 @@ export async function POST(request: NextRequest) {
 
     // Require either a noticeId OR a direct message
     if (!noticeId && !message) {
-      return NextResponse.json({ error: "Notice ID or message is required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Notice ID or message is required" },
+        { status: 400 },
+      );
     }
 
     let subject = "New Clinic Announcement";
@@ -34,7 +37,10 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (noticeError || !notice) {
-        return NextResponse.json({ error: "Notice not found" }, { status: 404 });
+        return NextResponse.json(
+          { error: "Notice not found" },
+          { status: 404 },
+        );
       }
 
       subject = `New Announcement: ${notice.title}`;
@@ -84,19 +90,18 @@ export async function POST(request: NextRequest) {
           return sendSms(client.phone, content);
         }
         return Promise.resolve(false);
-      })
+      }),
     );
 
     return NextResponse.json({
       success: true,
-      message: `Notified ${clients.length} clients successfully`
+      message: `Notified ${clients.length} clients successfully`,
     });
-
   } catch (error: any) {
     console.error("[POST /api/veterinarian/noticeboard/notify] error:", error);
     return NextResponse.json(
       { error: "Internal server error", details: error.message },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
