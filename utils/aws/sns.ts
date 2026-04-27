@@ -1,14 +1,22 @@
 import { SNSClient, PublishCommand } from "@aws-sdk/client-sns";
 
-const snsClient = new SNSClient({
-  region: process.env.AWS_REGION,
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-  },
-});
+const region = process.env.AWS_REGION;
+const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
+const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
 
 export async function sendSms(phoneNumber: string, message: string) {
+  if (!region || !accessKeyId || !secretAccessKey) {
+    throw new Error("No Valid Credentials");
+  }
+
+  const snsClient = new SNSClient({
+    region,
+    credentials: {
+      accessKeyId: accessKeyId,
+      secretAccessKey: secretAccessKey,
+    },
+  });
+
   try {
     // format the phone number to E.164 format
     let formattedPhone = phoneNumber.trim();
@@ -22,7 +30,7 @@ export async function sendSms(phoneNumber: string, message: string) {
     const params = {
       Message: message,
       PhoneNumber: formattedPhone,
-      MessageAttibutes: {
+      MessageAttributes: {
         "AWS.SNS.SMS.SMSType": {
           DataType: "String",
           // 'Transactional' bypasses promotional quiet hours and sends immediately
