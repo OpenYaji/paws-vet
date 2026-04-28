@@ -181,6 +181,7 @@ export default function RegularAppointmentPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const [appointmentNumber, setAppointmentNumber] = useState<string | null>(null);
+  const [clinicSettings, setClinicSettings] = useState<any>(null);
 
   const petGender = (selectedPet?.gender as 'male' | 'female') ?? 'male';
   const duration = selectedPet ? calculateDuration(petGender === 'female' ? 'female' : 'male') : 10;
@@ -193,13 +194,17 @@ export default function RegularAppointmentPage() {
         if (authErr || !user) { setInitError('Session expired. Please log in again.'); setLoadingInit(false); return; }
         setUserId(user.id);
 
-        const profileRes = await supabase
-          .from('client_profiles')
-          .select('id,user_id,first_name,last_name,phone,address_line1')
-          .eq('user_id', user.id)
-          .maybeSingle();
+        const [profileRes, settingsRes] = await Promise.all([
+          supabase
+            .from('client_profiles')
+            .select('id,user_id,first_name,last_name,phone,address_line1')
+            .eq('user_id', user.id)
+            .maybeSingle(),
+          supabase.from('clinic_settings').select('*').limit(1).maybeSingle()
+        ]);
         if (profileRes.error) throw profileRes.error;
         setProfile(profileRes.data ?? null);
+        if (settingsRes.data) setClinicSettings(settingsRes.data);
 
         const profileId = profileRes.data?.id;
         const petsRes = profileId
@@ -903,21 +908,43 @@ export default function RegularAppointmentPage() {
 
                 {/* Reference number */}
                 {(paymentMethod === 'gcash' || paymentMethod === 'maya') && (
-                  <div className="space-y-2 animate-in fade-in duration-200">
-                    <Label htmlFor="ref" className="text-sm font-bold">
-                      Transaction Reference Number <span className="text-destructive">*</span>
-                    </Label>
-                    <Input
-                      id="ref"
-                      placeholder={`Enter your ${paymentMethod === 'gcash' ? 'GCash' : 'Maya'} reference number`}
-                      value={paymentReference}
-                      onChange={(e) => setPaymentReference(e.target.value)}
-                      className="h-11 focus:ring-2 focus:ring-ring font-mono"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Found in your {paymentMethod === 'gcash' ? 'GCash' : 'Maya'} transaction history.
-                      Payment will be verified by our team.
-                    </p>
+                  <div className="space-y-4 animate-in fade-in duration-200">
+                    {/* Render QR UI if configured */}
+                    {((paymentMethod === 'gcash' && clinicSettings?.gcash_qr_url) || 
+                      (paymentMethod === 'maya' && clinicSettings?.maya_qr_url)) && (
+                      <div className="flex flex-col items-center p-4 border rounded-xl bg-accent/20">
+                        <Label className="text-sm font-bold mb-3 text-center">
+                          Scan to Pay via {paymentMethod === 'gcash' ? 'GCash' : 'Maya'}
+                        </Label>
+                        <div className="w-48 h-48 relative rounded-xl border bg-white overflow-hidden shadow-sm flex items-center justify-center p-2 mb-2">
+                          <img 
+                            src={paymentMethod === 'gcash' ? clinicSettings.gcash_qr_url : clinicSettings.maya_qr_url} 
+                            alt={`${paymentMethod} QR`} 
+                            className="max-w-full max-h-full object-contain"
+                          />
+                        </div>
+                        <p className="text-xs text-muted-foreground text-center">
+                          Total Amount: <span className="font-bold text-foreground">₱ {paymentAmount.toFixed(2)}</span>
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      <Label htmlFor="ref" className="text-sm font-bold">
+                        Transaction Reference Number <span className="text-destructive">*</span>
+                      </Label>
+                      <Input
+                        id="ref"
+                        placeholder={`Enter your ${paymentMethod === 'gcash' ? 'GCash' : 'Maya'} reference number`}
+                        value={paymentReference}
+                        onChange={(e) => setPaymentReference(e.target.value)}
+                        className="h-11 focus:ring-2 focus:ring-ring font-mono"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Found in your {paymentMethod === 'gcash' ? 'GCash' : 'Maya'} transaction history.
+                        Payment will be verified by our team.
+                      </p>
+                    </div>
                   </div>
                 )}
 

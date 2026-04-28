@@ -27,6 +27,8 @@ interface ClinicSettings {
   products_page_title: string;
   products_page_description: string;
   dashboard_about_text: string;
+  gcash_qr_url?: string;
+  maya_qr_url?: string;
 }
 
 interface NavSettings {
@@ -179,6 +181,43 @@ export default function CMSSettingsPage() {
 
   // ── Save clinic settings ──────────────────────
 
+  const uploadQrCode = async (method: 'gcash' | 'maya', file: File) => {
+    if (!file.type.startsWith('image/')) {
+      showToast('Please upload an image file', 'error');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${method}-qr-${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('payment-qr')
+        .upload(fileName, file, { cacheControl: '3600', upsert: false });
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('payment-qr')
+        .getPublicUrl(fileName);
+
+      setClinicSettings(s => {
+        if (!s) return s;
+        return {
+          ...s,
+          [method === 'gcash' ? 'gcash_qr_url' : 'maya_qr_url']: publicUrl
+        };
+      });
+
+      showToast(`Successfully uploaded ${method.toUpperCase()} QR Code`);
+    } catch (e: any) {
+      showToast(e.message || 'Failed to upload QR code', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const saveClinicSettings = async () => {
     if (!clinicSettings) return;
     setSaving(true);
@@ -198,6 +237,8 @@ export default function CMSSettingsPage() {
           products_page_title: clinicSettings.products_page_title,
           products_page_description: clinicSettings.products_page_description,
           dashboard_about_text: clinicSettings.dashboard_about_text,
+          gcash_qr_url: clinicSettings.gcash_qr_url,
+          maya_qr_url: clinicSettings.maya_qr_url,
           updated_at: new Date().toISOString(),
         })
         .eq('id', clinicSettings.id)
@@ -506,7 +547,7 @@ export default function CMSSettingsPage() {
               </div>
               <div className="ml-auto flex items-center gap-2">
                 <span className="text-xs text-muted-foreground">
-                  {clinicSettings.is_announcement_active ? 'Active' : 'Inactive'}
+                  {currentClinicSettings.is_announcement_active ? 'Active' : 'Inactive'}
                 </span>
                 <button
                   onClick={() => setClinicSettings(s => ({ ...(s ?? defaultClinicSettings), is_announcement_active: !(s ?? defaultClinicSettings).is_announcement_active }))}
@@ -586,6 +627,85 @@ export default function CMSSettingsPage() {
                   onChange={e => setClinicSettings(s => ({ ...(s ?? defaultClinicSettings), dashboard_about_text: e.target.value }))}
                   rows={3}
                 />
+              </div>
+            </div>
+          </div>
+
+          {/* Payment QR Codes */}
+          <div className="rounded-2xl border border-border/80 bg-card/95 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-bold">Payment QR Codes</h2>
+                <p className="text-xs text-muted-foreground">Upload your GCash and Maya QR codes to display during appointment booking.</p>
+              </div>
+            </div>
+            <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-6">
+              {/* GCash */}
+              <div className="flex flex-col gap-3">
+                <label className="text-sm font-semibold text-blue-600 dark:text-blue-400">GCash QR Code</label>
+                {currentClinicSettings.gcash_qr_url ? (
+                  <div className="relative rounded-xl border border-border overflow-hidden aspect-square bg-muted/30 flex items-center justify-center p-4">
+                    <img src={currentClinicSettings.gcash_qr_url} alt="GCash QR" className="max-w-full max-h-full object-contain mix-blend-multiply dark:mix-blend-normal" />
+                    <button
+                      onClick={() => setClinicSettings(s => ({ ...(s ?? defaultClinicSettings), gcash_qr_url: '' }))}
+                      className="absolute top-2 right-2 p-2 bg-red-100 hover:bg-red-200 text-red-600 rounded-lg transition-colors"
+                      title="Remove GCash QR Code"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center h-48 rounded-xl border-2 border-dashed border-border bg-accent/30 hover:bg-accent/50 cursor-pointer transition-colors text-center p-4">
+                    <Plus size={24} className="text-muted-foreground mb-2" />
+                    <span className="text-sm font-medium">Upload GCash QR</span>
+                    <span className="text-xs text-muted-foreground mt-1">PNG, JPG up to 5MB</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (file) uploadQrCode('gcash', file);
+                        e.target.value = '';
+                      }}
+                      disabled={saving}
+                    />
+                  </label>
+                )}
+              </div>
+
+              {/* Maya */}
+              <div className="flex flex-col gap-3">
+                <label className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">Maya QR Code</label>
+                {currentClinicSettings.maya_qr_url ? (
+                  <div className="relative rounded-xl border border-border overflow-hidden aspect-square bg-muted/30 flex items-center justify-center p-4">
+                    <img src={currentClinicSettings.maya_qr_url} alt="Maya QR" className="max-w-full max-h-full object-contain mix-blend-multiply dark:mix-blend-normal" />
+                    <button
+                      onClick={() => setClinicSettings(s => ({ ...(s ?? defaultClinicSettings), maya_qr_url: '' }))}
+                      className="absolute top-2 right-2 p-2 bg-red-100 hover:bg-red-200 text-red-600 rounded-lg transition-colors"
+                      title="Remove Maya QR Code"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center h-48 rounded-xl border-2 border-dashed border-border bg-accent/30 hover:bg-accent/50 cursor-pointer transition-colors text-center p-4">
+                    <Plus size={24} className="text-muted-foreground mb-2" />
+                    <span className="text-sm font-medium">Upload Maya QR</span>
+                    <span className="text-xs text-muted-foreground mt-1">PNG, JPG up to 5MB</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (file) uploadQrCode('maya', file);
+                        e.target.value = '';
+                      }}
+                      disabled={saving}
+                    />
+                  </label>
+                )}
               </div>
             </div>
           </div>
