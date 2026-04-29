@@ -13,6 +13,29 @@ export type {
   AppointmentType
 };
 
+/** Shape returned by GET /api/appointments (flattened joins) */
+export interface AppointmentResponse extends Appointment {
+  pet?: {
+    id: string;
+    name: string;
+    species: string;
+    breed?: string;
+  };
+  client?: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    phone: string;
+    email?: string | { email: string };
+  };
+  veterinarian?: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    specializations?: string[];
+  };
+}
+
 // Additional appointment-specific utility types
 export interface AppointmentCalendarEvent {
   id: string;

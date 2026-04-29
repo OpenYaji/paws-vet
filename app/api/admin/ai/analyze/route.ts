@@ -79,11 +79,11 @@ Reply with ONLY this JSON, no extra text:
 {"summary":"2 sentences max","critical_alerts":[{"type":"inventory|finance|ops","message":"under 20 words","severity":"high|medium"}],"agentic_recommendations":[{"action":"under 12 words","reasoning":"1 sentence","expected_impact":"1 sentence"}],"deep_insight":"1 sentence cross-domain finding"}
 
 Rules:
-1. Flag stock<=10 as high inventory alert.
+1. Flag stock<=5 as high inventory alert.
 2. Flag outstanding>15% of total revenue as high finance alert.
-3. Flag cancelRate>15 as medium ops alert.
-4. If lowestMovingItems is non-empty: MUST create a medium inventory alert. The message MUST quote the exact product name (e.g. "Flea Collar has 45 units but only 2 sales — deadstock risk."). Do NOT say "No lowest moving items identified" if the array has data.
-5. If lowestMovingItems is non-empty: MUST include at least one recommendation with the exact product name (e.g. "Bundle Flea Collar with grooming packages to clear stock.").
+3. Flag cancelRate>15 as medium ops alert. Flag completionRate<60 as a separate medium ops alert (e.g. "Only [X]% of appointments completed — follow-up and scheduling review needed.").
+4. If lowestMovingItems is non-empty: MUST create a medium inventory alert. The message MUST use this format: "[Product Name] is the lowest moving product with [qty] units and only [sales] sales — deadstock risk." Do NOT say "No lowest moving items identified" if the array has data.
+5. If lowestMovingItems is non-empty: MUST include at least one recommendation with the exact product name (e.g. "Bundle [Product Name] with services to clear deadstock.").
 6. Only say no items exist if lowestMovingItems array is literally empty [].
 Give up to 5 alerts and 5 recommendations max.`;
 }
