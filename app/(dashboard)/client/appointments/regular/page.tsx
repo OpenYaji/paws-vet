@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
@@ -203,7 +203,8 @@ export default function RegularAppointmentPage() {
                      selectedService.service_name.toLowerCase().includes('neuter');
   }
 
-  const duration = selectedService?.duration_minutes ?? (selectedPet ? calculateDuration(petGender === 'female' ? 'female' : 'male') : 10);
+  const calculatedPetDuration = selectedPet ? calculateDuration(petGender === 'female' ? 'female' : 'male') : 10;
+  const duration = isKaponService ? calculatedPetDuration : (selectedService?.duration_minutes ?? calculatedPetDuration);
   const paymentAmount = selectedService?.base_price ?? calculatePaymentAmount({ appointmentType: 'regular', isAspinPuspin: false });
 
   useEffect(() => {
@@ -669,9 +670,13 @@ export default function RegularAppointmentPage() {
                                 <p className="font-bold text-primary whitespace-nowrap">
                                   &#8369;{service.base_price.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                                 </p>
-                                {service.duration_minutes && (
-                                  <p className="text-xs text-muted-foreground whitespace-nowrap">~{service.duration_minutes} min</p>
-                                )}
+                                {(() => {
+                                  const isThisKapon = service.service_name.toLowerCase().includes('kapon') || service.service_name.toLowerCase().includes('neuter');
+                                  const displayDuration = isThisKapon ? calculatedPetDuration : service.duration_minutes;
+                                  return displayDuration ? (
+                                    <p className="text-xs text-muted-foreground whitespace-nowrap">~{displayDuration} min</p>
+                                  ) : null;
+                                })()}
                               </div>
                             </div>
                           </button>
