@@ -151,6 +151,11 @@ export async function GET(request: NextRequest) {
 // --- POST: Save Vitals & Update Status ---
 export async function POST(request: NextRequest) {
   try {
+    const { user, role, supabase } = await getAuthUser(request);
+    if (!user || role !== "veterinarian") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
     const {
       appointment_id,
@@ -163,24 +168,6 @@ export async function POST(request: NextRequest) {
       triage_level,
       chief_complaint,
     } = body;
-
-    if (!appointment_id || !pet_id) {
-      return NextResponse.json(
-        { error: "Appointment ID and Pet ID are required" },
-        { status: 400 },
-      );
-    }
-    if (!weight || !temperature) {
-      return NextResponse.json(
-        { error: "Weight and Temperature are required" },
-        { status: 400 },
-      );
-    }
-
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
 
     const [triageResult, , auditResult] = await Promise.all([
       supabase

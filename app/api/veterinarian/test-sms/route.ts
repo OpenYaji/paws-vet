@@ -1,9 +1,21 @@
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
 // change this path to match your actual file location
 import { sendSms, sendSmsToClient, sendSmsByName } from "@/utils/httpSms";
+import { createClient } from "@/utils/supabase/server";
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
     try {
+        const supabase = await createClient();
+
+        // get the current user by getUser()
+        const {
+            data: { user },
+            error: authError,
+        } = await supabase.auth.getUser();
+        if (authError || !user || user.user_metadata?.role !== "veterinarian") {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
         const body = await request.json();
         const { to, message, clientProfileId, clientName } = body;
 

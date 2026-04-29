@@ -57,13 +57,11 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient();
 
     const {
-      data: { session },
+      data: { user },
       error,
-    } = await supabase.auth.getSession();
-    const user = session?.user;
+    } = await supabase.auth.getUser();
     if (
       error ||
-      !session ||
       !user ||
       user.user_metadata?.role !== "veterinarian"
     ) {
@@ -181,13 +179,11 @@ export async function PATCH(request: NextRequest) {
     const supabase = await createClient();
 
     const {
-      data: { session },
+      data: { user },
       error,
-    } = await supabase.auth.getSession();
-    const user = session?.user;
+    } = await supabase.auth.getUser();
     if (
       error ||
-      !session ||
       !user ||
       user.user_metadata?.role !== "veterinarian"
     ) {
@@ -244,13 +240,11 @@ export async function DELETE(request: NextRequest) {
     const supabase = await createClient();
 
     const {
-      data: { session },
+      data: { user },
       error,
-    } = await supabase.auth.getSession();
-    const user = session?.user;
+    } = await supabase.auth.getUser();
     if (
       error ||
-      !session ||
       !user ||
       user.user_metadata?.role !== "veterinarian"
     ) {

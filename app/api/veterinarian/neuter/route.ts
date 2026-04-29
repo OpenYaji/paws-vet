@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
       error: authError,
     } = await supabase.auth.getUser();
 
-    if (authError || !user) {
+    if (authError || !user || user.user_metadata?.role !== "veterinarian") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

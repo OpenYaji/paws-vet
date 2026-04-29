@@ -20,6 +20,16 @@ export async function GET() {
 export async function PATCH(request: Request) {
   try {
     const supabase = await createClient();
+
+    // get the current user by getUser()
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+    if (authError || !user || user.user_metadata?.role !== "veterinarian") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
 
     const { data: oldRecord } = await supabase

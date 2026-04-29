@@ -1,13 +1,9 @@
-import { createClient } from '@supabase/supabase-js';
+import { createAdminClient } from '@/utils/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-);
 
 export async function GET(request: NextRequest) {
   try {
+    const supabase = await createAdminClient();
     const { data, error } = await supabase.from('inventory').select('*').order('created_at', { ascending: false });
 
     if (error) {
@@ -22,6 +18,17 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const supabase = await createAdminClient();
+    
+    // get the current user by getUser()
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+    if (authError || !user || user.user_metadata?.role !== "veterinarian") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
 
     const { data, error } = await supabase.from('inventory').insert([body]).select();

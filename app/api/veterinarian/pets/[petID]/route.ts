@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js"; // Fixed: Use service role client
+import { createAdminClient } from "@/utils/supabase/server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -9,6 +9,17 @@ type RouteContext = {
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
   try {
+    const supabase = await createAdminClient();
+
+    // get the current user by getUser()
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+    if (authError || !user || user.user_metadata?.role !== "veterinarian") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     // Await params for Next.js 15 compatibility
     const params = await context.params;
     console.log("DEBUG - All params received:", params); // Debug log
@@ -28,12 +39,6 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
     // Read the request body
     const body = await request.json();
-
-    // Fixed: Use service role to bypass RLS (like other API routes do)
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    );
 
     // Build update payload — only include fields present in body
     const allowedFields = [

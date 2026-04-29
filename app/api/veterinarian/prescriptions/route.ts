@@ -77,6 +77,15 @@ export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
 
+    // get the current user by getUser()
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+    if (authError || !user || user.user_metadata?.role !== "veterinarian") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
     const { medical_record_id, prescribed_by, medication_name } = body;
 
@@ -109,14 +118,6 @@ export async function POST(request: NextRequest) {
         { status: 404 },
       );
     }
-
-    // Check for veterinarian by getSession()
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    const user = session?.user;
-    if (!user)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { data: petData } = await supabase
       .from("pets")
@@ -222,6 +223,16 @@ export async function PUT(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const supabase = await createClient();
+
+    // get the current user by getUser()
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+    if (authError || !user || user.user_metadata?.role !== "veterinarian") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const searchParams = new URL(request.url).searchParams;
     const id = searchParams.get("id");
 
@@ -255,11 +266,12 @@ export async function PATCH(request: NextRequest) {
     const supabase = await createClient();
 
     const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    const user = session?.user;
-    if (!user)
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+    if (authError || !user || user.user_metadata?.role !== "veterinarian") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
     const body = await request.json();
     const { id, mark_dispensed, ...edits } = body;

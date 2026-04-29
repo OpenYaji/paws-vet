@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@/utils/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
@@ -27,12 +27,8 @@ export async function POST(request: NextRequest) {
     }
     const token = authHeader.split(' ')[1];
 
-    // Create a temporary client to get the user's email
-    // We use the ANON key here because we just need to read the token
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
+    // Use the helper to create a client
+    const supabase = await createClient();
 
     const { data: { user }, error: userError } = await supabase.auth.getUser(token);
 
@@ -44,11 +40,8 @@ export async function POST(request: NextRequest) {
     }
 
     // 3. Verify Old Password & Create Update Session
-    // We create a FRESH client instance to handle the sign-in
-    const sessionClient = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
+    // We create another client instance to handle the sign-in
+    const sessionClient = await createClient();
 
     // Attempt to log in with the OLD password
     const { error: signInError } = await sessionClient.auth.signInWithPassword({

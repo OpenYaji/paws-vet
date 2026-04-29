@@ -8,7 +8,7 @@ export async function POST() {
   // Verify the caller is authenticated
   const supabase = await createClient();
   const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) {
+  if (authError || !user || user.user_metadata?.role !== "veterinarian") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
