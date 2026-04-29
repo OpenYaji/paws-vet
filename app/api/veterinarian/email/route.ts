@@ -1,6 +1,6 @@
 import { EmailTemplate } from "@/components/veterinarian/email-template/email-template";
 import { sendEmail } from "@/utils/mail/email";
-
+ 
 export async function POST(req: Request) {
   const { to, subject, content } = await req.json();
   try {
