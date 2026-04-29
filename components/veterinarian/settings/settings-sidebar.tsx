@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Shield, SlidersHorizontal, Palette } from "lucide-react"
+import { Shield, SlidersHorizontal, Palette, Building2 } from "lucide-react"
 
 interface SettingsMenuItem {
   name: string
@@ -15,6 +15,11 @@ const settingsMenuItems: SettingsMenuItem[] = [
     name: "General Settings",
     icon: <SlidersHorizontal size={18} />,
     path: "/veterinarian/settings/general-settings",
+  },
+  {
+    name: "Clinic Profile",
+    icon: <Building2 size={18} />,
+    path: "/veterinarian/settings/clinic-profile",
   },
   {
     name: "Access & Security",

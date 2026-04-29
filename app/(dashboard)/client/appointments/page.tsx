@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/auth-client';
+import useSWR from 'swr';
 import {
   Calendar,
   Heart,
@@ -26,24 +27,71 @@ interface CurrentAppointment {
   pets?: { name: string; species: string; breed: string } | { name: string; species: string; breed: string }[] | null;
 }
 
+const fetchAppointments = async () => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const { data: profile } = await supabase
+    .from('client_profiles')
+    .select('id')
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  if (!profile) return { current: [], pets: [] };
+
+  const petsRes = await fetch(
+    `/api/client/pets?client_id=${profile.id}`
+  );
+  const petsData = await petsRes.json();
+  const pets = Array.isArray(petsData) ? petsData : [];
+  const petIds = pets.map((p: any) => p.id);
+
+  if (petIds.length === 0)
+    return { current: [], pets };
+
+  const { data: appointments } = await supabase
+    .from('appointments')
+    .select(`
+      id, appointment_number, appointment_type_detail,
+      scheduled_start, scheduled_end,
+      appointment_status, reason_for_visit,
+      payment_status, payment_amount,
+      outreach_program_id,
+      is_emergency,
+      pets!appointments_pet_id_fkey (
+        id, name, species, breed
+      )
+    `)
+    .in('pet_id', petIds)
+    .in('appointment_status', ['pending', 'confirmed'])
+    .order('scheduled_start', { ascending: true });
+
+  return {
+    current: appointments ?? [],
+    pets
+  };
+};
+
 export default function ClientAppointmentsPage() {
-  const [clientId, setClientId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [currentAppointments, setCurrentAppointments] = useState<CurrentAppointment[]>([]);
-  const [loadingAppointments, setLoadingAppointments] = useState(false);
   const [outreachAvailable, setOutreachAvailable] = useState(false);
   const [checkingOutreach, setCheckingOutreach] = useState(true);
 
-  useEffect(() => {
-    fetchClientData();
-    checkOutreachAvailability();
-  }, []);
+  const { data, isLoading, mutate } = useSWR(
+    'client-appointments',
+    fetchAppointments,
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      dedupingInterval: 60000, // 1 minute cache
+    }
+  );
+
+  const appointments = (data?.current ?? []) as CurrentAppointment[];
+  const loadingAppointments = isLoading;
 
   useEffect(() => {
-    if (clientId) {
-      fetchCurrentAppointments(clientId);
-    }
-  }, [clientId]);
+    checkOutreachAvailability();
+  }, []);
 
   const checkOutreachAvailability = async () => {
     setCheckingOutreach(true);
@@ -64,98 +112,6 @@ export default function ClientAppointmentsPage() {
     }
   };
 
-  const fetchClientData = async () => {
-    try {
-      const {
-        data: { user },
-        error: authError,
-      } = await supabase.auth.getUser();
-      if (authError || !user) {
-        setLoading(false);
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from('client_profiles')
-        .select('id')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      if (error) {
-        setLoading(false);
-        return;
-      }
-
-      if (data) {
-        setClientId(data.id);
-      } else {
-        const { data: newProfile, error: createError } = await supabase
-          .from('client_profiles')
-          .insert({
-            user_id: user.id,
-            first_name: user.email?.split('@')[0] || 'User',
-            last_name: '',
-            phone: '+10000000000',
-            address_line1: 'N/A',
-            city: 'N/A',
-            state: 'N/A',
-            zip_code: '00000',
-            communication_preference: 'email',
-          })
-          .select('id')
-          .single();
-        if (!createError && newProfile) setClientId(newProfile.id);
-      }
-    } catch {
-      // silent
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchCurrentAppointments = async (cId: string) => {
-    setLoadingAppointments(true);
-    try {
-      const { data: petsData } = await supabase
-        .from('pets')
-        .select('id')
-        .eq('owner_id', cId);
-
-      if (!petsData || petsData.length === 0) {
-        setCurrentAppointments([]);
-        return;
-      }
-
-      const petIds = petsData.map((p: any) => p.id);
-
-      const { data, error } = await supabase
-        .from('appointments')
-        .select(`
-          id,
-          appointment_number,
-          scheduled_start,
-          scheduled_end,
-          appointment_status,
-          reason_for_visit,
-          is_emergency,
-          pets!appointments_pet_id_fkey (
-            name,
-            species,
-            breed
-          )
-        `)
-        .in('pet_id', petIds)
-        .in('appointment_status', ['pending', 'confirmed'])
-        .order('scheduled_start', { ascending: true });
-
-      if (error) return;
-      setCurrentAppointments((data || []) as unknown as CurrentAppointment[]);
-    } catch {
-      // silent
-    } finally {
-      setLoadingAppointments(false);
-    }
-  };
 
   return (
     <main className="p-6 space-y-8">
@@ -176,15 +132,15 @@ export default function ClientAppointmentsPage() {
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <h2 className="text-2xl font-bold">Current Appointments</h2>
-            {!loadingAppointments && currentAppointments.length > 0 && (
+            {!loadingAppointments && appointments.length > 0 && (
               <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-                {currentAppointments.length} active
+                {appointments.length} active
               </span>
             )}
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => { if (clientId) fetchCurrentAppointments(clientId); checkOutreachAvailability(); }}
+              onClick={() => { mutate(); checkOutreachAvailability(); }}
               className="p-2 rounded-lg border border-border bg-card hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-150"
               aria-label="Refresh appointments"
             >
@@ -204,7 +160,7 @@ export default function ClientAppointmentsPage() {
             <div className="w-5 h-5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
             Loading appointments&hellip;
           </div>
-        ) : currentAppointments.length === 0 ? (
+        ) : appointments.length === 0 ? (
           <div className="bg-card border border-dashed border-border rounded-2xl p-8 text-center text-muted-foreground">
             <CalendarIcon size={36} className="mx-auto mb-3 opacity-30" />
             <p className="font-semibold">No current appointments</p>
@@ -212,7 +168,7 @@ export default function ClientAppointmentsPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {currentAppointments.map((apt) => {
+            {appointments.map((apt) => {
               const isPending = apt.appointment_status === 'pending';
               const cardCls = isPending
                 ? 'border-l-yellow-500 bg-yellow-50/40 dark:bg-yellow-900/10'
@@ -363,7 +319,6 @@ export default function ClientAppointmentsPage() {
                 <Heart size={24} className="text-pink-500" />
               </div>
               <div className="flex flex-col items-end gap-1.5">
-                <span className="bg-pink-100 text-pink-700 text-xs font-bold px-2 py-0.5 rounded-full">Free / ₱500</span>
                 {!checkingOutreach && !outreachAvailable && (
                   <span className="text-xs font-semibold bg-muted text-muted-foreground rounded-full px-3 py-1">
                     Currently Unavailable

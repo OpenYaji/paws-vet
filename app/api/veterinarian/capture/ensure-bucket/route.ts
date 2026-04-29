@@ -30,7 +30,7 @@ export async function POST() {
   }
 
   // Create the bucket (private — URLs are generated server-side)
-  const { error: createError } = await admin.storage.createBucket(BUCKET, {
+  const { error: createError } = await admin.storage.createBucket(bucket, {
     public: true,
     allowedMimeTypes: ["image/jpeg", "image/png", "image/webp", "image/gif", "image/heic"],
     fileSizeLimit: 10 * 1024 * 1024, // 10 MB

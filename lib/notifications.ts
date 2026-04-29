@@ -17,7 +17,10 @@ export type AppointmentNotificationType =
   | 'cancelled'
   | 'rescheduled'
   | 'payment_verified'
-  | 'reminder';
+  | 'reminder'
+  | 'booked'
+  | 'pet_added'
+  | 'pet_updated';
 
 export interface NotificationRecord {
   id: string;
@@ -73,6 +76,24 @@ function buildPayload(
         subject: `Reminder: You have an appointment tomorrow — ${appointmentNumber}`,
         content: `This is a friendly reminder that you have appointment ${appointmentNumber} scheduled for tomorrow. Please ensure your pet is ready and arrive on time.`,
       };
+    case 'booked':
+      return {
+        notification_type: 'new_appointment',
+        subject: `New appointment booked — ${appointmentNumber}`,
+        content: `A client has booked appointment ${appointmentNumber}. Please review and confirm at your earliest convenience.`,
+      };
+    case 'pet_added':
+      return {
+        notification_type: 'new_pet',
+        subject: `New pet registered — ${appointmentNumber}`,
+        content: `A client has added a new pet "${appointmentNumber}" to their profile. You can view it in the CMS Pet Management tab.`,
+      };
+    case 'pet_updated':
+      return {
+        notification_type: 'new_pet',
+        subject: `Pet profile updated — ${appointmentNumber}`,
+        content: `A client has updated their pet "${appointmentNumber}"'s profile information.`,
+      };
   }
 }
 
@@ -103,6 +124,28 @@ export async function sendAppointmentNotification(params: {
   });
 }
 
+// ── sendAdminNotification ─────────────────────────────────────────────────────
+
+export async function sendAdminNotification(params: {
+  type: AppointmentNotificationType;
+  label: string;
+  appointmentId?: string;
+  petId?: string;
+  clientUserId?: string;
+}): Promise<void> {
+  await fetch('/api/notifications/send-admin', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      type: params.type,
+      label: params.label,
+      appointmentId: params.appointmentId,
+      petId: params.petId,
+      clientUserId: params.clientUserId,
+    }),
+  });
+}
+
 // ── getClientNotifications ────────────────────────────────────────────────────
 
 export async function getClientNotifications(
@@ -112,6 +155,7 @@ export async function getClientNotifications(
     .from('notification_logs')
     .select('*')
     .eq('recipient_id', userId)
+    .not('notification_type', 'in', '(appointment_booked,pet_added,pet_updated)')
     .order('created_at', { ascending: false });
 
   if (error || !data) {

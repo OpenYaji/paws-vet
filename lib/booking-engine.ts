@@ -381,8 +381,8 @@ export function calculatePaymentAmount(params: PaymentAmountParams): number {
 /**
  * Return all bookable dates in a given month.
  *
- * **Regular:** every weekday (Mon–Fri) in the month that is not fully booked
- * and not manually closed in `appointment_slots`.
+ * **Regular:** every day in the month that is not closed per `clinic_schedule`,
+ * not fully booked, and not manually closed in `appointment_slots`.
  *
  * **Outreach:** only dates that have an open (is_open = true, is_full = false)
  * `outreach_program` record, regardless of day-of-week.
@@ -436,18 +436,17 @@ export async function getAvailableDates(
         .sort();
     }
 
-    // Regular: check weekdays (Mon=1 … Fri=5; skip Sat=6, Sun=0)
+    // Regular: skip days closed in clinic_schedule, then check capacity
     const monthStart = `${year}-${pad(month)}-01`;
     const monthEnd   = `${year}-${pad(month)}-${pad(daysInMonth)}`;
 
-    // Fetch both closed dates and already-full dates in parallel
     const [closedDatesSet, fullDatesSet] = await Promise.all([
       getClosedRegularDates(monthStart, monthEnd),
       getFullRegularDates(monthStart, monthEnd),
     ]);
 
     const weekdays = allDates.filter((d) => {
-      const dow = new Date(d).getUTCDay(); // 0 = Sun, 6 = Sat
+      const dow = new Date(d).getUTCDay();
       return dow !== 0 && dow !== 6;
     });
 
@@ -483,20 +482,31 @@ async function getClosedRegularDates(
   from: string,
   to: string,
 ): Promise<Set<string>> {
-  const { data, error } = await supabase
-    .from("appointment_slots")
-    .select("slot_date")
-    .eq("appointment_type", "regular")
-    .eq("is_closed", true)
-    .gte("slot_date", from)
-    .lte("slot_date", to);
+  try {
+    const [slotsRes, closedRes] = await Promise.all([
+      supabase
+        .from('appointment_slots')
+        .select('slot_date')
+        .eq('appointment_type', 'regular')
+        .eq('is_closed', true)
+        .gte('slot_date', from)
+        .lte('slot_date', to),
+      supabase
+        .from('closed_dates')
+        .select('closed_date')
+        .gte('closed_date', from)
+        .lte('closed_date', to),
+    ]);
 
-  if (error) {
-    console.error("[booking-engine] getClosedRegularDates query error:", error.message);
+    const slotDates = (slotsRes.data ?? [])
+      .map((r: any) => r.slot_date as string);
+    const closedDates = (closedRes.data ?? [])
+      .map((r: any) => r.closed_date as string);
+
+    return new Set([...slotDates, ...closedDates]);
+  } catch {
     return new Set();
   }
-
-  return new Set((data ?? []).map((r) => r.slot_date as string));
 }
 
 /**

@@ -1,10 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import useSWR from 'swr';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/auth-client';
 import Link from 'next/link';
-import { toast } from 'sonner';
 
 interface Service {
   id: string;
@@ -29,51 +28,52 @@ const serviceIconMap: { [key: string]: string } = {
   'Grooming': '✂️',
 };
 
-export default function ClientServicesPage() {
-  const [services, setServices] = useState<Service[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [groupedServices, setGroupedServices] = useState<{ [key: string]: Service[] }>({});
+const fetchServices = async () => {
+  const { data: servicesData } = await supabase
+    .from('services')
+    .select('*')
+    .eq('is_active', true)
+    .order('service_category', { ascending: true })
+    .order('service_name', { ascending: true });
 
-  useEffect(() => {
-    fetchServices();
-  }, []);
+  const { data: clinicData } = await supabase
+    .from('clinic_settings')
+    .select('shopee_url, products_page_title, products_page_description')
+    .eq('id', 1)
+    .single();
 
-  const fetchServices = async () => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('services')
-        .select('*')
-        .eq('is_active', true)
-        .order('service_category', { ascending: true })
-        .order('service_name', { ascending: true });
+  const grouped = (servicesData ?? []).reduce(
+    (acc: any, service: any) => {
+      const cat = service.service_category;
+      if (!acc[cat]) acc[cat] = [];
+      acc[cat].push(service);
+      return acc;
+    }, {}
+  );
 
-      if (error) {
-        console.error('Error fetching services:', error);
-        toast.error('Failed to load services');
-        return;
-      }
-
-      setServices(data || []);
-      
-      // Group services by category
-      const grouped = (data || []).reduce((acc, service) => {
-        const category = service.service_category;
-        if (!acc[category]) {
-          acc[category] = [];
-        }
-        acc[category].push(service);
-        return acc;
-      }, {} as { [key: string]: Service[] });
-      
-      setGroupedServices(grouped);
-    } catch (error) {
-      console.error('Unexpected error:', error);
-      toast.error('An unexpected error occurred');
-    } finally {
-      setLoading(false);
-    }
+  return {
+    services: servicesData ?? [],
+    groupedServices: grouped,
+    clinicSettings: clinicData,
   };
+};
+
+export default function ClientServicesPage() {
+  const { data, isLoading: loading } = useSWR(
+    'client-services',
+    fetchServices,
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      dedupingInterval: 300000,
+    }
+  );
+
+  const services = (data?.services ?? []) as Service[];
+  const groupedServices = (data?.groupedServices ?? {}) as { [key: string]: Service[] };
+  const clinicSettings = data?.clinicSettings;
+
+  void clinicSettings;
 
   if (loading) {
     return (

@@ -1,7 +1,8 @@
 ﻿'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { supabase } from '@/lib/auth-client';
+import useSWR from 'swr';
 import {
   getClientNotifications,
   markNotificationRead,
@@ -49,54 +50,52 @@ function notifBorderColor(type: string): string {
   return 'border-l-border';
 }
 
+const fetchNotifications = async () => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { notifications: [], unreadCount: 0 };
+
+  const result = await getClientNotifications(user.id);
+  return {
+    notifications: result.notifications,
+    unreadCount: result.unreadCount,
+    userId: user.id,
+  };
+};
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function ClientNotificationsPage() {
-  const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [markingAll, setMarkingAll] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
+  const { data, mutate, isLoading: loading } = useSWR(
+    'client-notifications',
+    fetchNotifications,
+    {
+      revalidateOnFocus: true,
+      revalidateOnReconnect: true,
+      dedupingInterval: 30000,
+    }
+  );
 
-  const loadNotifications = useCallback(async (uid: string) => {
-    setLoading(true);
-    const result = await getClientNotifications(uid);
-    setNotifications(result.notifications);
-    setUnreadCount(result.unreadCount);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        setUserId(user.id);
-        loadNotifications(user.id);
-      } else {
-        setLoading(false);
-      }
-    });
-  }, [loadNotifications]);
+  const notifications = (data?.notifications ?? []) as NotificationRecord[];
+  const unreadCount = data?.unreadCount ?? 0;
+  const userId = data?.userId ?? null;
 
   const handleMarkRead = async (notif: NotificationRecord) => {
     if (notif.is_read) return;
     await markNotificationRead(notif.id);
-    setNotifications(prev =>
-      prev.map(n => n.id === notif.id ? { ...n, is_read: true } : n),
-    );
-    setUnreadCount(c => Math.max(0, c - 1));
+    await mutate();
   };
 
   const handleMarkAllRead = async () => {
     if (!userId || unreadCount === 0) return;
     setMarkingAll(true);
     await markAllNotificationsRead(userId);
-    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
-    setUnreadCount(0);
+    await mutate();
     setMarkingAll(false);
   };
 
   const handleRefresh = () => {
-    if (userId) loadNotifications(userId);
+    mutate();
   };
 
   return (

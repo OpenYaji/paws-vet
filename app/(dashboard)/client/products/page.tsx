@@ -1,10 +1,29 @@
 'use client';
 
+import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/auth-client';
 import { ShoppingBag, ExternalLink, Star, Package, Truck, BadgeCheck, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 
 export default function ClientProductsPage() {
+  const [settings, setSettings] = useState({
+    shopee_url: 'https://ph.shp.ee/5dyuZHF',
+    products_page_title: 'Visit Our Shopee Store',
+    products_page_description: 'Browse our complete collection of vet-approved pet food, accessories, healthcare items, and more.',
+  });
+
+  useEffect(() => {
+    supabase
+      .from('clinic_settings')
+      .select('shopee_url, products_page_title, products_page_description')
+      .eq('id', 1)
+      .single()
+      .then(({ data }) => {
+        if (data) setSettings(data);
+      });
+  }, []);
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -38,10 +57,10 @@ export default function ClientProductsPage() {
             {/* Content */}
             <div className="space-y-4 max-w-2xl mx-auto">
               <h2 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
-                Visit Our Shopee Store
+                {settings.products_page_title}
               </h2>
               <p className="text-lg text-muted-foreground leading-relaxed">
-                Browse our complete collection of vet-approved pet food, accessories, healthcare items, and more. Delivered straight to your door with Shopee's trusted service!
+                {settings.products_page_description}
               </p>
             </div>
 
@@ -53,7 +72,7 @@ export default function ClientProductsPage() {
                 className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-bold group h-14 px-8 shadow-lg hover:shadow-xl transition-all duration-300"
               >
                 <a
-                  href="https://ph.shp.ee/5dyuZHF"
+                  href={settings.shopee_url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-3"
@@ -96,7 +115,7 @@ export default function ClientProductsPage() {
                 icon: Star,
                 color: 'from-amber-500 to-orange-500',
                 title: 'Official PAWS Store',
-                desc: 'Authentic products backed by our clinic\'s guarantee and customer support'
+                desc: "Authentic products backed by our clinic's guarantee and customer support"
               },
             ].map((feature, idx) => {
               const Icon = feature.icon;
@@ -166,7 +185,7 @@ export default function ClientProductsPage() {
         {/* Secondary CTA */}
         <div className="text-center space-y-6 py-8 md:py-12">
           <div className="space-y-2">
-            <h2 className="text-3xl md:text-4xl font-bold">Can't Find What You Need?</h2>
+            <h2 className="text-3xl md:text-4xl font-bold">Can&apos;t Find What You Need?</h2>
             <p className="text-lg text-muted-foreground">Check out our services or book a consultation with our vets</p>
           </div>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">

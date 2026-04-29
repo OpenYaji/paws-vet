@@ -6,8 +6,13 @@ import Link from 'next/link';
 import {
   ArrowLeft, Calendar, Users, Plus, RefreshCw,
   CheckCircle, XCircle, Eye, Download, AlertTriangle,
-  MoreVertical, Loader2, ToggleLeft, ToggleRight,
+  MoreVertical, Loader2, ToggleLeft, ToggleRight, Edit, Trash2,
 } from 'lucide-react';
+import { CmsCard } from '@/components/client/cms-card';
+import { CmsPageHeader } from '@/components/client/cms-page-header';
+import { CmsEmptyState } from '@/components/client/cms-empty-state';
+import { CmsStatusBadge } from '@/components/client/cms-status-badge';
+import { CmsBreadcrumb } from '@/components/client/cms-breadcrumb';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -22,6 +27,7 @@ interface OutreachProgram {
   current_bookings: number;
   is_open: boolean;
   is_full: boolean;
+  linked_appointments_count?: number;
   created_by?: string | null;
   created_at: string;
 }
@@ -48,23 +54,9 @@ interface Registration {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function programStatusBadge(p: OutreachProgram) {
-  if (p.is_full)
-    return (
-      <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
-        Full
-      </span>
-    );
-  if (p.is_open)
-    return (
-      <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-        Open
-      </span>
-    );
-  return (
-    <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold bg-muted text-muted-foreground">
-      Closed
-    </span>
-  );
+  if (p.is_full) return <CmsStatusBadge status="full" />;
+  if (p.is_open) return <CmsStatusBadge status="open" />;
+  return <CmsStatusBadge status="closed" />;
 }
 
 function payBadge(status?: string | null) {
@@ -145,15 +137,71 @@ export default function OutreachManagementPage() {
     is_open: false,
   });
 
+  // Edit modal
+  const [showEdit, setShowEdit] = useState(false);
+  const [editProgram, setEditProgram] = useState<OutreachProgram | null>(null);
+  const [editForm, setEditForm] = useState({
+    title: '',
+    description: '',
+    program_date: '',
+    registration_start: '',
+    registration_end: '',
+    max_capacity: 16,
+  });
+  const [saving, setSaving] = useState(false);
+
   // Registrations modal
   const [viewProgram, setViewProgram] = useState<OutreachProgram | null>(null);
   const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [regsLoading, setRegsLoading] = useState(false);
 
+  const dateInputClass = 'w-full px-3 py-2 pr-11 border border-border rounded-lg text-sm bg-background text-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all dark:[color-scheme:dark] [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0';
+  const dateTriggerButtonClass = 'absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 items-center justify-center rounded-md border border-border bg-accent text-foreground shadow-sm transition-all duration-150 hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-primary/20';
+
+  const openPicker = (inputId: string) => {
+    const input = document.getElementById(inputId) as (HTMLInputElement & { showPicker?: () => void }) | null;
+    if (!input) return;
+    if (typeof input.showPicker === 'function') {
+      input.showPicker();
+      return;
+    }
+    input.focus();
+    input.click();
+  };
+
   const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3500);
   };
+
+  const withLinkedAppointmentCounts = useCallback(async (rows: OutreachProgram[]) => {
+    if (rows.length === 0) return rows;
+
+    const programIds = rows.map((row) => row.id);
+    const { data, error } = await supabase
+      .from('appointments')
+      .select('outreach_program_id')
+      .in('outreach_program_id', programIds);
+
+    if (error) {
+      console.error('[outreach] failed to load linked appointment counts:', error.message);
+      return rows.map((row) => ({ ...row, linked_appointments_count: 0 }));
+    }
+
+    const counts = new Map<string, number>();
+    for (const appointment of (data ?? []) as Array<{ outreach_program_id: string | null }>) {
+      if (!appointment.outreach_program_id) continue;
+      counts.set(
+        appointment.outreach_program_id,
+        (counts.get(appointment.outreach_program_id) ?? 0) + 1
+      );
+    }
+
+    return rows.map((row) => ({
+      ...row,
+      linked_appointments_count: counts.get(row.id) ?? 0,
+    }));
+  }, []);
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
 
@@ -163,9 +211,40 @@ export default function OutreachManagementPage() {
       .from('outreach_programs')
       .select('*')
       .order('program_date', { ascending: false });
-    if (!error && data) setPrograms(data as OutreachProgram[]);
+    if (!error && data) {
+      const enrichedPrograms = await withLinkedAppointmentCounts(data as OutreachProgram[]);
+      setPrograms(enrichedPrograms);
+
+      const today = new Date().toISOString().slice(0, 10);
+      const pastOpenPrograms = (data ?? []).filter(
+        (p: OutreachProgram) =>
+          p.is_open && p.program_date < today
+      );
+
+      if (pastOpenPrograms.length > 0) {
+        await Promise.all(
+          pastOpenPrograms.map((p: OutreachProgram) =>
+            supabase
+              .from('outreach_programs')
+              .update({ is_open: false })
+              .eq('id', p.id)
+          )
+        );
+        // Refetch after auto-closing
+        const { data: refreshed } = await supabase
+          .from('outreach_programs')
+          .select('*')
+          .order('program_date', { ascending: false });
+        if (refreshed) {
+          const enrichedRefreshed = await withLinkedAppointmentCounts(refreshed as OutreachProgram[]);
+          setPrograms(enrichedRefreshed);
+        }
+        setLoading(false);
+        return;
+      }
+    }
     setLoading(false);
-  }, []);
+  }, [withLinkedAppointmentCounts]);
 
   useEffect(() => { fetchPrograms(); }, [fetchPrograms]);
 
@@ -246,6 +325,83 @@ export default function OutreachManagementPage() {
     fetchPrograms();
   };
 
+  const handleDelete = (program: OutreachProgram) => {
+    const linkedCount = program.linked_appointments_count ?? 0;
+    if (linkedCount > 0) {
+      showToast(
+        `Cannot delete this program because it has ${linkedCount} linked appointment${linkedCount === 1 ? '' : 's'}.`,
+        'error'
+      );
+      return;
+    }
+
+    setConfirmModal({
+      title: 'Delete Program',
+      message: `Permanently delete "${program.title}"? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        const { error } = await supabase
+          .from('outreach_programs')
+          .delete()
+          .eq('id', program.id);
+        if (error) {
+          const lowerMessage = (error.message ?? '').toLowerCase();
+          if (lowerMessage.includes('foreign key constraint') || lowerMessage.includes('outreach_program_id_fkey')) {
+            showToast('Cannot delete this program because linked appointments still exist.', 'error');
+            return;
+          }
+          showToast(error.message || 'Failed to delete', 'error');
+          return;
+        }
+        showToast('Program deleted');
+        fetchPrograms();
+      },
+    });
+  };
+
+  const handleEditOpen = (p: OutreachProgram) => {
+    setEditProgram(p);
+    setEditForm({
+      title: p.title,
+      description: p.description ?? '',
+      program_date: p.program_date,
+      registration_start: p.registration_start ?? '',
+      registration_end: p.registration_end ?? '',
+      max_capacity: p.max_capacity,
+    });
+    setShowEdit(true);
+  };
+
+  const handleEditSave = async () => {
+    if (!editProgram) return;
+    if (!editForm.title.trim() || !editForm.program_date) {
+      showToast('Title and Program Date are required', 'error');
+      return;
+    }
+    setSaving(true);
+    const { error } = await supabase
+      .from('outreach_programs')
+      .update({
+        title: editForm.title.trim(),
+        description: editForm.description.trim() || null,
+        program_date: editForm.program_date,
+        registration_start: editForm.registration_start || null,
+        registration_end: editForm.registration_end || null,
+        max_capacity: editForm.max_capacity,
+      })
+      .eq('id', editProgram.id);
+    setSaving(false);
+    if (error) {
+      showToast(error.message || 'Failed to save', 'error');
+      return;
+    }
+    showToast('Program updated successfully');
+    setShowEdit(false);
+    setEditProgram(null);
+    fetchPrograms();
+  };
+
   const handleViewRegistrations = async (program: OutreachProgram) => {
     setViewProgram(program);
     await fetchRegistrations(program.id);
@@ -254,7 +410,7 @@ export default function OutreachManagementPage() {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="max-w-[1400px] mx-auto px-6 py-8">
+    <div className="mx-auto max-w-[1500px] px-4 py-8 sm:px-6 lg:px-8">
       {/* Toast */}
       {toast && (
         <div className={`fixed bottom-6 right-6 z-[9999] px-5 py-3 rounded-xl shadow-lg text-sm font-semibold text-white ${toast.type === 'success' ? 'bg-emerald-600' : 'bg-destructive'}`}>
@@ -263,14 +419,18 @@ export default function OutreachManagementPage() {
       )}
 
       {/* Header */}
-      <div className="flex items-start justify-between mb-7 gap-4 flex-wrap">
+      <div className="mb-7 flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-center gap-3">
-          <Link href="/client-admin" className="p-2 rounded-lg border border-border bg-card hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-150">
+          <Link href="/client-admin" className="rounded-lg border border-border bg-card p-2 text-muted-foreground transition-all duration-150 hover:border-primary/40 hover:bg-accent hover:text-foreground">
             <ArrowLeft size={16} />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Outreach Programs</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Manage PAWS outreach events and registrations</p>
+            <CmsBreadcrumb items={[{ label: 'CMS', href: '/client-admin?tab=clients' }, { label: 'Outreach Programs' }]} />
+            <CmsPageHeader
+              title="Outreach Programs"
+              description="Manage PAWS outreach events and registrations"
+              count={programs.length}
+            />
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -287,21 +447,19 @@ export default function OutreachManagementPage() {
       </div>
 
       {/* Programs table */}
-      <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+      <CmsCard className="overflow-hidden">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
             <Loader2 size={28} className="animate-spin" />
             <span className="text-sm">Loading programs…</span>
           </div>
         ) : programs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-3 text-center px-6">
-            <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
-              <Calendar size={26} className="text-primary" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-foreground mb-1">No outreach programs yet</h3>
-              <p className="text-sm text-muted-foreground">Create a program to start accepting bookings</p>
-            </div>
+          <div className="px-6 py-10">
+            <CmsEmptyState
+              icon={Calendar}
+              title="No outreach programs yet"
+              description="Create a program to start accepting bookings"
+            />
             <button
               onClick={() => setShowCreate(true)}
               className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold bg-primary text-primary-foreground hover:opacity-90 transition-all duration-150"
@@ -315,13 +473,17 @@ export default function OutreachManagementPage() {
               <thead className="bg-muted/50 border-b border-border">
                 <tr>
                   {['Program', 'Date', 'Status', 'Registrations', 'Registration Window', 'Actions'].map(h => (
-                    <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{h}</th>
+                    <th key={h} className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90 whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {programs.map(p => (
-                  <tr key={p.id} className="hover:bg-primary/5 transition-colors duration-150">
+                {programs.map(p => {
+                  const linkedCount = p.linked_appointments_count ?? 0;
+                  const deleteDisabled = linkedCount > 0;
+
+                  return (
+                  <tr key={p.id} className="hover:bg-primary/[0.08] transition-colors duration-150">
                     <td className="px-5 py-4">
                       <div className="font-semibold text-foreground">{p.title}</div>
                       {p.description && <div className="text-xs text-muted-foreground mt-0.5 max-w-xs truncate">{p.description}</div>}
@@ -343,6 +505,23 @@ export default function OutreachManagementPage() {
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-1.5 justify-end">
+                        {/* Edit */}
+                        <button
+                          onClick={() => handleEditOpen(p)}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border border-border bg-card hover:bg-accent text-foreground transition-all duration-150"
+                        >
+                          <Edit size={12} /> Edit
+                        </button>
+
+                        <button
+                          onClick={() => handleDelete(p)}
+                          disabled={deleteDisabled}
+                          title={deleteDisabled ? `Cannot delete: ${linkedCount} linked appointment${linkedCount === 1 ? '' : 's'}.` : 'Delete program'}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all duration-150 disabled:opacity-55 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                        >
+                          <Trash2 size={12} /> Delete
+                        </button>
+
                         {/* View Registrations */}
                         <button
                           onClick={() => handleViewRegistrations(p)}
@@ -380,12 +559,151 @@ export default function OutreachManagementPage() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
-      </div>
+      </CmsCard>
+
+      {/* ── Edit Program Modal ───────────────────────────────────────────── */}
+      {showEdit && editProgram && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50" onClick={() => !saving && setShowEdit(false)} />
+          <div className="relative z-10 bg-card rounded-2xl border border-border shadow-2xl w-full max-w-lg overflow-y-auto max-h-[90vh]">
+            <div className="px-6 py-5 border-b border-border flex items-center justify-between">
+              <h2 className="text-lg font-bold">Edit Outreach Program</h2>
+              <button
+                onClick={() => !saving && setShowEdit(false)}
+                className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground transition-all duration-150"
+              >
+                <XCircle size={16} />
+              </button>
+            </div>
+            <div className="p-6 flex flex-col gap-4">
+              {/* Title */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-semibold">Title <span className="text-destructive">*</span></label>
+                <input
+                  className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-background text-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
+                  placeholder="e.g. Barangay Outreach — Pasay City"
+                  value={editForm.title}
+                  onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
+                />
+              </div>
+              {/* Description */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-semibold">Description</label>
+                <textarea
+                  rows={3}
+                  className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-background text-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all resize-vertical"
+                  placeholder="Optional program description…"
+                  value={editForm.description}
+                  onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
+                />
+              </div>
+              {/* Program Date */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-semibold">Program Date <span className="text-destructive">*</span></label>
+                <div className="relative">
+                  <input
+                    id="edit-program-date"
+                    type="date"
+                    className={dateInputClass}
+                    value={editForm.program_date}
+                    onChange={e => setEditForm(f => ({ ...f, program_date: e.target.value }))}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => openPicker('edit-program-date')}
+                    className={dateTriggerButtonClass}
+                    aria-label="Open program date calendar"
+                  >
+                    <Calendar size={14} />
+                  </button>
+                </div>
+              </div>
+              {/* Registration window */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-semibold">Registration Start</label>
+                  <div className="relative">
+                    <input
+                      id="edit-registration-start"
+                      type="datetime-local"
+                      className={dateInputClass}
+                      value={editForm.registration_start}
+                      onChange={e => setEditForm(f => ({ ...f, registration_start: e.target.value }))}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => openPicker('edit-registration-start')}
+                      className={dateTriggerButtonClass}
+                      aria-label="Open registration start picker"
+                    >
+                      <Calendar size={14} />
+                    </button>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-semibold">Registration End</label>
+                  <div className="relative">
+                    <input
+                      id="edit-registration-end"
+                      type="datetime-local"
+                      className={dateInputClass}
+                      value={editForm.registration_end}
+                      onChange={e => setEditForm(f => ({ ...f, registration_end: e.target.value }))}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => openPicker('edit-registration-end')}
+                      className={dateTriggerButtonClass}
+                      aria-label="Open registration end picker"
+                    >
+                      <Calendar size={14} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+              {/* Max Capacity */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-semibold">Max Capacity</label>
+                <input
+                  type="number"
+                  min={editProgram.current_bookings}
+                  max={500}
+                  className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-background text-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
+                  value={editForm.max_capacity}
+                  onChange={e => setEditForm(f => ({ ...f, max_capacity: Number(e.target.value) }))}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Cannot be set lower than current bookings ({editProgram.current_bookings})
+                </p>
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-border flex justify-end gap-2">
+              <button
+                onClick={() => setShowEdit(false)}
+                disabled={saving}
+                className="px-4 py-2 rounded-lg text-sm font-semibold border border-border bg-card hover:bg-accent text-foreground transition-all duration-150 disabled:opacity-55"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleEditSave}
+                disabled={saving}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold bg-primary text-primary-foreground hover:opacity-90 active:scale-95 transition-all duration-150 disabled:opacity-55"
+              >
+                {saving
+                  ? <><Loader2 size={14} className="animate-spin" />Saving…</>
+                  : <><CheckCircle size={14} />Save Changes</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Create Program Modal ─────────────────────────────────────────── */}
       {showCreate && (
@@ -423,32 +741,65 @@ export default function OutreachManagementPage() {
               {/* Program Date */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-semibold">Program Date <span className="text-destructive">*</span></label>
-                <input
-                  type="date"
-                  className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-background text-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
-                  value={form.program_date}
-                  onChange={e => setForm(f => ({ ...f, program_date: e.target.value }))}
-                />
+                <div className="relative">
+                  <input
+                    id="create-program-date"
+                    type="date"
+                    className={dateInputClass}
+                    value={form.program_date}
+                    onChange={e => setForm(f => ({ ...f, program_date: e.target.value }))}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => openPicker('create-program-date')}
+                    className={dateTriggerButtonClass}
+                    aria-label="Open program date calendar"
+                  >
+                    <Calendar size={14} />
+                  </button>
+                </div>
               </div>
               {/* Registration window */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
                   <label className="text-sm font-semibold">Registration Start</label>
-                  <input
-                    type="datetime-local"
-                    className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-background text-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
-                    value={form.registration_start}
-                    onChange={e => setForm(f => ({ ...f, registration_start: e.target.value }))}
-                  />
+                  <div className="relative">
+                    <input
+                      id="create-registration-start"
+                      type="datetime-local"
+                      className={dateInputClass}
+                      value={form.registration_start}
+                      onChange={e => setForm(f => ({ ...f, registration_start: e.target.value }))}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => openPicker('create-registration-start')}
+                      className={dateTriggerButtonClass}
+                      aria-label="Open registration start picker"
+                    >
+                      <Calendar size={14} />
+                    </button>
+                  </div>
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <label className="text-sm font-semibold">Registration End</label>
-                  <input
-                    type="datetime-local"
-                    className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-background text-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
-                    value={form.registration_end}
-                    onChange={e => setForm(f => ({ ...f, registration_end: e.target.value }))}
-                  />
+                  <div className="relative">
+                    <input
+                      id="create-registration-end"
+                      type="datetime-local"
+                      className={dateInputClass}
+                      value={form.registration_end}
+                      onChange={e => setForm(f => ({ ...f, registration_end: e.target.value }))}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => openPicker('create-registration-end')}
+                      className={dateTriggerButtonClass}
+                      aria-label="Open registration end picker"
+                    >
+                      <Calendar size={14} />
+                    </button>
+                  </div>
                 </div>
               </div>
               {/* Max Capacity */}

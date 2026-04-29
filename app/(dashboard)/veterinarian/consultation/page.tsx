@@ -134,13 +134,20 @@ export default function ConsultationPage() {
 
       toast({
         title: "Consultation completed",
-        description: `Medical record ${result.record_number} created successfully.`,
+        description: result.next_step === "neuter"
+          ? `Medical record ${result.record_number} saved. Redirecting to Neuter queue...`
+          : `Medical record ${result.record_number} created successfully.`,
       });
 
       mutate("/api/veterinarian/consultations");
       setSelected(null);
       setForm({ subjective: "", objective: "", assessment: "", plan: "" });
-      router.push("/veterinarian/medical-records");
+
+      if (result.next_step === "neuter") {
+        router.push("/veterinarian/appointments?tab=neuter");
+      } else {
+        router.push("/veterinarian/medical-records");
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "An error occurred";
       toast({ title: "Error", description: message, variant: "destructive" });

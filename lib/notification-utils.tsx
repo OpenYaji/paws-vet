@@ -40,6 +40,10 @@ export function getNotificationIcon(type: NotificationType, size: number = 16): 
     no_show: <UserX size={size} className="text-gray-500" />,
     admin_announcement: <Megaphone size={size} className="text-purple-500" />,
     admin_duty_notice: <ClipboardList size={size} className="text-blue-600" />,
+    // CMS admin types
+    appointment_booked: <CalendarCheck size={size} className="text-green-500" />,
+    pet_added: <PawPrint size={size} className="text-teal-500" />,
+    pet_updated: <PawPrint size={size} className="text-amber-500" />,
   };
 
   return icons[type] || icons.general;
@@ -59,7 +63,10 @@ export function getDeliveryStatusIcon(status: NotificationStatus, size: number =
 
 // Format time ago
 export function timeAgo(dateStr: string): string {
-  const seconds = Math.floor((new Date().getTime() - new Date(dateStr).getTime()) / 1000);
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return '';
+  const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
   if (seconds < 60) return 'Just now';
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ago`;
@@ -96,6 +103,10 @@ export function getNotificationTypeLabel(type: NotificationType): string {
     no_show: 'No Show',
     admin_announcement: 'Announcement',
     admin_duty_notice: 'Duty Notice',
+    // CMS admin labels
+    appointment_booked: 'Appointment Booked',
+    pet_added: 'New Pet Added',
+    pet_updated: 'Pet Updated',
   };
 
   return labels[type] || 'Notification';
@@ -132,6 +143,10 @@ export function getNotificationColor(type: NotificationType): string {
     no_show: 'bg-gray-50 border-gray-200',
     admin_announcement: 'bg-purple-50 border-purple-200',
     admin_duty_notice: 'bg-blue-50 border-blue-200',
+    // CMS admin colors
+    appointment_booked: 'bg-green-50 border-green-200',
+    pet_added: 'bg-teal-50 border-teal-200',
+    pet_updated: 'bg-amber-50 border-amber-200',
   };
 
   return colors[type] || colors.general;
@@ -154,6 +169,10 @@ export function sortNotificationsByPriority(notifications: Notification[]): Noti
     new_pet: 12,
     admin_announcement: 13,
     admin_duty_notice: 14,
+    // CMS admin priorities
+    appointment_booked: 9,
+    pet_added: 12,
+    pet_updated: 12,
     general: 15,
   };
 

@@ -1,42 +1,41 @@
 "use client";
-
 import { useState, useMemo } from 'react';
 import { supabase } from '@/lib/auth-client';
 import useSWR, { mutate } from 'swr';
+import { Fetcher } from '@/lib/fetcher';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
+  Tooltip, TooltipContent, TooltipTrigger,
 } from '@/components/ui/tooltip';
 import {
-  Search,
-  Pill,
-  Printer,
-  LayoutList,
-  TableIcon,
-  ChevronLeft,
-  ChevronRight,
+  Search, Pill, Printer, LayoutList, TableIcon, ChevronLeft, ChevronRight,
+  Pencil, CheckCircle2, Loader2,
 } from 'lucide-react';
 import IssuePrescription from '@/components/veterinarian/prescriptions/issue-prescriptions';
 import PrintPrescription from '@/components/veterinarian/prescriptions/print-prescription';
 
+async function authedFetch(path: string, init?: RequestInit) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData?.session?.access_token;
+  return fetch(path, {
+    ...init,
+    headers: { ...(init?.headers ?? {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+  });
+}
+
 // items shown per page per view mode
 const itemsList = 20;
 const itemsTable = 20;
-
-const fetcher = (url: string) => fetch(url).then(res => res.json());
 
 function StatusBadge({ dispensedDate }: { dispensedDate: string | null }) {
   return (
@@ -52,12 +51,66 @@ function StatusBadge({ dispensedDate }: { dispensedDate: string | null }) {
 export default function PrescriptionsPage() {
   const { data: prescriptions = [], isLoading } = useSWR(
     "/api/veterinarian/prescriptions",
-    fetcher,
+    Fetcher,{
+      revalidateOnFocus: false,
+      dedupingInterval: 30000,
+    }
   );
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'table'>('list');
   const [page, setPage] = useState(1);
   const [selectedRx, setSelectedRx] = useState<any>(null);
+  const [editRx, setEditRx] = useState<any>(null);
+  const [editForm, setEditForm] = useState({ medication_name: '', dosage: '', frequency: '', duration: '', instructions: '' });
+  const [editSaving, setEditSaving] = useState(false);
+  const [dispensing, setDispensing] = useState<string | null>(null);
+
+  const openEdit = (rx: any) => {
+    setEditRx(rx);
+    setEditForm({
+      medication_name: rx.medication_name ?? '',
+      dosage: rx.dosage ?? '',
+      frequency: rx.frequency ?? '',
+      duration: rx.duration ?? '',
+      instructions: rx.instructions ?? '',
+    });
+  };
+
+  const handleEditSave = async () => {
+    if (!editRx) return;
+    setEditSaving(true);
+    try {
+      const res = await authedFetch('/api/veterinarian/prescriptions', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: editRx.id, ...editForm }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setEditRx(null);
+      mutate('/api/veterinarian/prescriptions');
+    } catch (err) {
+      console.error('[Prescriptions] edit error', err);
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  const handleMarkDispensed = async (rxId: string) => {
+    setDispensing(rxId);
+    try {
+      const res = await authedFetch('/api/veterinarian/prescriptions', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: rxId, mark_dispensed: true }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      mutate('/api/veterinarian/prescriptions');
+    } catch (err) {
+      console.error('[Prescriptions] dispense error', err);
+    } finally {
+      setDispensing(null);
+    }
+  };
 
   const resetPage = () => setPage(1);
   const itemsPerPage = viewMode === 'list' ? itemsList : itemsTable;
@@ -222,19 +275,36 @@ export default function PrescriptionsPage() {
                       </p>
                     )}
                   </div>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8 shrink-0"
-                        onClick={() => setSelectedRx(rx)}
-                      >
-                        <Printer size={15} />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Print Prescription</TooltipContent>
-                  </Tooltip>
+                  <div className="flex items-center gap-1">
+                    {!rx.dispensed_date && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button variant="outline" size="icon" className="h-8 w-8 shrink-0"
+                            disabled={dispensing === rx.id}
+                            onClick={() => handleMarkDispensed(rx.id)}>
+                            {dispensing === rx.id ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} className="text-green-600" />}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Mark as Dispensed</TooltipContent>
+                      </Tooltip>
+                    )}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={() => openEdit(rx)}>
+                          <Pencil size={14} />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Edit Prescription</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={() => setSelectedRx(rx)}>
+                          <Printer size={15} />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Print Prescription</TooltipContent>
+                    </Tooltip>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -283,19 +353,35 @@ export default function PrescriptionsPage() {
                       {new Date(rx.created_at).toLocaleDateString()}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => setSelectedRx(rx)}
-                          >
-                            <Printer size={15} />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Print Prescription</TooltipContent>
-                      </Tooltip>
+                      <div className="flex justify-end gap-1">
+                        {!rx.dispensed_date && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button variant="outline" size="icon" className="h-8 w-8"
+                                disabled={dispensing === rx.id} onClick={() => handleMarkDispensed(rx.id)}>
+                                {dispensing === rx.id ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} className="text-green-600" />}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Mark as Dispensed</TooltipContent>
+                          </Tooltip>
+                        )}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => openEdit(rx)}>
+                              <Pencil size={14} />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Edit Prescription</TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setSelectedRx(rx)}>
+                              <Printer size={15} />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Print Prescription</TooltipContent>
+                        </Tooltip>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -313,6 +399,43 @@ export default function PrescriptionsPage() {
         open={!!selectedRx}
         onOpenChange={(open: boolean) => !open && setSelectedRx(null)}
       />
+
+      {/* Edit Prescription Dialog */}
+      <Dialog open={!!editRx} onOpenChange={(open) => !open && setEditRx(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader><DialogTitle>Edit Prescription</DialogTitle></DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1">
+              <Label>Medication Name</Label>
+              <Input value={editForm.medication_name} onChange={e => setEditForm(f => ({ ...f, medication_name: e.target.value }))} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Dosage</Label>
+                <Input value={editForm.dosage} onChange={e => setEditForm(f => ({ ...f, dosage: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <Label>Frequency</Label>
+                <Input value={editForm.frequency} onChange={e => setEditForm(f => ({ ...f, frequency: e.target.value }))} />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label>Duration</Label>
+              <Input value={editForm.duration} onChange={e => setEditForm(f => ({ ...f, duration: e.target.value }))} />
+            </div>
+            <div className="space-y-1">
+              <Label>Instructions</Label>
+              <Input value={editForm.instructions} onChange={e => setEditForm(f => ({ ...f, instructions: e.target.value }))} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditRx(null)} disabled={editSaving}>Cancel</Button>
+            <Button onClick={handleEditSave} disabled={editSaving}>
+              {editSaving && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

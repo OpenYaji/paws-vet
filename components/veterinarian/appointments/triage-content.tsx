@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import useSWR, { mutate } from 'swr';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,10 +8,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog';
+import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import {
-  Stethoscope, Thermometer, Weight, Heart, Activity, Clock, AlertTriangle,
+  Stethoscope, Thermometer, Weight, Heart, Activity, Clock, AlertTriangle, Pencil, Loader2,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
@@ -31,8 +34,17 @@ const TRIAGE_BADGE: Record<string, string> = {
 };
 
 export default function TriageContent() {
-  const { data: queue = [], isLoading, error } = useSWR('/api/veterinarian/triage', fetcher);
+  const { data: queue = [], isLoading, error } = useSWR('/api/veterinarian/triage', fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 30_000,
+  });
   const safeQueue = Array.isArray(queue) ? queue : [];
+
+  // Defer the completed section until after the critical queue has painted
+  const [showCompleted, setShowCompleted] = useState(false);
+  useEffect(() => {
+    if (!isLoading) setShowCompleted(true);
+  }, [isLoading]);
 
   const [selectedAppt, setSelectedAppt] = useState<any | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -50,7 +62,11 @@ export default function TriageContent() {
 
   const handleSelect = (appt: any) => {
     setSelectedAppt(appt);
-    setVitals((prev) => ({ ...prev, chief_complaint: appt.reason_for_visit || '' }));
+    setVitals((prev) => ({
+      ...prev,
+      chief_complaint: appt.reason_for_visit || '',
+      weight: appt.pets?.weight != null ? String(appt.pets.weight) : '',
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -232,6 +248,11 @@ export default function TriageContent() {
                     <div className="space-y-2">
                       <Label className="flex items-center gap-1 text-xs uppercase text-muted-foreground">
                         <Weight size={13} /> Weight (kg) <span className="text-red-500">*</span>
+                        {selectedAppt?.pets?.weight != null && (
+                          <span className="ml-1 text-[10px] normal-case font-normal text-green-600 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded-full">
+                            Auto-filled
+                          </span>
+                        )}
                       </Label>
                       <Input
                         type="number" step="0.1" required
@@ -307,7 +328,7 @@ export default function TriageContent() {
                     <Button
                       type="submit"
                       disabled={isSaving}
-                      className="bg-green-600 hover:bg-green-700 min-w-[160px]"
+                      className="bg-green-600 hover:bg-green-700 min-w-40"
                     >
                       {isSaving ? 'Saving…' : 'Complete Triage'}
                     </Button>
@@ -317,7 +338,7 @@ export default function TriageContent() {
               </CardContent>
             </Card>
           ) : (
-            <div className="flex flex-col items-center justify-center min-h-[420px] border-2 border-dashed rounded-xl bg-muted/30 text-muted-foreground">
+            <div className="flex flex-col items-center justify-center min-h-105 border-2 border-dashed rounded-xl bg-muted/30 text-muted-foreground">
               <AlertTriangle className="h-12 w-12 mb-4 opacity-20" />
               <h3 className="text-lg font-medium text-foreground">No Patient Selected</h3>
               <p className="text-sm mt-1">Select a patient from the waiting room to start triage.</p>
@@ -326,6 +347,181 @@ export default function TriageContent() {
         </div>
 
       </div>
+
+      {/* Completed Triage Records — rendered only after the queue above has loaded */}
+      {showCompleted && <CompletedTriageSection />}
+    </div>
+  );
+}
+
+function CompletedTriageSection() {
+  const { data: completed = [], mutate: refetch } = useSWR(
+    '/api/veterinarian/triage?completed=true',
+    (url: string) => fetch(url).then(r => r.json()),
+    // Today's completed records are static until manually edited — no need to revalidate passively
+    { revalidateOnFocus: false, revalidateOnReconnect: false }
+  );
+
+  const [editRec, setEditRec] = useState<any>(null);
+  const [editForm, setEditForm] = useState({
+    weight: '', temperature: '', heart_rate: '', respiratory_rate: '',
+    mucous_membrane: 'Pink', triage_level: 'Non-Urgent', chief_complaint: '',
+  });
+  const [saving, setSaving] = useState(false);
+  const { toast } = useToast();
+
+  const openEdit = (rec: any) => {
+    setEditRec(rec);
+    setEditForm({
+      weight: rec.weight?.toString() ?? '',
+      temperature: rec.temperature?.toString() ?? '',
+      heart_rate: rec.heart_rate?.toString() ?? '',
+      respiratory_rate: rec.respiratory_rate?.toString() ?? '',
+      mucous_membrane: rec.mucous_membrane ?? 'Pink',
+      triage_level: rec.triage_level ?? 'Non-Urgent',
+      chief_complaint: rec.chief_complaint ?? '',
+    });
+  };
+
+  const handleSave = async () => {
+    if (!editRec) return;
+    setSaving(true);
+    try {
+      const res = await fetch('/api/veterinarian/triage', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: editRec.id, ...editForm }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setEditRec(null);
+      refetch();
+      toast({ title: 'Vitals Updated', description: `${editRec.pets?.name}'s triage record has been corrected.` });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!Array.isArray(completed) || completed.length === 0) return null;
+
+  return (
+    <div className="mt-6 space-y-3">
+      <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+        <Clock size={14} /> Today's Completed Triage — <span className="text-foreground">{completed.length} record{completed.length !== 1 ? 's' : ''}</span>
+        <span className="text-xs font-normal">(click pencil to correct vitals)</span>
+      </h3>
+      <div className="rounded-md border overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-muted/40 border-b text-xs text-muted-foreground">
+              <th className="px-3 py-2 text-left">Patient</th>
+              <th className="px-3 py-2 text-left">Weight</th>
+              <th className="px-3 py-2 text-left">Temp</th>
+              <th className="px-3 py-2 text-left">HR</th>
+              <th className="px-3 py-2 text-left">RR</th>
+              <th className="px-3 py-2 text-left">Priority</th>
+              <th className="px-3 py-2 text-left">Time</th>
+              <th className="px-3 py-2 text-right">Edit</th>
+            </tr>
+          </thead>
+          <tbody>
+            {completed.map((rec: any) => (
+              <tr key={rec.id} className="border-b last:border-0 hover:bg-muted/30">
+                <td className="px-3 py-2 font-medium">{rec.pets?.name ?? '—'}</td>
+                <td className="px-3 py-2">{rec.weight ?? '—'} kg</td>
+                <td className="px-3 py-2">{rec.temperature ?? '—'} °C</td>
+                <td className="px-3 py-2">{rec.heart_rate ?? '—'}</td>
+                <td className="px-3 py-2">{rec.respiratory_rate ?? '—'}</td>
+                <td className="px-3 py-2">
+                  <Badge variant={rec.triage_level === 'Critical' ? 'destructive' : rec.triage_level === 'Urgent' ? 'secondary' : 'outline'} className="text-xs">
+                    {rec.triage_level}
+                  </Badge>
+                </td>
+                <td className="px-3 py-2 text-muted-foreground text-xs">
+                  {rec.created_at ? format(new Date(rec.created_at), 'h:mm a') : '—'}
+                </td>
+                <td className="px-3 py-2 text-right">
+                  <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(rec)}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Edit Vitals Dialog */}
+      <Dialog open={!!editRec} onOpenChange={(open) => !open && setEditRec(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Correct Vitals — {editRec?.pets?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Weight (kg)</Label>
+                <Input type="number" step="0.1" value={editForm.weight}
+                  onChange={e => setEditForm(f => ({ ...f, weight: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <Label>Temperature (°C)</Label>
+                <Input type="number" step="0.1" value={editForm.temperature}
+                  onChange={e => setEditForm(f => ({ ...f, temperature: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <Label>Heart Rate (bpm)</Label>
+                <Input type="number" value={editForm.heart_rate}
+                  onChange={e => setEditForm(f => ({ ...f, heart_rate: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <Label>Respiratory Rate (bpm)</Label>
+                <Input type="number" value={editForm.respiratory_rate}
+                  onChange={e => setEditForm(f => ({ ...f, respiratory_rate: e.target.value }))} />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label>Priority Level</Label>
+              <Select value={editForm.triage_level} onValueChange={v => setEditForm(f => ({ ...f, triage_level: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Non-Urgent">Non-Urgent</SelectItem>
+                  <SelectItem value="Urgent">Urgent</SelectItem>
+                  <SelectItem value="Critical">Critical</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Chief Complaint</Label>
+              <Input value={editForm.chief_complaint}
+                onChange={e => setEditForm(f => ({ ...f, chief_complaint: e.target.value }))} />
+            </div>
+            <div className="space-y-1">
+              <Label>Mucous Membrane</Label>
+              <div className="flex flex-wrap gap-2">
+                {['Pink', 'Pale', 'Cyanotic', 'Jaundiced', 'Injected'].map(color => (
+                  <button key={color} type="button"
+                    onClick={() => setEditForm(f => ({ ...f, mucous_membrane: color }))}
+                    className={`px-3 py-1.5 rounded-md border text-sm transition-all ${
+                      editForm.mucous_membrane === color
+                        ? 'bg-primary/10 border-primary text-primary font-medium'
+                        : 'hover:bg-muted border-border'
+                    }`}>
+                    {color}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditRec(null)} disabled={saving}>Cancel</Button>
+            <Button onClick={handleSave} disabled={saving}>
+              {saving && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}Save Correction
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

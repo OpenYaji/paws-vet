@@ -13,20 +13,22 @@ export type {
   AppointmentType
 };
 
-/** Shape returned by GET /api/appointments (flattened joins) */
-export interface AppointmentResponse extends Appointment {
+// Type that matches the shape returned by /api/appointments
+// (uses Supabase query aliases: pet, veterinarian, pet.client)
+export interface AppointmentApiResponse extends Appointment {
   pet?: {
     id: string;
     name: string;
     species: string;
     breed?: string;
-  };
-  client?: {
-    id: string;
-    first_name: string;
-    last_name: string;
-    phone: string;
-    email?: string | { email: string };
+    owner_id: string;
+    client?: {
+      id: string;
+      first_name: string;
+      last_name: string;
+      phone: string;
+      email?: { email: string }; // nested from users join
+    };
   };
   veterinarian?: {
     id: string;

@@ -1,110 +1,89 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { supabase } from '@/lib/auth-client';
 import { Button } from '@/components/ui/button';
-import { PawPrint, Calendar, ChevronRight, HeartPulse } from 'lucide-react';
+import { PawPrint, Calendar, ChevronRight, HeartPulse, Megaphone, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
+import useSWR from 'swr';
+
+function withProtocol(url?: string | null): string {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  return `https://${url}`;
+}
+
+const fetchDashboardData = async () => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const { data: profile } = await supabase
+    .from('client_profiles')
+    .select('id')
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  if (!profile) return { myPets: 0, upcomingAppointments: 0 };
+
+  const petsRes = await fetch(
+    `/api/client/pets?client_id=${profile.id}`
+  );
+  const petsData = await petsRes.json();
+  const pets = Array.isArray(petsData) ? petsData : [];
+  const petIds = pets.map((pet: any) => pet.id);
+
+  let upcomingCount = 0;
+  if (petIds.length > 0) {
+    const today = new Date().toISOString();
+    const { count } = await supabase
+      .from('appointments')
+      .select('*', { count: 'exact', head: true })
+      .in('pet_id', petIds)
+      .gte('scheduled_start', today)
+      .in('appointment_status', ['pending', 'confirmed']);
+    upcomingCount = count || 0;
+  }
+
+  return { myPets: pets.length, upcomingAppointments: upcomingCount };
+};
 
 export default function ClientDashboardPage() {
-  const [stats, setStats] = useState({
-    myPets: 0,
-    upcomingAppointments: 0,
+  const [clinicDefaults] = useState({
+    clinic_name: 'PAWS Veterinary',
+    dashboard_about_text: "Welcome! Here you can manage all aspects of your pet's healthcare.",
+    is_announcement_active: false,
+    announcement_text: '',
+    facebook_url: '',
+    instagram_url: '',
   });
-  const [isLoading, setIsLoading] = useState(true);
-  const [userId, setUserId] = useState<string>('');
-  const [clientId, setClientId] = useState<string>('');
 
-  useEffect(() => {
-    async function loadStats() {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          console.log('No user found');
-          setIsLoading(false);
-          return;
-        }
-
-        setUserId(user.id);
-        console.log('User ID:', user.id);
-
-        // Get client profile first
-        const { data: profile, error: profileError } = await supabase
-          .from('client_profiles')
-          .select('id')
-          .eq('user_id', user.id)
-          .maybeSingle();
-
-        if (profileError) {
-          console.error('Error fetching profile:', profileError);
-          setIsLoading(false);
-          return;
-        }
-
-        if (!profile) {
-          console.log('No client profile found for user');
-          setIsLoading(false);
-          return;
-        }
-        
-        console.log('Client Profile ID:', profile.id);
-        setClientId(profile.id);
-
-        // Fetch pets using the API endpoint (bypasses RLS issues)
-        try {
-          const petsResponse = await fetch(`/api/client/pets?client_id=${profile.id}`);
-          
-          if (!petsResponse.ok) {
-            console.error('Failed to fetch pets:', petsResponse.status);
-          }
-
-          const petsData = await petsResponse.json();
-          const pets = Array.isArray(petsData) ? petsData : [];
-          console.log('Fetched pets:', pets);
-
-          const petsCount = pets.length;
-          console.log('Pets count:', petsCount);
-
-          // Get pet IDs for appointments query
-          const petIds = pets.map((pet: any) => pet.id);
-          console.log('Pet IDs:', petIds);
-
-          // Get upcoming appointments count
-          let upcomingCount = 0;
-          if (petIds.length > 0) {
-            const today = new Date().toISOString();
-            
-            const { count, error: appointmentsError } = await supabase
-              .from('appointments')
-              .select('*', { count: 'exact', head: true })
-              .in('pet_id', petIds)
-              .gte('scheduled_start', today)
-              .in('appointment_status', ['pending', 'confirmed']);
-            
-            if (appointmentsError) {
-              console.error('Error fetching appointments:', appointmentsError);
-            } else {
-              console.log('Upcoming appointments count:', count);
-              upcomingCount = count || 0;
-            }
-          }
-
-          setStats({
-            myPets: petsCount,
-            upcomingAppointments: upcomingCount,
-          });
-        } catch (fetchError) {
-          console.error('Error fetching pets via API:', fetchError);
-        }
-      } catch (error) {
-        console.error('Error loading stats:', error);
-      } finally {
-        setIsLoading(false);
-      }
+  const { data: stats, isLoading } = useSWR(
+    'dashboard-stats',
+    fetchDashboardData,
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      dedupingInterval: 300000, // 5 minutes cache
     }
+  );
 
-    loadStats();
-  }, []);
+  const { data: clinicSettings } = useSWR(
+    'clinic-settings',
+    async () => {
+      const { data } = await supabase
+        .from('clinic_settings')
+        .select('clinic_name, dashboard_about_text, is_announcement_active, announcement_text, facebook_url, instagram_url')
+        .eq('id', 1)
+        .single();
+      return data;
+    },
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 600000, // 10 minutes cache
+    }
+  );
+
+  const clinic = clinicSettings ?? clinicDefaults;
 
   if (isLoading) {
     return (
@@ -118,13 +97,22 @@ export default function ClientDashboardPage() {
   }
 
   return (
-    <div className="space-y-8 max-w-6xl mx-auto p-6">
+    <div className="mx-auto max-w-7xl space-y-8 lg:space-y-10">
+
+      {/* Announcement Banner */}
+      {clinic.is_announcement_active && clinic.announcement_text && (
+        <div className="bg-primary/10 border border-primary/20 rounded-2xl px-5 py-3 flex items-center gap-3 text-sm font-medium text-primary">
+          <Megaphone size={16} className="flex-shrink-0" />
+          {clinic.announcement_text}
+        </div>
+      )}
+
       {/* Welcome Section */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border border-primary/10 p-8">
+      <div className="relative overflow-hidden rounded-3xl border border-primary/15 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-8 shadow-sm">
         <div className="absolute -top-10 -right-10 w-48 h-48 bg-primary/10 rounded-full blur-3xl" />
         <div className="absolute bottom-0 left-0 w-32 h-32 bg-primary/5 rounded-full blur-2xl" />
         <div className="relative z-10">
-          <p className="text-sm font-semibold text-primary mb-1">Dashboard</p>
+          <p className="mb-1 text-sm font-semibold text-primary">Client Home</p>
           <h1 className="text-3xl sm:text-4xl font-bold text-foreground">
             Welcome Back <span className="inline-block animate-in fade-in duration-500">👋</span>
           </h1>
@@ -133,9 +121,9 @@ export default function ClientDashboardPage() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         <Link href="/client/pets" className="group">
-          <div className="bg-card rounded-2xl border border-border shadow-sm p-6 relative overflow-hidden hover:-translate-y-1 hover:shadow-lg hover:border-primary/30 transition-all duration-200">
+          <div className="relative overflow-hidden rounded-3xl border border-border bg-card p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-primary/30 hover:shadow-lg">
             <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
             <div className="relative z-10 flex items-start justify-between mb-5">
               <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center ring-1 ring-emerald-500/20">
@@ -144,13 +132,13 @@ export default function ClientDashboardPage() {
               <ChevronRight size={16} className="text-muted-foreground opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all duration-200 mt-1" />
             </div>
             <p className="text-xs font-bold tracking-widest uppercase text-muted-foreground mb-2 relative z-10">My Pets</p>
-            <div className="text-4xl font-bold text-foreground mb-1 relative z-10">{stats.myPets}</div>
+            <div className="text-4xl font-bold text-foreground mb-1 relative z-10">{stats?.myPets ?? 0}</div>
             <p className="text-sm text-muted-foreground relative z-10">Registered in your account</p>
           </div>
         </Link>
 
         <Link href="/client/appointments" className="group">
-          <div className="bg-card rounded-2xl border border-border shadow-sm p-6 relative overflow-hidden hover:-translate-y-1 hover:shadow-lg hover:border-primary/30 transition-all duration-200">
+          <div className="relative overflow-hidden rounded-3xl border border-border bg-card p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-primary/30 hover:shadow-lg">
             <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
             <div className="relative z-10 flex items-start justify-between mb-5">
               <div className="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center ring-1 ring-blue-500/20">
@@ -159,7 +147,7 @@ export default function ClientDashboardPage() {
               <ChevronRight size={16} className="text-muted-foreground opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all duration-200 mt-1" />
             </div>
             <p className="text-xs font-bold tracking-widest uppercase text-muted-foreground mb-2 relative z-10">Upcoming Appointments</p>
-            <div className="text-4xl font-bold text-foreground mb-1 relative z-10">{stats.upcomingAppointments}</div>
+            <div className="text-4xl font-bold text-foreground mb-1 relative z-10">{stats?.upcomingAppointments ?? 0}</div>
             <p className="text-sm text-muted-foreground relative z-10">Scheduled visits</p>
           </div>
         </Link>
@@ -204,7 +192,7 @@ export default function ClientDashboardPage() {
       </div>
 
       {/* Info Card */}
-      <div className="relative overflow-hidden rounded-2xl border border-border bg-card p-6">
+      <div className="relative overflow-hidden rounded-3xl border border-border bg-card p-6 shadow-sm">
         <div className="absolute -top-16 -right-16 w-48 h-48 bg-primary/8 rounded-full blur-3xl" />
         <div className="absolute -bottom-8 -left-8 w-32 h-32 bg-primary/5 rounded-full blur-2xl" />
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-start gap-5">
@@ -213,9 +201,9 @@ export default function ClientDashboardPage() {
           </div>
           <div className="space-y-3 flex-1">
             <div>
-              <h3 className="text-lg font-bold text-foreground">About PAWS Veterinary</h3>
+              <h3 className="text-lg font-bold text-foreground">{clinic.clinic_name}</h3>
               <p className="text-sm text-muted-foreground leading-relaxed mt-1">
-                Welcome! Here you can manage all aspects of your pet&apos;s healthcare. Book appointments with our experienced veterinarians, track medical records, and keep your pets healthy and happy.
+                {clinic.dashboard_about_text}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -225,6 +213,30 @@ export default function ClientDashboardPage() {
               <Button variant="outline" size="sm" asChild>
                 <Link href="/client/services">Our Services</Link>
               </Button>
+              {clinic.facebook_url && (
+                <Button variant="outline" size="sm" asChild>
+                  <a
+                    href={withProtocol(clinic.facebook_url)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5"
+                  >
+                    Facebook <ExternalLink size={14} />
+                  </a>
+                </Button>
+              )}
+              {clinic.instagram_url && (
+                <Button variant="outline" size="sm" asChild>
+                  <a
+                    href={withProtocol(clinic.instagram_url)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5"
+                  >
+                    Instagram <ExternalLink size={14} />
+                  </a>
+                </Button>
+              )}
             </div>
           </div>
         </div>
