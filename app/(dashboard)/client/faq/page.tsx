@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { supabase } from '@/lib/auth-client';
+import useSWR from 'swr';
 import { ChevronDown, Phone, Mail, MapPin, HelpCircle, MessageCircle } from 'lucide-react';
 
 interface FAQItem {
@@ -8,23 +10,60 @@ interface FAQItem {
   answer: string;
 }
 
-const faqs: FAQItem[] = [
-  {
-    question: "How do I schedule an appointment for my pet?",
-    answer: "You can easily schedule an appointment through your client dashboard. Navigate to the 'Appointments' section, click 'Book New Appointment', select your pet, choose a service, and pick an available time slot. You'll receive a confirmation email once your appointment is booked."
-  },
-  {
-    question: "What should I bring to my pet's first appointment?",
-    answer: "For your pet's first visit, please bring any previous medical records, vaccination history, current medications, and your pet's insurance information if applicable. It's also helpful to bring a list of any questions or concerns you have about your pet's health."
-  }
-];
+const fetchFAQData = async () => {
+  const [faqRes, clinicRes] = await Promise.all([
+    supabase
+      .from('faqs')
+      .select('*')
+      .eq('is_active', true)
+      .order('display_order', { ascending: true }),
+    supabase
+      .from('clinic_settings')
+      .select('phone, email, address')
+      .eq('id', 1)
+      .single(),
+  ]);
+
+  return {
+    faqs: faqRes.data ?? [],
+    clinicInfo: clinicRes.data ?? {
+      phone: '(123) 456-7890',
+      email: 'info@pawsclinic.com',
+      address: '123 Pet Street, VC 12345',
+    },
+  };
+};
 
 export default function FAQPage() {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const { data, isLoading: loading } = useSWR(
+    'client-faq',
+    fetchFAQData,
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      dedupingInterval: 300000,
+    }
+  );
+
+  const faqs = (data?.faqs ?? []) as FAQItem[];
+  const clinicInfo = data?.clinicInfo ?? {
+    phone: '(123) 456-7890',
+    email: 'info@pawsclinic.com',
+    address: '123 Pet Street, VC 12345',
+  };
 
   const toggleFAQ = (index: number) => {
     setOpenIndex(openIndex === index ? null : index);
   };
+
+  if (loading) return (
+    <div className="max-w-4xl mx-auto p-6">
+      <div className="flex items-center justify-center py-20">
+        <div className="w-7 h-7 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+      </div>
+    </div>
+  );
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-8">
@@ -75,10 +114,10 @@ export default function FAQPage() {
       <div className="bg-gradient-to-br from-primary/5 via-accent/30 to-primary/10 rounded-2xl border border-border p-8">
         <h2 className="text-2xl font-bold text-foreground mb-2 flex items-center gap-2">
           <MessageCircle className="w-6 h-6 text-primary" />
-          Didn't Find Your Answer?
+          Didn&apos;t Find Your Answer?
         </h2>
         <p className="text-muted-foreground mb-6 text-sm">
-          Our team is here to help! Contact us directly with any questions about your pet's care.
+          Our team is here to help! Contact us directly with any questions about your pet&apos;s care.
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
@@ -90,10 +129,10 @@ export default function FAQPage() {
             <div>
               <h3 className="font-semibold text-foreground mb-0.5 text-sm">Call Us</h3>
               <a
-                href="tel:1234567890"
+                href={`tel:${clinicInfo.phone}`}
                 className="text-primary hover:underline text-sm font-medium transition-colors"
               >
-                (123) 456-7890
+                {clinicInfo.phone}
               </a>
             </div>
           </div>
@@ -106,10 +145,10 @@ export default function FAQPage() {
             <div>
               <h3 className="font-semibold text-foreground mb-0.5 text-sm">Email Us</h3>
               <a
-                href="mailto:info@pawsclinic.com"
+                href={`mailto:${clinicInfo.email}`}
                 className="text-primary hover:underline text-sm font-medium break-all transition-colors"
               >
-                info@pawsclinic.com
+                {clinicInfo.email}
               </a>
             </div>
           </div>
@@ -122,7 +161,7 @@ export default function FAQPage() {
             <div>
               <h3 className="font-semibold text-foreground mb-0.5 text-sm">Visit Us</h3>
               <p className="text-muted-foreground text-sm">
-                123 Pet Street, VC 12345
+                {clinicInfo.address}
               </p>
             </div>
           </div>

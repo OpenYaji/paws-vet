@@ -1,13 +1,14 @@
 'use client';
 
-import { useState, useEffect, useCallback, Suspense } from 'react';
-import { useSearchParams, useRouter, usePathname } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/auth-client';
+import useSWR from 'swr';
 import Link from 'next/link';
 import {
   Search, Edit, Archive, Eye, RefreshCw,
-  MoreVertical, Users, PawPrint, Calendar,
-  AlertTriangle, Download, ClipboardList, MapPin, Heart, Filter,
+  MoreVertical, Users, PawPrint, Calendar, Bell,
+  AlertTriangle, Download, ClipboardList, MapPin, Filter,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -15,6 +16,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { CmsCard } from '@/components/client/cms-card';
+import { CmsPageHeader } from '@/components/client/cms-page-header';
+import { CmsEmptyState } from '@/components/client/cms-empty-state';
+import { CmsStatusBadge } from '@/components/client/cms-status-badge';
+import { CmsBreadcrumb } from '@/components/client/cms-breadcrumb';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -42,6 +48,8 @@ interface PetData {
   name: string;
   species: string;
   breed: string;
+  photo_url?: string | null;
+  allow_repeat_kapon_booking: boolean;
   owner_id: string;
   owner_name: string;
   owner_phone: string;
@@ -97,8 +105,98 @@ interface OutreachAppointmentData {
   breed?: string | null;
 }
 
+interface NotificationLogData {
+  id: string;
+  recipient_id: string;
+  notification_type: string;
+  subject: string | null;
+  content: string;
+  delivery_status: string;
+  is_read: boolean;
+  sent_at: string;
+  related_entity_type: string | null;
+  related_entity_id: string | null;
+}
+
 // REMOVED: 'dashboard' from type — CMS only handles clients, pets, appointments
-type ActiveTab = 'clients' | 'pets' | 'appointments' | 'regular_appointments' | 'outreach_appointments';
+type ActiveTab = 'clients' | 'pets' | 'appointments' | 'regular_appointments' | 'outreach_appointments' | 'notifications';
+
+const fetchClients = async (showArchived: boolean) => {
+  const res = await fetch('/api/client-admin/clients');
+  if (!res.ok) return [];
+  const data = await res.json();
+  const mapped = (data || []).map((c: any) => ({
+    id: c.id,
+    user_id: c.user_id,
+    first_name: c.first_name,
+    last_name: c.last_name,
+    email: c.users?.email || c.email || '',
+    phone: c.phone,
+    address_line1: c.address_line1,
+    city: c.city,
+    state: c.state,
+    zip_code: c.zip_code,
+    account_status: c.users?.account_status || c.account_status || 'active',
+    created_at: c.created_at,
+    last_login_at: c.users?.last_login_at || c.last_login_at,
+    pet_count: c.pet_count || 0,
+    appointment_count: c.appointment_count || 0,
+    deleted_at: c.users?.deleted_at || null,
+  }));
+  return showArchived
+    ? mapped.filter((c: any) => c.deleted_at)
+    : mapped.filter((c: any) => !c.deleted_at);
+};
+
+const fetchPets = async () => {
+  const res = await fetch('/api/client-admin/pets');
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data || []).map((p: any) => ({
+    id: p.id,
+    name: p.name,
+    species: p.species,
+    breed: p.breed || 'Unknown',
+    photo_url: p.photo_url || null,
+    allow_repeat_kapon_booking: p.allow_repeat_kapon_booking ?? false,
+    owner_id: p.owner_id,
+    owner_name: p.client_profiles
+      ? `${p.client_profiles.first_name} ${p.client_profiles.last_name}`
+      : 'Unknown',
+    owner_phone: p.client_profiles?.phone || '',
+    date_of_birth: p.date_of_birth,
+    weight: p.weight,
+    is_active: p.is_active,
+    created_at: p.created_at,
+  }));
+};
+
+const fetchAllAppointments = async () => {
+  const res = await fetch('/api/client-admin/appointments');
+  if (!res.ok) return [];
+  return await res.json() || [];
+};
+
+const fetchNotificationLogs = async () => {
+  const { data } = await supabase
+    .from('notification_logs')
+    .select('*')
+    .order('sent_at', { ascending: false })
+    .limit(200);
+
+  return (data || []).map((n: any) => ({
+    id: n.id,
+    recipient_id: n.recipient_id,
+    notification_type: n.notification_type,
+    subject: n.subject,
+    content: n.content,
+    delivery_status: n.delivery_status,
+    is_read: n.is_read ?? false,
+    sent_at: n.sent_at,
+    related_entity_type: n.related_entity_type,
+    related_entity_id: n.related_entity_id,
+  }));
+};
 
 // ── CSV helpers ────────────────────────────────────────────────────────────────
 
@@ -215,18 +313,12 @@ function ActionsDropdown({ items }: {
 
 function ClientAdminPageInner() {
   const searchParams = useSearchParams();
-  const router = useRouter();
-  const pathname = usePathname();
   const tabParam = searchParams.get('tab') as ActiveTab;
 
   // DEFAULT TO 'clients' instead of 'dashboard' — CMS has no dashboard
   const [activeTab, setActiveTab] = useState<ActiveTab>(tabParam || 'clients');
-  const [clients, setClients] = useState<ClientData[]>([]);
-  const [pets, setPets] = useState<PetData[]>([]);
-  const [appointments, setAppointments] = useState<AppointmentData[]>([]);
-  const [regularAppointments, setRegularAppointments] = useState<RegularAppointmentData[]>([]);
-  const [outreachAppointments, setOutreachAppointments] = useState<OutreachAppointmentData[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [petsView, setPetsView] = useState<'cards' | 'table'>('cards');
+  const [updatingPetId, setUpdatingPetId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [showArchived, setShowArchived] = useState(false);
@@ -250,82 +342,55 @@ function ClientAdminPageInner() {
     if (tabParam && tabParam !== activeTab) setActiveTab(tabParam);
   }, [tabParam, activeTab]);
 
-  // ── Fetch ──────────────────────────────────────────────────────────────────
-
-  const fetchClients = useCallback(async () => {
-    try {
-      const res = await fetch('/api/client-admin/clients');
-      if (!res.ok) return;
-      const data = await res.json();
-
-      const mapped = (data || []).map((c: any) => ({
-        id: c.id,
-        user_id: c.user_id,
-        first_name: c.first_name,
-        last_name: c.last_name,
-        email: c.users?.email || c.email || '',
-        phone: c.phone,
-        address_line1: c.address_line1,
-        city: c.city,
-        state: c.state,
-        zip_code: c.zip_code,
-        account_status: c.users?.account_status || c.account_status || 'active',
-        created_at: c.created_at,
-        last_login_at: c.users?.last_login_at || c.last_login_at,
-        pet_count: c.pet_count || 0,
-        appointment_count: c.appointment_count || 0,
-        deleted_at: c.users?.deleted_at || null,
-      }));
-
-      const filtered = showArchived
-        ? mapped.filter((c: any) => c.deleted_at)
-        : mapped.filter((c: any) => !c.deleted_at);
-
-      setClients(filtered);
-    } catch (e) {
-      console.error(e);
+  const {
+    data: clients = [],
+    isLoading: clientsLoading,
+    mutate: mutateClients,
+  } = useSWR(
+    activeTab === 'clients'
+      ? ['cms-clients', showArchived]
+      : null,
+    () => fetchClients(showArchived),
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 30000,
     }
-  }, [showArchived]);
+  );
 
-  const fetchPets = useCallback(async () => {
-    try {
-      const res = await fetch('/api/client-admin/pets');
-      if (!res.ok) return;
-      const data = await res.json();
-      const mapped = (data || []).map((p: any) => ({
-        id: p.id,
-        name: p.name,
-        species: p.species,
-        breed: p.breed || 'Unknown',
-        owner_id: p.owner_id,
-        owner_name: p.client_profiles
-          ? `${p.client_profiles.first_name} ${p.client_profiles.last_name}`
-          : 'Unknown',
-        owner_phone: p.client_profiles?.phone || '',
-        date_of_birth: p.date_of_birth,
-        weight: p.weight,
-        is_active: p.is_active,
-        created_at: p.created_at,
-      }));
-      setPets(mapped);
-    } catch (e) {
-      console.error(e);
+  const {
+    data: pets = [],
+    isLoading: petsLoading,
+    mutate: mutatePets,
+  } = useSWR(
+    activeTab === 'pets' ? 'cms-pets' : null,
+    fetchPets,
+    {
+      revalidateOnFocus: false,
+      refreshInterval: activeTab === 'pets' ? 5000 : 0,
+      dedupingInterval: 30000,
     }
-  }, []);
+  );
 
-  const fetchAppointments = useCallback(async () => {
-    try {
-      const res = await fetch('/api/client-admin/appointments');
-      if (!res.ok) return;
-      const data = await res.json();
-      setAppointments(data || []);
-    } catch (e) {
-      console.error(e);
+  const {
+    data: appointments = [],
+    isLoading: appointmentsLoading,
+    mutate: mutateAppointments,
+  } = useSWR(
+    activeTab === 'appointments' ? 'cms-appointments' : null,
+    fetchAllAppointments,
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 30000,
     }
-  }, []);
+  );
 
-  const fetchRegularAppointments = useCallback(async () => {
-    try {
+  const {
+    data: regularAppointments = [],
+    isLoading: regularLoading,
+    mutate: mutateRegular,
+  } = useSWR(
+    activeTab === 'regular_appointments' ? 'cms-regular' : null,
+    async () => {
       const { data } = await supabase
         .from('appointments')
         .select(`
@@ -340,7 +405,8 @@ function ClientAdminPageInner() {
         `)
         .eq('appointment_type_detail', 'regular')
         .order('scheduled_start', { ascending: false });
-      const mapped = (data || []).map((a: any) => ({
+
+      return (data || []).map((a: any) => ({
         id: a.id,
         appointment_number: a.appointment_number,
         scheduled_start: a.scheduled_start,
@@ -357,12 +423,20 @@ function ClientAdminPageInner() {
           ? `${a.pets.client_profiles.first_name} ${a.pets.client_profiles.last_name}`
           : '—',
       }));
-      setRegularAppointments(mapped);
-    } catch (e) { console.error(e); }
-  }, []);
+    },
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 30000,
+    }
+  );
 
-  const fetchOutreachAppointments = useCallback(async () => {
-    try {
+  const {
+    data: outreachAppointments = [],
+    isLoading: outreachLoading,
+    mutate: mutateOutreach,
+  } = useSWR(
+    activeTab === 'outreach_appointments' ? 'cms-outreach' : null,
+    async () => {
       const { data } = await supabase
         .from('appointments')
         .select(`
@@ -379,7 +453,8 @@ function ClientAdminPageInner() {
         `)
         .eq('appointment_type_detail', 'outreach')
         .order('scheduled_start', { ascending: false });
-      const mapped = (data || []).map((a: any) => ({
+
+      return (data || []).map((a: any) => ({
         id: a.id,
         appointment_number: a.appointment_number,
         scheduled_start: a.scheduled_start,
@@ -397,32 +472,39 @@ function ClientAdminPageInner() {
           ? `${a.pets.client_profiles.first_name} ${a.pets.client_profiles.last_name}`
           : '—',
       }));
-      setOutreachAppointments(mapped);
-    } catch (e) { console.error(e); }
-  }, []);
-
-  const loadTab = useCallback(async () => {
-    setLoading(true);
-    try {
-      if (activeTab === 'clients') await fetchClients();
-      else if (activeTab === 'pets') await fetchPets();
-      else if (activeTab === 'appointments') await fetchAppointments();
-      else if (activeTab === 'regular_appointments') await fetchRegularAppointments();
-      else if (activeTab === 'outreach_appointments') await fetchOutreachAppointments();
-    } finally {
-      setLoading(false);
+    },
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 30000,
     }
-  }, [activeTab, fetchClients, fetchPets, fetchAppointments, fetchRegularAppointments, fetchOutreachAppointments]);
+  );
+
+  const {
+    data: notificationLogs = [],
+    isLoading: notificationsLoading,
+    mutate: mutateNotifications,
+  } = useSWR(
+    activeTab === 'notifications' ? 'cms-notifications' : null,
+    fetchNotificationLogs,
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 30000,
+    }
+  );
+
+  const loading =
+    clientsLoading || petsLoading ||
+    appointmentsLoading || regularLoading ||
+    outreachLoading || notificationsLoading;
 
   useEffect(() => {
-    loadTab();
     setSearchTerm('');
     setStatusFilter('all');
-  }, [activeTab, showArchived, loadTab]);
+  }, [activeTab, showArchived]);
 
   // ── Filtered data ─────────────────────────────────────────────────────────
 
-  const filteredClients = clients.filter(c => {
+  const filteredClients = clients.filter((c: ClientData) => {
     const q = searchTerm.toLowerCase();
     const matchesSearch = !q ||
       c.first_name.toLowerCase().includes(q) ||
@@ -433,7 +515,7 @@ function ClientAdminPageInner() {
     return matchesSearch && matchesStatus;
   });
 
-  const filteredPets = pets.filter(p => {
+  const filteredPets = pets.filter((p: PetData) => {
     const q = searchTerm.toLowerCase();
     return !q ||
       p.name.toLowerCase().includes(q) ||
@@ -441,7 +523,7 @@ function ClientAdminPageInner() {
       p.owner_name.toLowerCase().includes(q);
   });
 
-  const filteredAppointments = appointments.filter(a => {
+  const filteredAppointments = appointments.filter((a: AppointmentData) => {
     const q = searchTerm.toLowerCase();
     const matchesSearch = !q ||
       a.client_name.toLowerCase().includes(q) ||
@@ -471,6 +553,16 @@ function ClientAdminPageInner() {
     return matchesSearch && matchesStatus;
   });
 
+  const filteredNotifications = notificationLogs.filter(n => {
+    const q = searchTerm.toLowerCase();
+    const matchesSearch = !q ||
+      (n.subject ?? '').toLowerCase().includes(q) ||
+      n.content.toLowerCase().includes(q) ||
+      n.notification_type.replace(/_/g, ' ').toLowerCase().includes(q);
+    const matchesStatus = statusFilter === 'all' || n.delivery_status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
   // ── Actions ───────────────────────────────────────────────────────────────
 
   const handleArchiveClient = async (
@@ -496,7 +588,7 @@ function ClientAdminPageInner() {
           );
           if (!res.ok) { showToast('Failed to archive client', 'error'); return; }
           showToast(`${name} archived successfully`);
-          await fetchClients();
+          await mutateClients();
         } catch {
           showToast('Failed to archive client', 'error');
         }
@@ -525,7 +617,7 @@ function ClientAdminPageInner() {
           );
           if (!res.ok) { showToast('Failed to unarchive client', 'error'); return; }
           showToast(`${name} has been restored successfully`);
-          await fetchClients();
+          await mutateClients();
         } catch {
           showToast('Failed to unarchive client', 'error');
         }
@@ -533,8 +625,36 @@ function ClientAdminPageInner() {
     });
   };
 
-  const goTab = (tab: ActiveTab) => {
-    router.push(`/client-admin?tab=${tab}`);
+  const handleRefresh = () => {
+    if (activeTab === 'clients') mutateClients();
+    else if (activeTab === 'pets') mutatePets();
+    else if (activeTab === 'appointments') mutateAppointments();
+    else if (activeTab === 'regular_appointments') mutateRegular();
+    else if (activeTab === 'outreach_appointments') mutateOutreach();
+    else if (activeTab === 'notifications') mutateNotifications();
+  };
+
+  const handleToggleKaponAccess = async (pet: PetData, nextValue: boolean) => {
+    setUpdatingPetId(pet.id);
+    try {
+      const res = await fetch(`/api/client-admin/pets?pet_id=${pet.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ allow_repeat_kapon_booking: nextValue }),
+      });
+
+      if (!res.ok) {
+        showToast('Failed to update pet booking access', 'error');
+        return;
+      }
+
+      showToast(nextValue ? 'Repeat kapon booking enabled (one-time)' : 'Repeat kapon booking disabled');
+      await mutatePets();
+    } catch {
+      showToast('Failed to update pet booking access', 'error');
+    } finally {
+      setUpdatingPetId(null);
+    }
   };
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -547,6 +667,7 @@ function ClientAdminPageInner() {
     appointments: 'All Appointments',
     regular_appointments: 'Regular Appointments',
     outreach_appointments: 'Outreach Appointments',
+    notifications: 'Notification Logs',
   };
 
   const tabDesc: Record<ActiveTab, string> = {
@@ -555,6 +676,7 @@ function ClientAdminPageInner() {
     appointments: 'Track and manage all scheduled appointments',
     regular_appointments: 'Clinic appointments booked through regular scheduling',
     outreach_appointments: 'Appointments booked through outreach programs',
+    notifications: 'View all system notifications sent to clients',
   };
 
   const activeCount =
@@ -562,6 +684,7 @@ function ClientAdminPageInner() {
     activeTab === 'pets' ? filteredPets.length :
     activeTab === 'regular_appointments' ? filteredRegular.length :
     activeTab === 'outreach_appointments' ? filteredOutreach.length :
+    activeTab === 'notifications' ? filteredNotifications.length :
     filteredAppointments.length;
 
   const totalCount =
@@ -569,6 +692,7 @@ function ClientAdminPageInner() {
     activeTab === 'pets' ? pets.length :
     activeTab === 'regular_appointments' ? regularAppointments.length :
     activeTab === 'outreach_appointments' ? outreachAppointments.length :
+    activeTab === 'notifications' ? notificationLogs.length :
     appointments.length;
 
   return (
@@ -586,64 +710,24 @@ function ClientAdminPageInner() {
 
       <div className="animate-in fade-in duration-300">
         {/* Sticky tab bar */}
-        <div className="sticky top-[60px] z-10 bg-background border-b border-border shadow-sm">
-          <div className="max-w-[1400px] mx-auto px-6 py-3">
+        <div className="sticky top-[64px] z-10 border-b border-border/70 bg-background/95 shadow-sm backdrop-blur-xl">
+          <div className="mx-auto max-w-[1500px] px-4 py-4 sm:px-6 lg:px-8">
             {/* Page header — compact, above tabs */}
-            <div className="mb-2.5">
-              <div className="flex items-center gap-2.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-primary inline-block flex-shrink-0" />
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent leading-tight">
-                  {tabLabel[activeTab]}
-                </h1>
-                <span className="bg-primary/10 text-primary text-xs font-bold px-2.5 py-0.5 rounded-full">
-                  {totalCount}
-                </span>
-              </div>
-              <p className="text-sm text-muted-foreground mt-0.5">{tabDesc[activeTab]}</p>
-            </div>
+            <CmsBreadcrumb items={[{ label: 'CMS', href: '/client-admin?tab=clients' }, { label: tabLabel[activeTab] }]} />
+            <CmsPageHeader
+              className="mb-3"
+              title={tabLabel[activeTab]}
+              description={tabDesc[activeTab]}
+              count={totalCount}
+            />
 
-            {/* Tab navigation */}
-            <div className="flex gap-1 overflow-x-auto pb-0.5 -mb-px">
-              {([
-                { value: 'clients' as const, label: 'Clients', icon: Users },
-                { value: 'pets' as const, label: 'Pets', icon: PawPrint },
-                { value: 'appointments' as const, label: 'All Appointments', icon: Calendar },
-                { value: 'regular_appointments' as const, label: 'Regular', icon: ClipboardList },
-                { value: 'outreach_appointments' as const, label: 'Outreach', icon: MapPin },
-              ] as const).map(tab => {
-                const Icon = tab.icon;
-                return (
-                  <button
-                    key={tab.value}
-                    onClick={() => goTab(tab.value)}
-                    className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all duration-150 ${
-                      activeTab === tab.value
-                        ? 'bg-primary/10 text-primary font-bold border-b-2 border-primary -mb-px'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-                    }`}
-                  >
-                    <Icon size={14} />{tab.label}
-                  </button>
-                );
-              })}
-              <button
-                onClick={() => router.push('/client-admin/outreach')}
-                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all duration-150 ${
-                  pathname === '/client-admin/outreach'
-                    ? 'bg-primary/10 text-primary font-bold border-b-2 border-primary -mb-px'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-                }`}
-              >
-                <Heart size={14} />Outreach Programs
-              </button>
-            </div>
           </div>
         </div>
 
-        <div className="max-w-[1400px] mx-auto px-6 py-6">
+        <div className="mx-auto max-w-[1500px] px-4 py-6 sm:px-6 lg:px-8">
 
         {/* Filters */}
-        <div className="mb-6 p-6 rounded-2xl border border-border border-l-4 border-l-primary/30 bg-card shadow-sm transition-all duration-200">
+        <CmsCard className="mb-6 border-l-4 border-l-primary/40 p-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:flex-wrap">
             {/* Search */}
             <div className="relative flex-1 min-w-[200px] md:min-w-[280px]">
@@ -658,6 +742,7 @@ function ClientAdminPageInner() {
                   activeTab === 'pets' ? 'Search by pet name, species, owner…' :
                   activeTab === 'regular_appointments' ? 'Search by client, pet, breed…' :
                   activeTab === 'outreach_appointments' ? 'Search by client, pet, program…' :
+                  activeTab === 'notifications' ? 'Search by subject, content, type…' :
                   'Search by client, pet, or reason…'
                 }
                 value={searchTerm}
@@ -666,7 +751,7 @@ function ClientAdminPageInner() {
             </div>
 
             {/* Status filter */}
-            {(activeTab === 'clients' || activeTab === 'appointments' || activeTab === 'regular_appointments' || activeTab === 'outreach_appointments') && (
+            {(activeTab === 'clients' || activeTab === 'appointments' || activeTab === 'regular_appointments' || activeTab === 'outreach_appointments' || activeTab === 'notifications') && (
               <div className="relative">
                 <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                 <select
@@ -680,6 +765,13 @@ function ClientAdminPageInner() {
                       <option value="active">Active</option>
                       <option value="inactive">Inactive</option>
                       <option value="suspended">Suspended</option>
+                    </>
+                  ) : activeTab === 'notifications' ? (
+                    <>
+                      <option value="pending">Pending</option>
+                      <option value="sent">Sent</option>
+                      <option value="delivered">Delivered</option>
+                      <option value="failed">Failed</option>
                     </>
                   ) : (
                     <>
@@ -709,6 +801,31 @@ function ClientAdminPageInner() {
               </button>
             )}
 
+            {activeTab === 'pets' && (
+              <div className="inline-flex items-center rounded-lg border border-border bg-background p-1">
+                <button
+                  onClick={() => setPetsView('cards')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all duration-150 ${
+                    petsView === 'cards'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Cards
+                </button>
+                <button
+                  onClick={() => setPetsView('table')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all duration-150 ${
+                    petsView === 'table'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Table
+                </button>
+              </div>
+            )}
+
             {/* Export CSV button for new tabs */}
             {(activeTab === 'regular_appointments' || activeTab === 'outreach_appointments') && (
               <button
@@ -724,7 +841,7 @@ function ClientAdminPageInner() {
             )}
 
             <button 
-              onClick={loadTab}
+              onClick={handleRefresh}
               className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-border bg-background text-muted-foreground hover:border-primary/50 hover:bg-primary/5 transition-all duration-200 font-semibold text-sm"
             >
               <RefreshCw size={16} /> 
@@ -732,15 +849,15 @@ function ClientAdminPageInner() {
             </button>
 
             <div className="flex-1 md:flex-none text-right">
-              <span className="bg-accent px-3 py-1 rounded-full text-xs font-bold text-foreground">
+              <span className="rounded-full border border-border bg-accent px-3 py-1 text-xs font-bold text-foreground">
                 {activeCount} of {totalCount}
               </span>
             </div>
           </div>
-        </div>
+        </CmsCard>
 
         {/* Table */}
-        <div className="rounded-xl border border-border bg-card overflow-hidden shadow-sm">
+        <CmsCard className="overflow-hidden">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-16 gap-4 bg-gradient-to-br from-primary/5 to-transparent">
               <div className="relative w-16 h-16">
@@ -755,32 +872,28 @@ function ClientAdminPageInner() {
               {/* CLIENTS TABLE */}
               {activeTab === 'clients' && (
                 filteredClients.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 px-6 gap-4 text-center">
-                    <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10">
-                      <Users size={28} className="text-primary" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-lg text-foreground mb-1">No clients found</h3>
-                      <p className="text-muted-foreground text-sm">Try adjusting your search or filters</p>
-                    </div>
-                  </div>
+                  <CmsEmptyState
+                    icon={Users}
+                    title="No clients found"
+                    description="Try adjusting your search or filters"
+                  />
                 ) : (
                   <table className="w-full">
                     <thead className="bg-primary/5 border-t border-b border-border">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Client</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Contact</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Location</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
-                        <th className="px-6 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pets</th>
-                        <th className="px-6 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wide">Apts</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Last Login</th>
-                        <th className="px-6 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">Actions</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Client</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Contact</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Location</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Status</th>
+                        <th className="px-6 py-3 text-center text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Pets</th>
+                        <th className="px-6 py-3 text-center text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Apts</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Last Login</th>
+                        <th className="px-6 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {filteredClients.map(c => (
-                        <tr key={c.id} className="hover:bg-primary/5 transition-colors duration-150">
+                      {filteredClients.map((c: ClientData) => (
+                        <tr key={c.id} className="hover:bg-primary/[0.08] transition-colors duration-150">
                           <td className="px-6 py-4">
                             <div className="flex items-center">
                               <div className="w-8 h-8 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center flex-shrink-0 mr-3">
@@ -800,13 +913,7 @@ function ClientAdminPageInner() {
                             <div className="text-xs text-muted-foreground">{c.phone}</div>
                           </td>
                           <td className="px-6 py-4 text-sm text-muted-foreground">{c.city}, {c.state}</td>
-                          <td className="px-6 py-4"><span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
-                            c.account_status === 'active' 
-                              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
-                              : c.account_status === 'inactive'
-                              ? 'bg-muted text-muted-foreground'
-                              : 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300'
-                          }`}>{c.account_status}</span></td>
+                          <td className="px-6 py-4"><CmsStatusBadge status={c.account_status} /></td>
                           <td className="px-6 py-4 text-center font-semibold text-foreground">{c.pet_count ?? '—'}</td>
                           <td className="px-6 py-4 text-center font-semibold text-foreground">{c.appointment_count ?? '—'}</td>
                           <td className="px-6 py-4 text-sm text-muted-foreground">{formatDate(c.last_login_at)}</td>
@@ -835,32 +942,122 @@ function ClientAdminPageInner() {
               {/* PETS TABLE */}
               {activeTab === 'pets' && (
                 filteredPets.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 px-6 gap-4 text-center">
-                    <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10">
-                      <PawPrint size={28} className="text-primary" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-lg text-foreground mb-1">No pets found</h3>
-                      <p className="text-muted-foreground text-sm">Try adjusting your search</p>
+                  <CmsEmptyState
+                    icon={PawPrint}
+                    title="No pets found"
+                    description="Try adjusting your search"
+                  />
+                ) : petsView === 'cards' ? (
+                  <div className="p-6 md:p-7">
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 md:gap-7">
+                      {filteredPets.map((p: PetData) => (
+                        <div
+                          key={p.id}
+                          className="group rounded-2xl border border-border/80 bg-card/95 shadow-sm hover:shadow-xl hover:-translate-y-0.5 hover:border-primary/30 transition-all duration-200 overflow-hidden"
+                        >
+                          <div className="h-48 bg-gradient-to-br from-accent/30 via-accent/15 to-transparent border-b border-border/70 overflow-hidden">
+                            {p.photo_url ? (
+                              <img
+                                src={p.photo_url}
+                                alt={p.name}
+                                className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <div className="w-20 h-20 rounded-full bg-primary/10 text-primary flex items-center justify-center ring-1 ring-primary/20">
+                                  <PawPrint size={30} />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="p-5 space-y-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <h3 className="font-bold text-foreground text-lg leading-tight tracking-tight">{p.name}</h3>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {p.species} • {p.breed}
+                                </p>
+                              </div>
+                              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold ${
+                                p.is_active
+                                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
+                                  : 'bg-muted text-muted-foreground'
+                              }`}>
+                                {p.is_active ? 'Active' : 'Inactive'}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3 text-xs">
+                              <div className="rounded-xl border border-border/70 bg-background/70 px-3 py-2.5">
+                                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Age</p>
+                                <p className="font-semibold text-foreground mt-0.5">{calcAge(p.date_of_birth)}</p>
+                              </div>
+                              <div className="rounded-xl border border-border/70 bg-background/70 px-3 py-2.5">
+                                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Weight</p>
+                                <p className="font-semibold text-foreground mt-0.5">{p.weight ? `${p.weight} kg` : '—'}</p>
+                              </div>
+                            </div>
+
+                            <div className="rounded-xl border border-border/70 bg-background/70 px-3.5 py-3">
+                              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Owner</p>
+                              <Link href={`/client-admin/clients/${p.owner_id}`} className="text-sm text-primary hover:underline font-semibold transition-colors">
+                                {p.owner_name}
+                              </Link>
+                              <p className="text-xs text-muted-foreground mt-0.5">{p.owner_phone || '—'}</p>
+                            </div>
+
+                            <div className="rounded-xl border border-border/70 bg-background/70 px-3.5 py-3 flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Repeat Kapon Booking</p>
+                                <p className="text-xs font-semibold text-foreground mt-0.5">
+                                  {p.allow_repeat_kapon_booking ? 'Allowed once' : 'Disabled'}
+                                </p>
+                              </div>
+                              <button
+                                disabled={updatingPetId === p.id}
+                                onClick={() => handleToggleKaponAccess(p, !p.allow_repeat_kapon_booking)}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 disabled:opacity-55 ${
+                                  p.allow_repeat_kapon_booking
+                                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
+                                    : 'bg-muted text-muted-foreground hover:bg-accent'
+                                }`}
+                              >
+                                {updatingPetId === p.id ? 'Saving...' : p.allow_repeat_kapon_booking ? 'Allow' : 'Disabled'}
+                              </button>
+                            </div>
+
+                            <div className="flex items-center justify-end gap-2 pt-1">
+                              <Link href={`/client-admin/pets/${p.id}`} className="p-2.5 rounded-xl border border-border/70 hover:border-primary/30 hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-150" title="View Pet">
+                                <Eye size={16} />
+                              </Link>
+                              <Link href={`/client-admin/clients/${p.owner_id}`} className="p-2.5 rounded-xl border border-border/70 hover:border-primary/30 hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-150" title="View Owner">
+                                <Users size={16} />
+                              </Link>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ) : (
                   <table className="w-full">
                     <thead className="bg-primary/5 border-t border-b border-border">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pet</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Species</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Breed</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Age</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Owner</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Phone</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
-                        <th className="px-6 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">Actions</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Pet</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Species</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Breed</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Age</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Owner</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Phone</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Kapon</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Status</th>
+                        <th className="px-6 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {filteredPets.map(p => (
-                        <tr key={p.id} className="hover:bg-primary/5 transition-colors duration-150">
+                      {filteredPets.map((p: PetData) => (
+                        <tr key={p.id} className="hover:bg-primary/[0.08] transition-colors duration-150">
                           <td className="px-6 py-4">
                             <div className="font-semibold text-foreground">{p.name}</div>
                             {p.weight && <div className="text-xs text-muted-foreground mt-1">{p.weight} kg</div>}
@@ -875,6 +1072,19 @@ function ClientAdminPageInner() {
                           </td>
                           <td className="px-6 py-4 text-sm text-muted-foreground">{p.owner_phone || '—'}</td>
                           <td className="px-6 py-4">
+                            <button
+                              disabled={updatingPetId === p.id}
+                              onClick={() => handleToggleKaponAccess(p, !p.allow_repeat_kapon_booking)}
+                              className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all duration-150 disabled:opacity-55 ${
+                                p.allow_repeat_kapon_booking
+                                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
+                                  : 'bg-muted text-muted-foreground hover:bg-accent'
+                              }`}
+                            >
+                              {updatingPetId === p.id ? 'Saving...' : p.allow_repeat_kapon_booking ? 'Allow' : 'Disabled'}
+                            </button>
+                          </td>
+                          <td className="px-6 py-4">
                             <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
                               p.is_active
                                 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
@@ -884,10 +1094,14 @@ function ClientAdminPageInner() {
                             </span>
                           </td>
                           <td className="px-6 py-4 text-right">
-                            <ActionsDropdown items={[
-                              { label: 'View Pet', href: `/client-admin/pets/${p.id}` },
-                              { label: 'View Owner', href: `/client-admin/clients/${p.owner_id}` },
-                            ]} />
+                            <div className="flex items-center justify-end gap-1">
+                              <Link href={`/client-admin/pets/${p.id}`} className="p-2 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-150" title="View Pet">
+                                <Eye size={16} />
+                              </Link>
+                              <Link href={`/client-admin/clients/${p.owner_id}`} className="p-2 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-150" title="View Owner">
+                                <Users size={16} />
+                              </Link>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -899,30 +1113,26 @@ function ClientAdminPageInner() {
               {/* APPOINTMENTS TABLE */}
               {activeTab === 'appointments' && (
                 filteredAppointments.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 px-6 gap-4 text-center">
-                    <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10">
-                      <Calendar size={28} className="text-primary" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-lg text-foreground mb-1">No appointments found</h3>
-                      <p className="text-muted-foreground text-sm">Try adjusting your search or filters</p>
-                    </div>
-                  </div>
+                  <CmsEmptyState
+                    icon={Calendar}
+                    title="No appointments found"
+                    description="Try adjusting your search or filters"
+                  />
                 ) : (
                   <table className="w-full">
                     <thead className="bg-primary/5 border-t border-b border-border">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Date & Time</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Client</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pet</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Reason</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
-                        <th className="px-6 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">Actions</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Date & Time</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Client</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Pet</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Reason</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Status</th>
+                        <th className="px-6 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {filteredAppointments.map(a => (
-                        <tr key={a.id} className="hover:bg-primary/5 transition-colors duration-150">
+                      {filteredAppointments.map((a: AppointmentData) => (
+                        <tr key={a.id} className="hover:bg-primary/[0.08] transition-colors duration-150">
                           <td className="px-6 py-4">
                             <div className="font-semibold text-foreground">{formatDate(a.appointment_date)}</div>
                             <div className="text-xs text-muted-foreground mt-1">{a.appointment_time}</div>
@@ -952,10 +1162,14 @@ function ClientAdminPageInner() {
                             }`}>{a.status}</span>
                           </td>
                           <td className="px-6 py-4 text-right">
-                            <ActionsDropdown items={[
-                              { label: 'View Details', href: `/client-admin/appointments/${a.id}` },
-                              { label: 'View Client', href: `/client-admin/clients/${a.client_id}` },
-                            ]} />
+                            <div className="flex items-center justify-end gap-1">
+                              <Link href={`/client-admin/appointments/${a.id}`} className="p-2 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-150" title="View Details">
+                                <Eye size={16} />
+                              </Link>
+                              <Link href={`/client-admin/clients/${a.client_id}`} className="p-2 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-150" title="View Client">
+                                <Users size={16} />
+                              </Link>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -981,13 +1195,13 @@ function ClientAdminPageInner() {
                     <thead className="bg-primary/5 border-t border-b border-border">
                       <tr>
                         {['Date', 'Client', 'Pet', 'Breed', 'Gender', 'Duration', 'Payment', 'Status', 'Actions'].map(h => (
-                          <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{h}</th>
+                          <th key={h} className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90 whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
                       {filteredRegular.map(a => (
-                        <tr key={a.id} className="hover:bg-primary/5 transition-colors duration-150">
+                        <tr key={a.id} className="hover:bg-primary/[0.08] transition-colors duration-150">
                           <td className="px-5 py-4">
                             <div className="text-sm font-semibold text-foreground whitespace-nowrap">
                               {formatDate(a.scheduled_start)}
@@ -1030,10 +1244,14 @@ function ClientAdminPageInner() {
                             }`}>{a.appointment_status}</span>
                           </td>
                           <td className="px-5 py-4 text-right">
-                            <ActionsDropdown items={[
-                              { label: 'View Details', href: `/client-admin/appointments/${a.id}` },
-                              { label: 'View Client', href: `/client-admin/clients/${a.client_id}` },
-                            ]} />
+                            <div className="flex items-center justify-end gap-1">
+                              <Link href={`/client-admin/appointments/${a.id}`} className="p-2 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-150" title="View Details">
+                                <Eye size={16} />
+                              </Link>
+                              <Link href={`/client-admin/clients/${a.client_id}`} className="p-2 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-150" title="View Client">
+                                <Users size={16} />
+                              </Link>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -1059,13 +1277,13 @@ function ClientAdminPageInner() {
                     <thead className="bg-primary/5 border-t border-b border-border">
                       <tr>
                         {['Date', 'Client', 'Pet', 'Breed', 'Aspin/Puspin', 'Program', 'Amount', 'Payment', 'Status', 'Actions'].map(h => (
-                          <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{h}</th>
+                          <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90 whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
                       {filteredOutreach.map(a => (
-                        <tr key={a.id} className="hover:bg-primary/5 transition-colors duration-150">
+                        <tr key={a.id} className="hover:bg-primary/[0.08] transition-colors duration-150">
                           <td className="px-4 py-4">
                             <div className="text-sm font-semibold text-foreground whitespace-nowrap">
                               {formatDate(a.scheduled_start)}
@@ -1123,10 +1341,91 @@ function ClientAdminPageInner() {
                             }`}>{a.appointment_status}</span>
                           </td>
                           <td className="px-4 py-4 text-right">
-                            <ActionsDropdown items={[
-                              { label: 'View Details', href: `/client-admin/appointments/${a.id}` },
-                              { label: 'View Client', href: `/client-admin/clients/${a.client_id}` },
-                            ]} />
+                            <div className="flex items-center justify-end gap-1">
+                              <Link href={`/client-admin/appointments/${a.id}`} className="p-2 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-150" title="View Details">
+                                <Eye size={16} />
+                              </Link>
+                              <Link href={`/client-admin/clients/${a.client_id}`} className="p-2 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-150" title="View Client">
+                                <Users size={16} />
+                              </Link>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )
+              )}
+
+              {/* NOTIFICATIONS TABLE */}
+              {activeTab === 'notifications' && (
+                filteredNotifications.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 px-6 gap-4 text-center">
+                    <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10">
+                      <Bell size={28} className="text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-lg text-foreground mb-1">No notifications found</h3>
+                      <p className="text-muted-foreground text-sm">Try adjusting your search or filters</p>
+                    </div>
+                  </div>
+                ) : (
+                  <table className="w-full">
+                    <thead className="bg-primary/5 border-t border-b border-border">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Sent</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Type</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Subject</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Content</th>
+                        <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Delivery</th>
+                        <th className="px-6 py-3 text-center text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/90">Read</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {filteredNotifications.map(n => (
+                        <tr key={n.id} className="hover:bg-primary/[0.08] transition-colors duration-150">
+                          <td className="px-6 py-4">
+                            <div className="text-sm font-semibold text-foreground whitespace-nowrap">{formatDate(n.sent_at)}</div>
+                            <div className="text-xs text-muted-foreground mt-0.5">
+                              {new Date(n.sent_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                              n.notification_type === 'appointment_confirmed' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300' :
+                              n.notification_type === 'appointment_cancelled' ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300' :
+                              n.notification_type === 'appointment_reminder' ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300' :
+                              n.notification_type === 'payment_due' ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300' :
+                              n.notification_type === 'test_results' ? 'bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300' :
+                              'bg-muted text-muted-foreground'
+                            }`}>
+                              {n.notification_type.replace(/_/g, ' ')}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-foreground font-medium max-w-[200px] truncate" title={n.subject ?? ''}>
+                            {n.subject || '—'}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-muted-foreground max-w-xs truncate" title={n.content}>
+                            {n.content}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                              n.delivery_status === 'delivered' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300' :
+                              n.delivery_status === 'sent' ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300' :
+                              n.delivery_status === 'failed' ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300' :
+                              'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300'
+                            }`}>
+                              {n.delivery_status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                              n.is_read
+                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
+                                : 'bg-muted text-muted-foreground'
+                            }`}>
+                              {n.is_read ? 'Read' : 'Unread'}
+                            </span>
                           </td>
                         </tr>
                       ))}
@@ -1137,7 +1436,7 @@ function ClientAdminPageInner() {
 
             </div>
           )}
-        </div>
+        </CmsCard>
         </div>{/* max-w container */}
       </div>
       {confirmModal && (
@@ -1186,3 +1485,4 @@ export default function ClientAdminPage() {
     </Suspense>
   );
 }
+

@@ -313,7 +313,7 @@ export default function PetDetailPage() {
       {/* ── VIEW MODE ── */}
       {!isEditing && (
         <div className="flex flex-col gap-5">
-          <div className="bg-card rounded-2xl border border-border shadow-sm">
+          <div className="rounded-2xl border border-border/80 bg-card/95 shadow-sm">
             <div className="px-6 py-4 border-b border-border">
               <h2 className="text-[17px] font-bold">Basic Information</h2>
             </div>
@@ -351,7 +351,7 @@ export default function PetDetailPage() {
             </div>
           </div>
 
-          <div className="bg-card rounded-2xl border border-border shadow-sm">
+          <div className="rounded-2xl border border-border/80 bg-card/95 shadow-sm">
             <div className="px-6 py-4 border-b border-border">
               <h2 className="text-[17px] font-bold">Medical & Behavioral Notes</h2>
             </div>
@@ -376,7 +376,7 @@ export default function PetDetailPage() {
       {/* ── EDIT MODE ── */}
       {isEditing && (
         <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-          <div className="bg-card rounded-2xl border border-border shadow-sm">
+          <div className="rounded-2xl border border-border/80 bg-card/95 shadow-sm">
             <div className="px-6 py-4 border-b border-border">
               <h2 className="text-[17px] font-bold">Basic Information</h2>
             </div>
@@ -446,7 +446,7 @@ export default function PetDetailPage() {
             </div>
           </div>
 
-          <div className="bg-card rounded-2xl border border-border shadow-sm">
+          <div className="rounded-2xl border border-border/80 bg-card/95 shadow-sm">
             <div className="px-6 py-4 border-b border-border">
               <h2 className="text-[17px] font-bold">Medical & Behavioral Notes</h2>
             </div>

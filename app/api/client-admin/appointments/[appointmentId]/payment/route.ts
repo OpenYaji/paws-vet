@@ -79,7 +79,11 @@ export async function POST(
       'refunded';
 
     const updatePayload: Record<string, unknown> = { payment_status: newPaymentStatus };
-    if (action === 'verify') updatePayload.paid_at = new Date().toISOString();
+    if (action === 'verify') {
+      updatePayload.paid_at = new Date().toISOString();
+      updatePayload.payment_verified_by = admin_user_id ?? null;
+      updatePayload.payment_verified_at = new Date().toISOString();
+    }
     if (action === 'refund') updatePayload.paid_at = null;
 
     const { error: updateErr } = await supabaseAdmin

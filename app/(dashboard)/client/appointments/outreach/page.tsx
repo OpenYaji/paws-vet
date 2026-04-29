@@ -30,6 +30,7 @@ import {
   checkDuplicateBooking,
 } from '@/lib/booking-engine';
 import type { OutreachProgram } from '@/lib/booking-engine';
+import { sendAdminNotification } from '@/lib/notifications';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -174,6 +175,7 @@ export default function OutreachAppointmentPage() {
 
   // success
   const [appointmentNumber, setAppointmentNumber] = useState<string | null>(null);
+  const [clinicSettings, setClinicSettings] = useState<any>(null);
 
   // ── Derived ──
   const selectedPet = pets.find((p) => p.id === selectedPetId) ?? null;
@@ -201,18 +203,20 @@ export default function OutreachAppointmentPage() {
         }
         setUserId(user.id);
 
-        const [profileRes, programs] = await Promise.all([
+        const [profileRes, programs, settingsRes] = await Promise.all([
           supabase
             .from('client_profiles')
             .select('id,user_id,first_name,last_name,phone,address_line1')
             .eq('user_id', user.id)
             .maybeSingle(),
           getOpenOutreachPrograms(),
+          supabase.from('clinic_settings').select('*').limit(1).maybeSingle()
         ]);
 
         if (profileRes.error) throw profileRes.error;
         setProfile(profileRes.data ?? null);
         setOpenPrograms(programs);
+        if (settingsRes.data) setClinicSettings(settingsRes.data);
 
         const profileId = profileRes.data?.id;
         const petsRes = profileId
@@ -336,45 +340,48 @@ export default function OutreachAppointmentPage() {
         is_emergency:            false,
       };
 
-      const { data: appt, error: insertErr } = await supabase
-        .from('appointments')
-        .insert(payload)
-        .select('appointment_number')
-        .single();
+      const createRes = await fetch('/api/client/appointments/outreach', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
 
-      if (insertErr) throw insertErr;
+      const createJson = await createRes.json().catch(() => null);
+      if (!createRes.ok) {
+        const errorToken = createJson?.error || '';
+        const message = createJson?.message || 'Something went wrong. Please try again.';
+
+        if (errorToken === 'program_full_or_closed') {
+          setSubmitError('Sorry, this outreach program is now full or closed. Please check back for future programs.');
+          setSubmitting(false);
+          return;
+        }
+
+        if (errorToken === 'duplicate_booking') {
+          setSubmitError('This pet is already registered for this outreach program.');
+          setSubmitting(false);
+          return;
+        }
+
+        setSubmitError(message);
+        setSubmitting(false);
+        return;
+      }
+
+      const appt = createJson as { id: string; appointment_number: string };
 
       // Update slot status — also syncs outreach_programs capacity internally
       await checkAndUpdateSlotStatus(selectedProgram.program_date, 'outreach');
 
-      // Get the real current count from DB (avoids stale selectedProgram value)
-      const { count: liveCount, error: countErr } = await supabase
-        .from('appointments')
-        .select('id', { count: 'exact', head: true })
-        .eq('outreach_program_id', selectedProgram.id)
-        .neq('appointment_status', 'cancelled');
-
-      if (countErr) {
-        console.error('[outreach] Failed to get live count:', countErr.message);
-      }
-
-      const realCount = liveCount ?? 0;
-      const nowFull = realCount >= selectedProgram.max_capacity;
-
-      const { error: updateErr } = await supabase
-        .from('outreach_programs')
-        .update({
-          current_bookings: realCount,
-          is_full:          nowFull,
-          is_open:          nowFull ? false : selectedProgram.is_open,
-        })
-        .eq('id', selectedProgram.id);
-
-      if (updateErr) {
-        console.error('[outreach] Failed to update program bookings:', updateErr.message);
-      }
-
       setAppointmentNumber(appt.appointment_number);
+
+      // Notify CMS admins about new outreach appointment (fire-and-forget)
+      sendAdminNotification({
+        type: 'booked',
+        label: appt.appointment_number,
+        appointmentId: appt.id,
+        clientUserId: userId ?? undefined,
+      }).catch(console.error);
     } catch (e: any) {
       setSubmitError(e.message ?? 'Something went wrong. Please try again.');
     } finally {
@@ -945,7 +952,28 @@ export default function OutreachAppointmentPage() {
                     </div>
 
                     {(paymentMethod === 'gcash' || paymentMethod === 'maya') && (
-                      <div className="space-y-2 animate-in fade-in duration-200">
+                    <div className="space-y-4 animate-in fade-in duration-200">
+                      {/* Render QR UI if configured */}
+                      {((paymentMethod === 'gcash' && clinicSettings?.gcash_qr_url) || 
+                        (paymentMethod === 'maya' && clinicSettings?.maya_qr_url)) && (
+                        <div className="flex flex-col items-center p-4 border rounded-xl bg-accent/20">
+                          <Label className="text-sm font-bold mb-3 text-center">
+                            Scan to Pay via {paymentMethod === 'gcash' ? 'GCash' : 'Maya'}
+                          </Label>
+                          <div className="w-48 h-48 relative rounded-xl border bg-white overflow-hidden shadow-sm flex items-center justify-center p-2 mb-2">
+                            <img 
+                              src={paymentMethod === 'gcash' ? clinicSettings.gcash_qr_url : clinicSettings.maya_qr_url} 
+                              alt={`${paymentMethod} QR`} 
+                              className="max-w-full max-h-full object-contain"
+                            />
+                          </div>
+                          <p className="text-xs text-muted-foreground text-center">
+                            Total Amount: <span className="font-bold text-foreground">₱ {paymentAmount?.toFixed(2)}</span>
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="space-y-2">
                         <Label htmlFor="ref" className="text-sm font-bold">
                           Transaction Reference Number <span className="text-destructive">*</span>
                         </Label>
@@ -961,6 +989,7 @@ export default function OutreachAppointmentPage() {
                           Payment will be verified by our team.
                         </p>
                       </div>
+                    </div>
                     )}
 
                     {paymentMethod === 'cash' && (
