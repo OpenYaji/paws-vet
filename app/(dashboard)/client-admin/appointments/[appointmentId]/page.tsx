@@ -43,6 +43,19 @@ interface Appointment {
   payment_sender_name?: string | null;
   payment_verified_by?: string | null;
   payment_verified_at?: string | null;
+  appointment_services?: Array<{
+    id: string;
+    quantity: number;
+    actual_price: number;
+    service_notes?: string;
+    services?: {
+      id: string;
+      service_name: string;
+      service_category: string;
+      base_price: number;
+      duration_minutes?: number;
+    };
+  }>;
 }
 
 interface Client {
@@ -154,7 +167,7 @@ export default function AppointmentDetailPage() {
       setAppointment(data);
       setSelectedStatus(data.appointment_status);
       setClient(data.pets?.client_profiles ?? null);
-      setPet(data.pets ?? null);
+      setPet(data.pets ? { name: data.pets.name, species: data.pets.species, breed: data.pets.breed } : null);
 
       if (data.payment_verified_by) {
         const { data: verifier } = await supabase
@@ -605,8 +618,22 @@ export default function AppointmentDetailPage() {
           </div>
           <div className="p-6 flex flex-col gap-5">
             <div className="flex flex-col gap-0.5">
-              <span className="text-xs text-muted-foreground font-medium">Reason for Visit</span>
-              <span className="text-[15px] font-medium">{appointment.reason_for_visit}</span>
+              <span className="text-xs text-muted-foreground font-medium">Services / Reason</span>
+              {appointment.appointment_services && appointment.appointment_services.length > 0 ? (
+                <div className="flex flex-col gap-3 mt-1">
+                  {appointment.appointment_services.map((appService) => (
+                    <div key={appService.id} className="rounded-lg bg-muted/50 p-3">
+                      <div className="font-medium text-[15px]">{appService.services?.service_name}</div>
+                      <div className="text-xs text-muted-foreground mt-1">{appService.services?.service_category}</div>
+                      {appService.service_notes && (
+                        <div className="text-sm mt-2">{appService.service_notes}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <span className="text-[15px] font-medium">{appointment.reason_for_visit || 'N/A'}</span>
+              )}
             </div>
             {appointment.special_instructions && (
               <div className="flex flex-col gap-0.5">

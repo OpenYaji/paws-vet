@@ -55,8 +55,8 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
 
-    if (!body?.pet_id || !body?.scheduled_start || !body?.scheduled_end) {
-      return jsonError('bad_request', 400, 'pet_id, scheduled_start, and scheduled_end are required.');
+    if (!body?.pet_id || !body?.scheduled_start || !body?.scheduled_end || !body?.service_id) {
+      return jsonError('bad_request', 400, 'pet_id, scheduled_start, scheduled_end, and service_id are required.');
     }
 
     const { data: profile, error: profileError } = await supabaseAdmin
@@ -85,22 +85,25 @@ export async function POST(request: NextRequest) {
       return jsonError('forbidden', 403, 'You can only book appointments for your own pets.');
     }
 
-    const { count: priorRegularCount, error: priorError } = await supabaseAdmin
-      .from('appointments')
-      .select('id', { count: 'exact', head: true })
-      .eq('pet_id', pet.id)
-      .eq('appointment_type_detail', 'regular');
+    // Only perform kapon-related checks if this is a kapon service
+    if (body.is_kapon_service) {
+      const { count: priorRegularCount, error: priorError } = await supabaseAdmin
+        .from('appointments')
+        .select('id', { count: 'exact', head: true })
+        .eq('pet_id', pet.id)
+        .eq('appointment_type_detail', 'regular');
 
-    if (priorError) {
-      return jsonError('booking_check_failed', 500, priorError.message);
-    }
+      if (priorError) {
+        return jsonError('booking_check_failed', 500, priorError.message);
+      }
 
-    if ((priorRegularCount ?? 0) > 0 && !pet.allow_repeat_kapon_booking) {
-      return jsonError(
-        'kapon_repeat_blocked',
-        409,
-        'This pet is currently disabled for repeat kapon booking. Please contact the clinic/admin to enable "Allow Again".'
-      );
+      if ((priorRegularCount ?? 0) > 0 && !pet.allow_repeat_kapon_booking) {
+        return jsonError(
+          'kapon_repeat_blocked',
+          409,
+          'This pet is currently disabled for repeat kapon booking. Please contact the clinic/admin to enable "Allow Again".'
+        );
+      }
     }
 
     let veterinarianId = body.veterinarian_id as string | undefined;
@@ -152,7 +155,23 @@ export async function POST(request: NextRequest) {
       return jsonError('booking_create_failed', 500, message || 'Failed to create appointment.');
     }
 
-    if (pet.allow_repeat_kapon_booking) {
+    // Insert into appointment_services
+    const { error: serviceInsertError } = await supabaseAdmin
+      .from('appointment_services')
+      .insert({
+        appointment_id: created.id,
+        service_id: body.service_id,
+        actual_price: body.payment_amount ?? null,
+        quantity: 1,
+      });
+
+    if (serviceInsertError) {
+      console.error('[regular-booking] Failed to insert appointment_services:', serviceInsertError);
+      // Log error but don't fail the appointment creation
+    }
+
+    // Only consume allow_repeat_kapon_booking if this is a kapon service
+    if (body.is_kapon_service && pet.allow_repeat_kapon_booking) {
       const { error: consumeError } = await supabaseAdmin
         .from('pets')
         .update({

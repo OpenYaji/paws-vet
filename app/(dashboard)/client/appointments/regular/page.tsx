@@ -55,6 +55,17 @@ interface ClientProfile {
   address_line1: string;
 }
 
+interface Service {
+  id: string;
+  service_name: string;
+  service_category: string;
+  description: string | null;
+  base_price: number;
+  duration_minutes: number;
+  requires_specialist: boolean;
+  is_active: boolean;
+}
+
 type Step = 'pet' | 'service' | 'date' | 'details' | 'payment';
 type PaymentMethod = 'gcash' | 'maya' | 'cash';
 
@@ -156,11 +167,13 @@ export default function RegularAppointmentPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [profile, setProfile] = useState<ClientProfile | null>(null);
   const [pets, setPets] = useState<Pet[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
   const [loadingInit, setLoadingInit] = useState(true);
   const [initError, setInitError] = useState<string | null>(null);
 
   const [step, setStep] = useState<Step>('pet');
   const [selectedPet, setSelectedPet] = useState<Pet | null>(null);
+  const [selectedService, setSelectedService] = useState<Service | null>(null);
 
   const [calMonth, setCalMonth] = useState(() => new Date());
   const [availableDateSet, setAvailableDateSet] = useState<Set<string>>(new Set());
@@ -184,8 +197,14 @@ export default function RegularAppointmentPage() {
   const [clinicSettings, setClinicSettings] = useState<any>(null);
 
   const petGender = (selectedPet?.gender as 'male' | 'female') ?? 'male';
-  const duration = selectedPet ? calculateDuration(petGender === 'female' ? 'female' : 'male') : 10;
-  const paymentAmount = calculatePaymentAmount({ appointmentType: 'regular', isAspinPuspin: false });
+  let isKaponService = false;
+  if (selectedService?.service_name) {
+    isKaponService = selectedService.service_name.toLowerCase().includes('kapon') || 
+                     selectedService.service_name.toLowerCase().includes('neuter');
+  }
+
+  const duration = selectedService?.duration_minutes ?? (selectedPet ? calculateDuration(petGender === 'female' ? 'female' : 'male') : 10);
+  const paymentAmount = selectedService?.base_price ?? calculatePaymentAmount({ appointmentType: 'regular', isAspinPuspin: false });
 
   useEffect(() => {
     (async () => {
@@ -194,17 +213,20 @@ export default function RegularAppointmentPage() {
         if (authErr || !user) { setInitError('Session expired. Please log in again.'); setLoadingInit(false); return; }
         setUserId(user.id);
 
-        const [profileRes, settingsRes] = await Promise.all([
+        const [profileRes, settingsRes, servicesRes] = await Promise.all([
           supabase
             .from('client_profiles')
             .select('id,user_id,first_name,last_name,phone,address_line1')
             .eq('user_id', user.id)
             .maybeSingle(),
-          supabase.from('clinic_settings').select('*').limit(1).maybeSingle()
+          supabase.from('clinic_settings').select('*').limit(1).maybeSingle(),
+          supabase.from('services').select('id,service_name,service_category,description,base_price,duration_minutes,requires_specialist,is_active').eq('is_active', true)
         ]);
         if (profileRes.error) throw profileRes.error;
         setProfile(profileRes.data ?? null);
         if (settingsRes.data) setClinicSettings(settingsRes.data);
+        if (servicesRes.error) throw servicesRes.error;
+        setServices((servicesRes.data ?? []) as Service[]);
 
         const profileId = profileRes.data?.id;
         const petsRes = profileId
@@ -280,25 +302,27 @@ export default function RegularAppointmentPage() {
         return;
       }
 
-      // Block repeat kapon bookings unless admin enabled a one-time override.
-      const [{ data: priorRegular }, { data: latestPet }] = await Promise.all([
-        supabase
-          .from('appointments')
-          .select('id')
-          .eq('pet_id', selectedPet.id)
-          .eq('appointment_type_detail', 'regular')
-          .limit(1),
-        supabase
-          .from('pets')
-          .select('allow_repeat_kapon_booking')
-          .eq('id', selectedPet.id)
-          .maybeSingle(),
-      ]);
+      // Block repeat kapon bookings unless admin enabled a one-time override. (Only for kapon services)
+      if (isKaponService) {
+        const [{ data: priorRegular }, { data: latestPet }] = await Promise.all([
+          supabase
+            .from('appointments')
+            .select('id')
+            .eq('pet_id', selectedPet.id)
+            .eq('appointment_type_detail', 'regular')
+            .limit(1),
+          supabase
+            .from('pets')
+            .select('allow_repeat_kapon_booking')
+            .eq('id', selectedPet.id)
+            .maybeSingle(),
+        ]);
 
-      if ((priorRegular?.length ?? 0) > 0 && !latestPet?.allow_repeat_kapon_booking) {
-        setSubmitError('This pet is currently disabled for repeat kapon booking. Please contact the clinic/admin to enable "Allow Again".');
-        setSubmitting(false);
-        return;
+        if ((priorRegular?.length ?? 0) > 0 && !latestPet?.allow_repeat_kapon_booking) {
+          setSubmitError('This pet is currently disabled for repeat kapon booking. Please contact the clinic/admin to enable "Allow Again".');
+          setSubmitting(false);
+          return;
+        }
       }
 
       // Bug 1 fix: calculate actual next available start time
@@ -331,6 +355,8 @@ export default function RegularAppointmentPage() {
           ? senderName.trim()
           : null,
         is_emergency: false,
+        service_id: selectedService?.id,
+        is_kapon_service: isKaponService,
       };
       const createRes = await fetch('/api/client/appointments/regular', {
         method: 'POST',
@@ -441,7 +467,7 @@ export default function RegularAppointmentPage() {
           <div className="bg-accent rounded-2xl p-5 space-y-3 text-sm text-left">
             <Row label="Appointment #" value={appointmentNumber} valueClass="font-mono" />
             <Row label="Pet" value={selectedPet?.name ?? ''} />
-            <Row label="Service" value="Kapon / Neuter" />
+            <Row label="Service" value={selectedService?.service_name ?? 'Regular'} />
             <Row label="Date" value={selectedDate ? formatDisplayDate(selectedDate) : ''} />
             <Row label="Duration" value={`${duration} minutes`} />
             <Row
@@ -508,7 +534,7 @@ export default function RegularAppointmentPage() {
             </div>
             <div>
               <h1 className="text-3xl font-bold tracking-tight">Regular Appointment</h1>
-              <p className="text-muted-foreground mt-0.5">Kapon / Neuter service booking</p>
+              <p className="text-muted-foreground mt-0.5">{selectedService ? `${selectedService.service_name} booking` : 'Select a service to begin'}</p>
             </div>
           </div>
         </div>
@@ -599,33 +625,77 @@ export default function RegularAppointmentPage() {
             {/* ── STEP 2: Service ── */}
             {step === 'service' && selectedPet && (
               <section className="space-y-6 animate-in fade-in duration-300">
-                <div className="bg-gradient-to-br from-primary/8 to-primary/3 border-2 border-primary/30 rounded-2xl p-6 flex items-start gap-5">
-                  <div className="w-14 h-14 bg-primary/15 rounded-2xl flex items-center justify-center flex-shrink-0">
-                    <Scissors size={28} className="text-primary" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <p className="font-bold text-xl">Kapon / Neuter</p>
-                      <span className="inline-flex items-center gap-1.5 bg-primary/10 text-primary text-xs font-bold px-3 py-1 rounded-full">
-                        <CheckCircle2 size={12} /> Selected
-                      </span>
+                <div className="bg-gradient-to-br from-primary/8 to-primary/3 border-2 border-primary/30 rounded-2xl p-6 flex flex-col gap-5">
+                  <p className="font-bold text-xl">Select a Service</p>
+                  
+                  {Object.entries(
+                    services.reduce((acc, s) => {
+                      const cat = s.service_category;
+                      if (!acc[cat]) acc[cat] = [];
+                      acc[cat].push(s);
+                      return acc;
+                    }, {} as Record<string, Service[]>)
+                  ).map(([category, items]) => (
+                    <div key={category}>
+                      <h3 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
+                        {category}
+                      </h3>
+                      <div className="grid gap-3">
+                        {items.map(service => (
+                          <button
+                            key={service.id}
+                            onClick={() => setSelectedService(service)}
+                            className={`p-4 rounded-xl border-2 transition-all text-left ${
+                              selectedService?.id === service.id
+                                ? 'border-primary bg-primary/8'
+                                : 'border-border hover:border-primary/50 bg-card'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex-1">
+                                <p className="font-semibold text-lg flex items-center gap-2">
+                                  {service.service_name}
+                                  {selectedService?.id === service.id && (
+                                    <span className="inline-flex items-center gap-1 bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
+                                      <CheckCircle2 size={10} /> Selected
+                                    </span>
+                                  )}
+                                </p>
+                                {service.description && (
+                                  <p className="text-sm text-muted-foreground mt-1">{service.description}</p>
+                                )}
+                              </div>
+                              <div className="text-right flex-shrink-0">
+                                <p className="font-bold text-primary whitespace-nowrap">
+                                  &#8369;{service.base_price.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                                </p>
+                                {service.duration_minutes && (
+                                  <p className="text-xs text-muted-foreground whitespace-nowrap">~{service.duration_minutes} min</p>
+                                )}
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                    <p className="text-muted-foreground mt-1.5">
-                      Spay or neuter procedure for your pet
-                    </p>
-                    <div className="flex flex-wrap items-center gap-6 mt-4">
+                  ))}
+
+                  {selectedService && (
+                    <div className="mt-4 pt-4 border-t border-primary/20 flex flex-wrap items-center gap-6">
                       <div>
                         <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">Amount</p>
-                        <p className="text-2xl font-bold text-primary">
+                        <p className="text-xl font-bold text-primary">
                           &#8369;{paymentAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                         </p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">Duration</p>
-                        <p className="text-xl font-bold">~{duration} min</p>
+                        <p className="text-lg font-bold text-foreground">
+                          ~{duration} min
+                        </p>
                       </div>
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 <div className="bg-accent/60 rounded-2xl p-4 flex items-center gap-3">
@@ -644,7 +714,12 @@ export default function RegularAppointmentPage() {
                   <Button size="lg" variant="outline" onClick={prevStep} className="min-w-[110px]">
                     <ChevronLeft size={18} className="mr-1" /> Back
                   </Button>
-                  <Button size="lg" className="bg-primary text-primary-foreground hover:opacity-90 active:scale-95 min-w-[140px]" onClick={nextStep}>
+                  <Button 
+                    size="lg" 
+                    className="bg-primary text-primary-foreground hover:opacity-90 active:scale-95 min-w-[140px]" 
+                    onClick={nextStep}
+                    disabled={!selectedService}
+                  >
                     Continue <ChevronRight size={18} className="ml-1" />
                   </Button>
                 </div>
@@ -782,7 +857,7 @@ export default function RegularAppointmentPage() {
                 <div className="bg-accent/60 rounded-2xl p-5 space-y-3">
                   <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-1">Booking Summary</p>
                   <Row label="Pet" value={selectedPet.name} />
-                  <Row label="Service" value="Kapon / Neuter" />
+                  <Row label="Service" value={selectedService?.service_name ?? 'Regular'} />
                   <Row label="Date" value={formatDisplayDate(selectedDate)} />
                   <Row label="Duration" value={`~${duration} minutes`} />
                   <div className="pt-2 mt-2 border-t border-border">
