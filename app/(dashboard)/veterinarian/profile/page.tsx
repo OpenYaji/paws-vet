@@ -10,8 +10,29 @@ import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { User, Mail, Phone, Award, Stethoscope, Save, Loader2, Calendar } from 'lucide-react';
+import { toast } from '@/components/ui/use-toast';
+import useSWR from 'swr';
+import { Fetcher } from '@/lib/fetcher';
+
+// define the interface for the user profile
+interface UserProfile {
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  license_number: string;
+  specializations: string[];
+  biography: string;
+  consultation_fee: string;
+  hire_date: string;
+}
 
 export default function ProfilePage() {
+  // use useSWR then define the type of data we expect to receive
+  const { data: user } = useSWR<UserProfile>('/api/veterinarian/profile', Fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 30000,
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   
@@ -19,56 +40,40 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState({
     first_name: '',
     last_name: '',
-    email: '', // Read-only from Auth
+    email: '',
     phone: '',
     license_number: '',
-    specializations: '', // We'll convert Array <-> String
+    specializations: '',
     biography: '',
     consultation_fee: '',
     hire_date: '',
   });
 
-  // 1. Fetch Profile Data on Load
+    // fetch Profile Data on Load
   useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+    // wait until useSWR gives us the user data
+    if (!user) return;
 
-        const { data, error } = await supabase
-          .from('veterinarian_profiles')
-          .select('*')
-          .eq('user_id', user.id)
-          .single();
+    if (Object.keys(user).length > 0) {
+      setProfile({
+        first_name: user.first_name || '',
+        last_name: user.last_name || '',
+        email: user.email || '', 
+        phone: user.phone || '',
+        license_number: user.license_number || '',
+        // convert array ['Surgery', 'Cats'] -> String "Surgery, Cats"
+        specializations: user.specializations ? user.specializations.join(', ') : '',
+        biography: user.biography || '',
+        consultation_fee: user.consultation_fee || '',
+        hire_date: user.hire_date || '',
+      });
+    } else {
+      // pre-fill email if no profile exists yet
+      setProfile(prev => ({...prev, email: user.email || ''}));
+    }
 
-        if (error && error.code !== 'PGRST116') throw error; // Ignore "not found" error if new user
-
-        if (data) {
-          setProfile({
-            first_name: data.first_name || '',
-            last_name: data.last_name || '',
-            email: user.email || '',
-            phone: data.phone || '',
-            license_number: data.license_number || '',
-            // Convert Array ['Surgery', 'Cats'] -> String "Surgery, Cats"
-            specializations: data.specializations ? data.specializations.join(', ') : '',
-            biography: data.biography || '',
-            consultation_fee: data.consultation_fee || '',
-            hire_date: data.hire_date || '',
-          });
-        } else {
-            // Pre-fill email if no profile exists yet
-            setProfile(prev => ({...prev, email: user.email || ''}));
-        }
-      } catch (error) {
-        console.error('Error loading profile:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchProfile();
-  }, []);
+    setLoading(false);
+  }, [user]); // this tells react to run the effect whenever 'user' updates
 
   // 2. Handle Save
   const handleSave = async (e: React.FormEvent) => {
@@ -83,15 +88,14 @@ export default function ProfilePage() {
         throw new Error("Date Hired is required.");
       }
 
-      // --- STEP 1: FIX THE FOREIGN KEY ERROR ---
-      // Check if this user exists in the 'public.users' table
+      // check if this user exists in the 'public.users' table
       const { data: existingUser } = await supabase
         .from('users')
         .select('id')
         .eq('id', user.id)
         .single();
 
-      // If they don't exist yet, create them!
+      // if they don't exist yet, create them!
       if (!existingUser) {
         const { error: userError } = await supabase
           .from('users')
@@ -133,11 +137,11 @@ export default function ProfilePage() {
         .upsert(updates, { onConflict: 'user_id' });
 
       if (error) throw error;
-      alert("Profile updated successfully!");
+      toast({ title: 'Profile Updated', description: 'Your profile has been saved.' });
 
     } catch (error: any) {
-      console.error(error); // Check console for detailed SQL errors
-      alert("Error saving profile: " + error.message);
+      console.error(error);
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } finally {
       setSaving(false);
     }

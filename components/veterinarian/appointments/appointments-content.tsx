@@ -123,16 +123,16 @@ export default function AppointmentsContent() {
                 selected={date}
                 onSelect={handleDateSelect}
                 className="rounded-md border shadow-sm"
-                classNames={{ today: 'border-2 border-green-500 text-green-700 font-bold hover:bg-green-50' }}
+                classNames={{ today: 'border-2 border-green-500 text-green-600 dark:text-green-400 font-bold' }}
                 modifiers={{ hasAppointment: appointmentDates }}
-                modifiersClassNames={{ hasAppointment: 'bg-green-100 text-green-900 font-bold hover:bg-green-200' }}
+                modifiersClassNames={{ hasAppointment: 'border-2 border-green-500 dark:border-green-400 font-semibold' }}
               />
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-500">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
                 Scheduled for {date ? format(date, 'MMM do') : 'Selected Date'}
               </CardTitle>
             </CardHeader>
@@ -153,7 +153,7 @@ export default function AppointmentsContent() {
             <Button
               variant="outline"
               size="sm"
-              className="gap-2 border-green-300 hover:bg-green-50 hover:text-green-700"
+              className="gap-2 border-green-300 hover:bg-green-100 dark:hover:bg-green-900/30 hover:text-green-700 dark:hover:text-green-400"
               onClick={() => setShowReport(true)}
             >
               <FileBarChart className="h-4 w-4" />
@@ -162,13 +162,13 @@ export default function AppointmentsContent() {
           </div>
 
           {isLoading ? (
-            <div className="text-center py-12 text-gray-400">Loading schedule...</div>
+            <div className="text-center py-12 text-muted-foreground">Loading schedule...</div>
           ) : selectedDateAppointments.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 bg-white rounded-xl border border-dashed border-gray-200">
-              <div className="bg-gray-50 p-4 rounded-full mb-3">
-                <CalendarIcon className="h-8 w-8 text-gray-300" />
+            <div className="flex flex-col items-center justify-center py-16 bg-card rounded-xl border border-dashed">
+              <div className="bg-green-100 dark:bg-green-900/30 p-4 rounded-full mb-3">
+                <CalendarIcon className="h-8 w-8 text-green-600 dark:text-green-400" />
               </div>
-              <p className="text-gray-500 font-medium">No appointments scheduled.</p>
+              <p className="text-muted-foreground font-medium">No appointments scheduled.</p>
             </div>
           ) : (
             <>
@@ -184,56 +184,56 @@ export default function AppointmentsContent() {
                 return (
                   <Card
                     key={app.id}
-                    className={`group transition-all cursor-pointer shadow-sm hover:shadow-md ${
+                    className={`group transition-all cursor-pointer hover:shadow-md ${
                       isActionable
-                        ? 'hover:border-green-400 hover:bg-green-50/30'
-                        : 'hover:border-gray-300 opacity-80'
+                        ? 'hover:border-green-400'
+                        : 'opacity-75'
                     }`}
                     onClick={() => setSelectedAppt(app)}
                   >
-                    <CardContent className="p-5 flex flex-col md:flex-row gap-6 items-start md:items-center">
+                    <CardContent className="p-4 flex items-center gap-4">
 
                       {/* Time */}
-                      <div className="flex flex-col items-center justify-center min-w-[80px] p-2 bg-green-50 text-green-700 rounded-lg">
-                        <Clock size={18} className="mb-1" />
-                        <span className="font-bold text-lg">
+                      <div className="flex flex-col items-center justify-center w-20 h-20 shrink-0 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-xl">
+                        <Clock size={16} className="mb-0.5" />
+                        <span className="font-bold text-sm leading-tight text-center">
                           {format(parseISO(app.scheduled_start), 'h:mm a')}
                         </span>
                       </div>
 
                       {/* Info */}
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-1">
-                          <h3 className="font-bold text-xl text-gray-800">
-                            {pet?.name ?? <span className="text-gray-400 italic">Unknown Patient</span>}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <h3 className="font-semibold text-base text-foreground truncate">
+                            {pet?.name ?? <span className="text-muted-foreground italic">Unknown</span>}
                           </h3>
                           {pet && (
-                            <Badge variant="outline" className="text-xs font-normal bg-gray-50">
+                            <Badge variant="outline" className="text-xs font-normal shrink-0">
                               {pet.species} • {pet.breed}
                             </Badge>
                           )}
                         </div>
-                        <div className="flex items-center gap-1 text-sm text-gray-500 mb-3">
-                          <User size={14} />
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1.5">
+                          <User size={12} />
                           <span>Owner: {ownerName}</span>
                         </div>
-                        <div className="flex items-start gap-2 bg-gray-50 p-3 rounded-md text-sm text-gray-700">
-                          <FileText size={16} className="mt-0.5 text-gray-400 shrink-0" />
-                          <p>{app.reason_for_visit || 'Routine Checkup'}</p>
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <FileText size={12} className="shrink-0" />
+                          <span className="truncate">{app.reason_for_visit || 'Routine Checkup'}</span>
                         </div>
                       </div>
 
-                      {/* Status + action hint */}
-                      <div className="flex flex-col items-end gap-2">
-                        <Badge className={STATUS_BADGE[app.appointment_status] ?? 'bg-gray-400'}>
-                          {app.appointment_status}
+                      {/* Status */}
+                      <div className="flex flex-col items-end gap-1.5 shrink-0">
+                        <Badge className={`${STATUS_BADGE[app.appointment_status] ?? 'bg-gray-400'} text-xs`}>
+                          {app.appointment_status.replace(/_/g, ' ')}
                         </Badge>
                         <Badge variant="outline" className="text-xs capitalize">
                           {app.appointment_type}
                         </Badge>
                         {isActionable && (
-                          <span className="text-xs text-green-600 font-medium group-hover:underline">
-                            Click to process →
+                          <span className="text-xs text-green-600 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+                            Process →
                           </span>
                         )}
                       </div>
@@ -339,7 +339,7 @@ export default function AppointmentsContent() {
 
                 {/* Already in triage or done */}
                 {!isActionable && (
-                  <div className="flex items-center gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
+                  <div className="flex items-center gap-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg text-sm text-yellow-800 dark:text-yellow-400">
                     <AlertTriangle className="h-4 w-4 shrink-0" />
                     This appointment cannot be sent to triage (status: {selectedAppt.appointment_status}).
                   </div>

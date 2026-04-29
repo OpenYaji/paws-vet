@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Sun, Moon, User, LogOut, Settings } from 'lucide-react';
+import { Search, Sun, Moon, User, LogOut, Settings, LifeBuoy } from 'lucide-react';
 import { supabase } from '@/lib/auth-client';
 import { useTheme } from '@/components/veterinarian/theme-provider';
 import { Button } from '@/components/ui/button';
@@ -69,12 +69,6 @@ export default function VetHeader() {
       
       {/* LEFT: Search Bar */}
       <div className="relative w-96 hidden md:block">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
-        <input
-          type="text"
-          placeholder="Search patients, appointments..."
-          className="w-full pl-10 pr-4 py-2 text-sm border border-border rounded-full bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-        />
       </div>
 
       {/* RIGHT: Actions */}
@@ -127,11 +121,16 @@ export default function VetHeader() {
               <span>Profile</span>
             </DropdownMenuItem>
             
-            <DropdownMenuItem className="cursor-pointer">
+            <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/veterinarian/settings')}>
               <Settings className="mr-2 h-4 w-4" />
               <span>Settings</span>
             </DropdownMenuItem>
-            
+
+            <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/veterinarian/help-support')}>
+              <LifeBuoy className="mr-2 h-4 w-4" />
+              <span>Help & Support</span>
+            </DropdownMenuItem>
+
             <DropdownMenuSeparator />
             
             <DropdownMenuItem 

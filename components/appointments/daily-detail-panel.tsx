@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Syringe, ClipboardList, Plus, Clock, User, PawPrint } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Appointment } from '@/types/appointments';
+import { AppointmentApiResponse as Appointment } from '@/types/appointments';
 
 interface DailyDetailPanelProps {
   selectedDate: string;
@@ -21,13 +21,12 @@ const TIME_SLOTS = [
 
 const typeIcons: Record<string, React.ReactNode> = {
   vaccination: <Syringe className="w-4 h-4 text-blue-600" />,
-  checkup: <ClipboardList className="w-4 h-4 text-green-600" />,
+  wellness: <ClipboardList className="w-4 h-4 text-green-600" />,
   dental: <span className="text-sm">🦷</span>,
   consultation: <ClipboardList className="w-4 h-4 text-purple-600" />,
   surgery: <ClipboardList className="w-4 h-4 text-red-600" />,
   emergency: <ClipboardList className="w-4 h-4 text-red-600" />,
-  grooming: <PawPrint className="w-4 h-4 text-amber-600" />,
-  followup: <ClipboardList className="w-4 h-4 text-teal-600" />,
+  follow_up: <ClipboardList className="w-4 h-4 text-teal-600" />,
 };
 
 const statusColors: Record<string, string> = {
@@ -183,7 +182,7 @@ export default function DailyDetailPanel({
                       </p>
                       <p className="text-xs text-muted-foreground flex items-center gap-1">
                         <User className="w-3 h-3" />
-                        {apt.client?.first_name} {apt.client?.last_name}
+                        {apt.pet?.client?.first_name} {apt.pet?.client?.last_name}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         Dr. {apt.veterinarian?.first_name} {apt.veterinarian?.last_name}

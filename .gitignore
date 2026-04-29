@@ -39,14 +39,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-package-lock.json
-package-lock.json
-package-lock.json
 
 # mcp configurations
 .vscode/
 .postman
 postman/
+.claude/
 
 # scripts
 scripts/
@@ -56,3 +54,14 @@ seed_images/
 
 # supabase migrations and seeds
 supabase/
+
+# packages
+package-lock.json
+package.json
+
+# claude and agent skills
+.agents/
+.claude/
+CLAUDE.md
+GEMINI.md
+skills-lock.json
