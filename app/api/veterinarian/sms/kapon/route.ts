@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { sendSms } from "@/utils/sms";
+import { sendSms } from "@/utils/sms/sms";
 import { createClient } from "@/utils/supabase/server";
 
 export async function POST(request: Request) {

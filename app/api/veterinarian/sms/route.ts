@@ -1,34 +1,85 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sendSms } from "@/utils/sms";
-import { createAdminClient } from "@/utils/supabase/server";
+import { sendSms } from "@/utils/sms/sms";
+import { createClient } from "@/utils/supabase/server";
+import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
 
+// Admin client uses SUPABASE_SERVICE_ROLE_KEY (server-only, bypasses RLS)
+function getAdminClient() {
+  return createSupabaseAdmin(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } },
+  );
+}
+
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createAdminClient();
+    // Verify vet session first
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+    if (authError || !user || user.user_metadata?.role !== "veterinarian") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-    // search params
+    const admin = getAdminClient();
+
     const { searchParams } = new URL(request.url);
-    const limit = searchParams.get("limit") || 10;
-    const offset = searchParams.get("offset") || 0;
+    const limit = Math.min(Number(searchParams.get("limit") || 20), 100);
+    const offset = Number(searchParams.get("offset") || 0);
+    const status = searchParams.get("status");
+    const search = searchParams.get("search");
 
-    // fetch all message history depending on limit and offset
-    const { data: clients, error } = await supabase
+    let query = admin
       .from("notification_logs")
       .select(
         "id, recipient_id, notification_type, subject, content, related_entity_type, delivery_status, is_read, created_at",
+        { count: "exact" },
       )
       .eq("notification_type", "sms")
-      .limit(Number(limit))
       .order("created_at", { ascending: false })
-      .range(Number(offset), Number(offset) + Number(limit) - 1);
+      .range(offset, offset + limit - 1);
 
-    if (error) {
-      throw error;
+    if (status) query = query.eq("delivery_status", status);
+    if (search)
+      query = query.or(`content.ilike.%${search}%,subject.ilike.%${search}%`);
+
+    const { data: logs, error, count } = await query;
+    if (error) throw error;
+
+    // Batch-fetch recipient names from client_profiles
+    const recipientIds = [
+      ...new Set(
+        (logs ?? [])
+          .map((l: any) => l.recipient_id)
+          .filter(Boolean) as string[],
+      ),
+    ];
+
+    let profileMap: Record<
+      string,
+      { first_name: string; last_name: string; phone: string | null }
+    > = {};
+    if (recipientIds.length > 0) {
+      const { data: profiles } = await admin
+        .from("client_profiles")
+        .select("user_id, first_name, last_name, phone")
+        .in("user_id", recipientIds);
+      (profiles ?? []).forEach((p: any) => {
+        profileMap[p.user_id] = p;
+      });
     }
 
-    return NextResponse.json(clients);
+    const enriched = (logs ?? []).map((log: any) => ({
+      ...log,
+      recipient: profileMap[log.recipient_id] ?? null,
+    }));
+
+    return NextResponse.json({ logs: enriched, total: count ?? 0 });
   } catch (error: any) {
     console.error("[GET /api/veterinarian/sms] error:", error);
     return NextResponse.json(
@@ -40,7 +91,16 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createAdminClient();
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+    if (authError || !user || user.user_metadata?.role !== "veterinarian") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const admin = getAdminClient();
     const body = await request.json();
     const { target, message } = body;
 
@@ -54,23 +114,17 @@ export async function POST(request: NextRequest) {
     let clientsToNotify: any[] = [];
 
     if (target === "all") {
-      // Fetch all client user IDs and phones
-      const { data: clients, error: clientsError } = await supabase
+      const { data: clients, error: clientsError } = await admin
         .from("client_profiles")
         .select("user_id, phone, first_name, last_name");
-
-      if (clientsError) {
-        throw clientsError;
-      }
+      if (clientsError) throw clientsError;
       clientsToNotify = clients || [];
     } else {
-      // Fetch specific client
-      const { data: client, error: clientError } = await supabase
+      const { data: client, error: clientError } = await admin
         .from("client_profiles")
         .select("user_id, phone, first_name, last_name")
         .eq("id", target)
         .single();
-
       if (clientError || !client) {
         return NextResponse.json(
           { error: "Client not found" },
@@ -80,12 +134,11 @@ export async function POST(request: NextRequest) {
       clientsToNotify = [client];
     }
 
-    // if no clients to notify
     if (clientsToNotify.length === 0) {
       return NextResponse.json({ message: "No clients to notify" });
     }
 
-    // Prepare notifications for logging (optional but good practice)
+    // Log to notification_logs before sending
     const notifications = clientsToNotify.map((client) => ({
       recipient_id: client.user_id,
       notification_type: "sms",
@@ -97,28 +150,22 @@ export async function POST(request: NextRequest) {
       created_at: new Date().toISOString(),
     }));
 
-    // Batch insert notifications
-    const { error: insertError } = await supabase
+    const { error: insertError } = await admin
       .from("notification_logs")
       .insert(notifications);
 
     if (insertError) {
       console.warn("Failed to insert notification logs:", insertError);
-      // We don't throw here to ensure SMS still attempts to send even if logging fails
     }
 
-    // sending sms concurrently
+    // Send SMS concurrently
     let sentCount = 0;
     let failCount = 0;
     await Promise.all(
       clientsToNotify.map(async (client) => {
         if (client.phone) {
           const success = await sendSms(client.phone, message);
-          if (success) {
-            sentCount++;
-          } else {
-            failCount++;
-          }
+          success ? sentCount++ : failCount++;
         } else {
           failCount++;
         }

@@ -7,7 +7,6 @@ import Image from 'next/image';
 import { supabase } from '@/lib/auth-client';
 import {
   LayoutDashboard,
-  Users,
   Calendar,
   Settings,
   LifeBuoy,
@@ -17,10 +16,9 @@ import {
   PillBottle,
   Syringe,
   ShieldAlert,
-  Flag,
   FileText,
   BarChart2,
-  Camera
+  Camera,
 } from "lucide-react";
 
 interface AdminSidebarProps {

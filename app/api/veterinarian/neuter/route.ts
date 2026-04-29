@@ -1,20 +1,18 @@
-import { NextResponse } from "next/server";
-import { NextRequest } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
 import { createClient } from "@/utils/supabase/server";
-import { sendSms } from "@/utils/sms";
+import { sendSms } from "@/utils/sms/sms";
 
 export const dynamic = "force-dynamic";
 
-/**
- * GET /api/veterinarian/neuter
- * Returns today's kapon/surgery appointments that have NOT yet had a neuter
- * procedure recorded. Includes all statuses so already-completed consultations
- * are still visible in the queue.
- */
+// Fetch today's kapon/surgery appointments that have not yet been recorded
+
 export async function GET() {
   try {
     const supabase = await createClient();
-    const today = new Date().toISOString().split("T")[0];
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(todayStart);
+    todayEnd.setDate(todayEnd.getDate() + 1);
 
     // Fetch all kapon/surgery appointments for today regardless of status
     const { data: appointments, error: apptError } = await supabase
@@ -44,6 +42,8 @@ export async function GET() {
         "in_progress",
         "completed",
       ])
+      .gte("scheduled_start", todayStart.toISOString())
+      .lt("scheduled_start", todayEnd.toISOString())
       .order("scheduled_start", { ascending: true });
 
     if (apptError) throw apptError;

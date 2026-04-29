@@ -1,17 +1,119 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { handleError } from "@/utils/error-handler";
+import { sendSms } from "@/utils/sms/sms";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-// ── Supabase clients ─────────────────────────────────────────────────────────
+const kapon_reminder_message =
+  "Hi, your pet is scheduled to procedure for kapon tomorrow, please be on time and prepare exact amount of payment";
 
-/** Service-role client — used for privileged DB operations (bypasses RLS). */
+async function sendReminderFallback(
+  origin: string,
+  recipientId: string,
+  relatedEntityId: string,
+): Promise<boolean> {
+  try {
+    const response = await fetch(`${origin}/api/notifications/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        recipient_id: recipientId,
+        notification_type: "appointment_reminder",
+        subject: "Kapon Procedure Reminder",
+        content: kapon_reminder_message,
+        related_entity_type: "appointment",
+        related_entity_id: relatedEntityId,
+      }),
+    });
+    return response.ok;
+  } catch (error) {
+    console.error("[GET /api/appointments] Reminder fallback failed:", error);
+    return false;
+  }
+}
 
-// ── Response helpers ──────────────────────────────────────────────────────────
+async function maybeSendKaponReminders(
+  request: NextRequest,
+  supabase: any,
+): Promise<void> {
+  const now = new Date();
+  const tomorrowStart = new Date(now);
+  tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+  tomorrowStart.setHours(0, 0, 0, 0);
 
-/** Returns a consistent error JSON response. */
+  const tomorrowEnd = new Date(tomorrowStart);
+  tomorrowEnd.setDate(tomorrowEnd.getDate() + 1);
+
+  const reminderWindowStart = new Date(tomorrowStart);
+  reminderWindowStart.setHours(reminderWindowStart.getHours() - 12);
+  if (now < reminderWindowStart || now >= tomorrowStart) return;
+
+  const { data: kaponAppointments, error } = await supabase
+    .from("appointments")
+    .select(
+      `
+      id,
+      scheduled_start,
+      reminder_sent,
+      pet:pets!appointments_pet_id_fkey(
+        id,
+        name,
+        client:client_profiles!pets_owner_id_fkey(
+          user_id,
+          phone
+        )
+      )
+    `,
+    )
+    .in("appointment_type", ["kapon", "surgery"])
+    .in("appointment_status", ["confirmed", "pending"])
+    .gte("scheduled_start", tomorrowStart.toISOString())
+    .lt("scheduled_start", tomorrowEnd.toISOString())
+    .is("reminder_sent", false);
+
+  if (error || !kaponAppointments || kaponAppointments.length === 0) return;
+
+  await Promise.all(
+    kaponAppointments.map(async (appointment: any) => {
+      const phone = appointment?.pet?.client?.phone;
+      const recipientId = appointment?.pet?.client?.user_id;
+
+      let smsSent = false;
+      if (phone) {
+        try {
+          smsSent = await sendSms(phone, kapon_reminder_message);
+        } catch (smsError) {
+          console.error(
+            "[GET /api/appointments] Kapon reminder SMS failed:",
+            smsError,
+          );
+        }
+      }
+
+      let fallbackSent = false;
+      if (!smsSent && recipientId) {
+        fallbackSent = await sendReminderFallback(
+          request.nextUrl.origin,
+          recipientId,
+          appointment.id,
+        );
+      }
+
+      if (smsSent || fallbackSent) {
+        await supabase
+          .from("appointments")
+          .update({
+            reminder_sent: true,
+            reminder_sent_at: new Date().toISOString(),
+          })
+          .eq("id", appointment.id);
+      }
+    }),
+  );
+}
+
 function jsonError(message: string, status: number, details?: unknown) {
   return NextResponse.json(
     { error: message, ...(details !== undefined && { details }) },
@@ -19,12 +121,6 @@ function jsonError(message: string, status: number, details?: unknown) {
   );
 }
 
-// ── Auth / authorization helpers ──────────────────────────────────────────────
-
-/**
- * Verifies the request carries a valid session via the cookie-based client.
- * Returns the authenticated user or a ready-to-send 401 response.
- */
 async function requireUser(req: NextRequest) {
   const cookieClient = await createClient();
   const { data, error } = await cookieClient.auth.getUser();
@@ -37,11 +133,6 @@ async function requireUser(req: NextRequest) {
   return { user: data.user, response: null };
 }
 
-/**
- * Checks that the authenticated user holds one of the allowed roles.
- * Role is expected in user_metadata.role (set during sign-up).
- * Returns a ready-to-send 403 response if the check fails, otherwise null.
- */
 function requireRole(
   user: { user_metadata?: Record<string, unknown> },
   allowedRoles: string[],
@@ -60,6 +151,7 @@ export async function GET(request: NextRequest) {
   try {
     // DB query — service-role client to bypass RLS
     const supabase = await createClient();
+    await maybeSendKaponReminders(request, supabase);
     const { searchParams } = new URL(request.url);
 
     const status = searchParams.get("status");
@@ -131,7 +223,7 @@ export async function GET(request: NextRequest) {
     // Delegate Supabase DB error to centralized handler
     if (error) return handleError(error, "GET /api/appointments");
 
-    // 6. Return consistent JSON + correct status
+    // Return consistent JSON + correct status
     const transformedData = (data || []).map((appointment: any) => ({
       ...appointment,
       client: appointment.pet?.client || null,
