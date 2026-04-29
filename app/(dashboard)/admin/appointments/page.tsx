@@ -13,8 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Search, Filter, Eye, Phone, Mail } from 'lucide-react';
-import { AppointmentApiResponse as Appointment } from '@/types/appointments';
+import { AppointmentResponse as Appointment } from '@/types/appointments';
 
 import HeatmapCalendar from '@/components/appointments/heatmap-calendar';
 import DailyDetailPanel from '@/components/appointments/daily-detail-panel';
@@ -30,13 +29,14 @@ const statusColors: Record<string, string> = {
 };
 
 const appointmentTypes: Record<string, string> = {
-  wellness: 'Wellness',
+  checkup: 'Checkup',
   consultation: 'Consultation',
   vaccination: 'Vaccination',
   surgery: 'Surgery',
   emergency: 'Emergency',
   dental: 'Dental',
-  follow_up: 'Follow-up',
+  grooming: 'Grooming',
+  followup: 'Follow-up',
 };
 
 const SLOTS_PER_DAY = 17;
@@ -100,7 +100,7 @@ export default function AppointmentsPage() {
     const now = new Date();
     const in7Days = new Date();
     in7Days.setDate(now.getDate() + 7);
-    
+
     const year = now.getFullYear();
     const month = now.getMonth();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -137,7 +137,7 @@ export default function AppointmentsPage() {
   }, [allAppointments]);
 
   const selectedDateAppointments = useMemo(() => {
-    return allAppointments.filter((apt) => 
+    return allAppointments.filter((apt) =>
       apt.scheduled_start && toLocalDateStr(new Date(apt.scheduled_start)) === selectedDate
     );
   }, [allAppointments, selectedDate]);
@@ -235,14 +235,14 @@ export default function AppointmentsPage() {
             <div className="flex flex-wrap items-center gap-3 mb-6 pb-4 border-b">
               <div className="relative flex-grow max-w-xs">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input 
-                  placeholder="Search pet or owner..." 
-                  className="pl-9 h-9" 
+                <Input
+                  placeholder="Search pet or owner..."
+                  className="pl-9 h-9"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
-              <select 
+              <select
                 className="h-9 px-3 border rounded-md text-sm bg-background"
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
@@ -252,7 +252,7 @@ export default function AppointmentsPage() {
                 <option value="confirmed">Confirmed</option>
                 <option value="completed">Completed</option>
               </select>
-              <select 
+              <select
                 className="h-9 px-3 border rounded-md text-sm bg-background"
                 value={vetFilter}
                 onChange={(e) => setVetFilter(e.target.value)}
@@ -261,7 +261,7 @@ export default function AppointmentsPage() {
                 {veterinarians.map(v => <option key={v.id} value={v.id}>Dr. {v.last_name}</option>)}
               </select>
               {(searchQuery || statusFilter !== 'all' || vetFilter) && (
-                <Button variant="ghost" size="sm" onClick={() => {setSearchQuery(''); setStatusFilter('all'); setVetFilter('')}}>
+                <Button variant="ghost" size="sm" onClick={() => { setSearchQuery(''); setStatusFilter('all'); setVetFilter('') }}>
                   <X className="w-4 h-4 mr-1" /> Reset
                 </Button>
               )}
@@ -281,215 +281,21 @@ export default function AppointmentsPage() {
             selectedDate={selectedDate}
             appointments={selectedDateAppointments}
             onAddWalkIn={(d, t) => console.log(d, t)}
-            onSelectAppointment={handleOpenAppointment} 
+            onSelectAppointment={handleOpenAppointment}
           />
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="bg-card border border-border rounded-xl shadow-sm p-4 space-y-4">
-        <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-muted-foreground" />
-          <h3 className="font-semibold">Filters</h3>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="text-sm font-medium mb-2 block">Search</label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Appointment #, reason..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="text-sm font-medium mb-2 block">Status</label>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full px-3 py-2 border border-border rounded-md bg-background"
-            >
-              <option value="all">All Statuses</option>
-              <option value="pending">Pending</option>
-              <option value="confirmed">Confirmed</option>
-              <option value="in_progress">In Progress</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
-              <option value="no_show">No Show</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="text-sm font-medium mb-2 block">Veterinarian</label>
-            <select
-              value={vetFilter}
-              onChange={(e) => setVetFilter(e.target.value)}
-              className="w-full px-3 py-2 border border-border rounded-md bg-background"
-            >
-              <option value="">All Veterinarians</option>
-              {veterinarians.map((vet) => (
-                <option key={vet.id} value={vet.id}>
-                  Dr. {vet.first_name} {vet.last_name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setStatusFilter('all');
-              setVetFilter('');
-              setSearchQuery('');
-            }}
-          >
-            Clear Filters
-          </Button>
-        </div>
-      </div>
-
-      {/* Appointments Table */}
-      <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Appointment #</TableHead>
-              <TableHead>Pet & Owner</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Date & Time</TableHead>
-              <TableHead>Veterinarian</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={7} className="text-center py-8">
-                  Loading appointments...
-                </TableCell>
-              </TableRow>
-            ) : allAppointments.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                  No appointments found
-                </TableCell>
-              </TableRow>
-            ) : (
-              paginatedAppointments.map((appointment) => (
-                <TableRow key={appointment.id}>
-                  <TableCell className="font-mono text-sm">
-                    {appointment.appointment_number}
-                    {appointment.is_emergency && (
-                      <Badge variant="destructive" className="ml-2 text-xs">
-                        Emergency
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <div>
-                      <p className="font-medium">{appointment.pet?.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {appointment.pet?.client?.first_name} {appointment.pet?.client?.last_name}
-                      </p>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">
-                      {appointmentTypes[appointment.appointment_type] || appointment.appointment_type}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div>
-                      <p className="font-medium">{formatDate(appointment.scheduled_start)}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {formatTime(appointment.scheduled_start)} –{' '}
-                        {formatTime(appointment.scheduled_end)}
-                      </p>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div>
-                      <p className="font-medium">
-                        Dr. {appointment.veterinarian?.first_name}{' '}
-                        {appointment.veterinarian?.last_name}
-                      </p>
-                      {appointment.veterinarian?.specializations && (
-                        <p className="text-xs text-muted-foreground">
-                          {appointment.veterinarian.specializations[0]}
-                        </p>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge className={statusColors[appointment.appointment_status]}>
-                      {appointment.appointment_status.replace('_', ' ')}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleViewDetails(appointment)}
-                    >
-                      <Eye className="w-4 h-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-
-        {/* Pagination Controls */}
-        {!loading && allAppointments.length > ROWS_PER_PAGE && (
-          <div className="flex items-center justify-between border-t border-border px-4 py-3">
-            <p className="text-sm text-muted-foreground">
-              Showing {(currentPage - 1) * ROWS_PER_PAGE + 1}–
-              {Math.min(currentPage * ROWS_PER_PAGE, allAppointments.length)} of{' '}
-              {allAppointments.length}
-            </p>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={currentPage <= 1}
-                onClick={() => setCurrentPage((p) => p - 1)}
-              >
-                Previous
-              </Button>
-              <span className="text-sm font-medium">
-                Page {currentPage} of {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={currentPage >= totalPages}
-                onClick={() => setCurrentPage((p) => p + 1)}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Details Dialog */}
-      <Dialog open={showDetails} onOpenChange={setShowDetails}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <Dialog open={showDetails} onOpenChange={(open) => {
+        setShowDetails(open);
+        if (!open) setIsEditingDetails(false);
+      }}>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Appointment Details</DialogTitle>
             <DialogDescription>View and update booking information</DialogDescription>
           </DialogHeader>
-          
+
           {selectedAppointment && (
             <div className="space-y-6">
               <div className="flex gap-2">
@@ -506,18 +312,10 @@ export default function AppointmentsPage() {
                   <p className="text-sm text-muted-foreground">{selectedAppointment.pet?.species} • {selectedAppointment.pet?.breed}</p>
                 </div>
                 <div className="bg-secondary/20 rounded-xl p-4 space-y-2">
-                  <p>
-                    <span className="font-medium">Name:</span>{' '}
-                    {selectedAppointment.pet?.client?.first_name}{' '}
-                    {selectedAppointment.pet?.client?.last_name}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <Phone className="w-4 h-4" />
-                    <span>{selectedAppointment.pet?.client?.phone}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Mail className="w-4 h-4" />
-                    <span>{selectedAppointment.pet?.client?.email?.email}</span>
+                  <h4 className="text-xs font-bold uppercase text-muted-foreground">Owner Details</h4>
+                  <p className="font-medium text-lg">{selectedAppointment.client?.first_name} {selectedAppointment.client?.last_name}</p>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Phone className="w-3 h-3" /> {selectedAppointment.client?.phone}
                   </div>
                 </div>
               </div>
