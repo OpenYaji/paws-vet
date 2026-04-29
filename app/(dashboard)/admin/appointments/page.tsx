@@ -1,18 +1,11 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Calendar } from 'lucide-react';
+import { Calendar, Search, X, Plus, Phone } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import {
   Dialog,
   DialogContent,
@@ -46,8 +39,7 @@ const appointmentTypes: Record<string, string> = {
   follow_up: 'Follow-up',
 };
 
-const SLOTS_PER_DAY = 17; // 9:00–17:00 in 30-min increments
-const ROWS_PER_PAGE = 7;
+const SLOTS_PER_DAY = 17;
 
 export default function AppointmentsPage() {
   const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
@@ -55,21 +47,28 @@ export default function AppointmentsPage() {
   const [loading, setLoading] = useState(true);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [showDetails, setShowDetails] = useState(false);
+  const [isEditingDetails, setIsEditingDetails] = useState(false);
+  const [editType, setEditType] = useState('consultation');
+  const [editReason, setEditReason] = useState('');
+  const [isSavingAction, setIsSavingAction] = useState(false);
 
-  // Calendar & date
-  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const toLocalDateStr = (date: Date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
+  const todayStr = useMemo(() => toLocalDateStr(new Date()), []);
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
+  const router = useRouter();
 
-  // Filters for table
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [vetFilter, setVetFilter] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
 
-  // Fetch all appointments for the month (broad fetch)
   const fetchAppointments = useCallback(async () => {
     setLoading(true);
-    setCurrentPage(1);
     try {
       const params = new URLSearchParams();
       if (statusFilter !== 'all') params.append('status', statusFilter);
@@ -77,11 +76,6 @@ export default function AppointmentsPage() {
       if (searchQuery) params.append('search', searchQuery);
 
       const response = await fetch(`/api/appointments?${params.toString()}`);
-      if (!response.ok) {
-        setAllAppointments([]);
-        setLoading(false);
-        return;
-      }
       const data = await response.json();
       setAllAppointments(Array.isArray(data) ? data : []);
     } catch {
@@ -91,143 +85,142 @@ export default function AppointmentsPage() {
     }
   }, [statusFilter, vetFilter, searchQuery]);
 
-  const fetchVeterinarians = useCallback(async () => {
-    try {
-      const response = await fetch('/api/veterinarians');
-      const data = await response.json();
+  useEffect(() => {
+    const fetchVets = async () => {
+      const res = await fetch('/api/veterinarians');
+      const data = await res.json();
       setVeterinarians(Array.isArray(data) ? data : []);
-    } catch {
-      setVeterinarians([]);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchVeterinarians();
-  }, [fetchVeterinarians]);
-
-  useEffect(() => {
+    };
+    fetchVets();
     fetchAppointments();
   }, [fetchAppointments]);
 
-  // --- Derived data ---
+  // --- Dynamic Stats Calculations ---
+  const { appointmentsToday, upcoming7Days, monthlyBooked, monthlyCapacity } = useMemo(() => {
+    const now = new Date();
+    const in7Days = new Date();
+    in7Days.setDate(now.getDate() + 7);
+    
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-  // Heatmap counts: { "2025-01-15": 4 }
+    let workDays = 0;
+    for (let d = 1; d <= daysInMonth; d++) {
+      if (new Date(year, month, d).getDay() !== 0) workDays++;
+    }
+
+    return {
+      appointmentsToday: allAppointments.filter(apt => apt.scheduled_start && toLocalDateStr(new Date(apt.scheduled_start)) === todayStr).length,
+      upcoming7Days: allAppointments.filter(apt => {
+        if (!apt.scheduled_start) return false;
+        const d = new Date(apt.scheduled_start);
+        return d >= now && d <= in7Days;
+      }).length,
+      monthlyBooked: allAppointments.filter(apt => {
+        if (!apt.scheduled_start) return false;
+        const d = new Date(apt.scheduled_start);
+        return d.getFullYear() === year && d.getMonth() === month;
+      }).length,
+      monthlyCapacity: workDays * SLOTS_PER_DAY
+    };
+  }, [allAppointments, todayStr]);
+
   const appointmentCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     allAppointments.forEach((apt) => {
       if (!apt.scheduled_start) return;
-      const dateKey = new Date(apt.scheduled_start).toISOString().split('T')[0];
+      const dateKey = toLocalDateStr(new Date(apt.scheduled_start));
       counts[dateKey] = (counts[dateKey] || 0) + 1;
     });
     return counts;
   }, [allAppointments]);
 
-  // Appointments for selected date
   const selectedDateAppointments = useMemo(() => {
-    if (!selectedDate) return [];
-    return allAppointments.filter((apt) => {
-      if (!apt.scheduled_start) return false;
-      const dateKey = new Date(apt.scheduled_start).toISOString().split('T')[0];
-      return dateKey === selectedDate;
-    });
+    return allAppointments.filter((apt) => 
+      apt.scheduled_start && toLocalDateStr(new Date(apt.scheduled_start)) === selectedDate
+    );
   }, [allAppointments, selectedDate]);
 
-  // Stats
-  const appointmentsToday = useMemo(() => {
-    return allAppointments.filter((apt) => {
-      if (!apt.scheduled_start) return false;
-      return new Date(apt.scheduled_start).toISOString().split('T')[0] === todayStr;
-    }).length;
-  }, [allAppointments, todayStr]);
-
-  const upcoming7Days = useMemo(() => {
-    const now = new Date();
-    const in7 = new Date(now);
-    in7.setDate(in7.getDate() + 7);
-    return allAppointments.filter((apt) => {
-      if (!apt.scheduled_start) return false;
-      const d = new Date(apt.scheduled_start);
-      return d >= now && d <= in7;
-    }).length;
-  }, [allAppointments]);
-
-  const { monthlyBooked, monthlyCapacity } = useMemo(() => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-
-    // Count only weekdays for capacity (Mon–Sat = 6 days/week)
-    let workDays = 0;
-    for (let d = 1; d <= daysInMonth; d++) {
-      const day = new Date(year, month, d).getDay();
-      if (day !== 0) workDays++; // exclude Sunday
-    }
-
-    const booked = allAppointments.filter((apt) => {
-      if (!apt.scheduled_start) return false;
-      const d = new Date(apt.scheduled_start);
-      return d.getFullYear() === year && d.getMonth() === month;
-    }).length;
-
-    return {
-      monthlyBooked: booked,
-      monthlyCapacity: workDays * SLOTS_PER_DAY,
-    };
-  }, [allAppointments]);
-
-  // --- Pagination ---
-  const totalPages = Math.max(1, Math.ceil(allAppointments.length / ROWS_PER_PAGE));
-  const paginatedAppointments = useMemo(() => {
-    const start = (currentPage - 1) * ROWS_PER_PAGE;
-    return allAppointments.slice(start, start + ROWS_PER_PAGE);
-  }, [allAppointments, currentPage]);
-
-  // --- Helpers ---
-
-  const formatDate = (dateString: string) =>
-    new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-
-  const formatTime = (dateString: string) =>
-    new Date(dateString).toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-    });
-
-  const handleViewDetails = (appointment: Appointment) => {
-    setSelectedAppointment(appointment);
+  const handleOpenAppointment = (apt: Appointment) => {
+    setSelectedAppointment(apt);
     setShowDetails(true);
   };
 
-  const handleAddWalkIn = (date: string, time: string) => {
-    // Placeholder: you can wire this to a creation dialog or API
-    alert(`Add walk-in for ${date} at ${time}`);
+  const handleCloseDetails = () => {
+    setShowDetails(false);
+    setIsEditingDetails(false);
   };
 
+  const updateAppointment = useCallback(
+    async (appointmentId: string, updateData: Record<string, unknown>) => {
+      setIsSavingAction(true);
+      try {
+        const response = await fetch('/api/appointments', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: appointmentId, ...updateData }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to update appointment');
+        }
+
+        const updated = await response.json();
+        setSelectedAppointment((prev) => (prev && prev.id === updated.id ? { ...prev, ...updated } : prev));
+        await fetchAppointments();
+        router.refresh();
+      } finally {
+        setIsSavingAction(false);
+      }
+    },
+    [fetchAppointments, router],
+  );
+
+  const handleCheckIn = async () => {
+    if (!selectedAppointment) return;
+    await updateAppointment(selectedAppointment.id, {
+      appointment_status: 'in_progress',
+      checked_in_at: new Date().toISOString(),
+    });
+  };
+
+  const handleStartEdit = () => {
+    if (!selectedAppointment) return;
+    setEditType(selectedAppointment.appointment_type || 'consultation');
+    setEditReason(selectedAppointment.reason_for_visit || '');
+    setIsEditingDetails(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!selectedAppointment) return;
+    await updateAppointment(selectedAppointment.id, {
+      appointment_type: editType,
+      reason_for_visit: editReason,
+    });
+    setIsEditingDetails(false);
+  };
+
+  const formatDate = (d: string) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const formatTime = (d: string) => new Date(d).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
   return (
-    <main className="space-y-6">
-      {/* Header */}
-{/* ═══════════ HEADER SECTION ═══════════ */}
-{/* ═══════════ APPOINTMENTS HEADER ═══════════ */}
-<div className="flex items-center gap-3 mb-6">
-  {/* Icon Container using theme variables */}
-  <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center">
-    <Calendar className="h-5 w-5 text-primary-foreground" />
-  </div>
-  
-  <div>
-    <h1 className="text-2xl font-bold text-foreground">Appointments</h1>
-    <p className="text-sm text-muted-foreground">
-      View and manage all pet clinic schedules and visits
-    </p>
-  </div>
-</div>
-      {/* Stats Dashboard */}
+    <main className="max-w-[1600px] mx-auto space-y-6">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center text-primary-foreground">
+            <Calendar className="h-5 w-5" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">Appointments</h1>
+            <p className="text-sm text-muted-foreground">Monitor and manage clinic schedules</p>
+          </div>
+        </div>
+        <Button className="gap-2">
+          <Plus className="w-4 h-4" /> New Booking
+        </Button>
+      </div>
+
       <StatsDashboard
         appointmentsToday={appointmentsToday}
         upcoming7Days={upcoming7Days}
@@ -235,23 +228,60 @@ export default function AppointmentsPage() {
         monthlyCapacity={monthlyCapacity}
       />
 
-      {/* Calendar + Daily Detail */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Heatmap Calendar — 2 cols */}
-        <div className="lg:col-span-2">
-          <HeatmapCalendar
-            appointmentCounts={appointmentCounts}
-            selectedDate={selectedDate}
-            onDateSelect={setSelectedDate}
-          />
+      <div className="grid grid-cols-12 gap-6 items-start">
+        {/* HEATMAP CALENDAR (7/12) */}
+        <div className="col-span-12 lg:col-span-7 space-y-4">
+          <div className="bg-card border rounded-xl shadow-sm p-5">
+            <div className="flex flex-wrap items-center gap-3 mb-6 pb-4 border-b">
+              <div className="relative flex-grow max-w-xs">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input 
+                  placeholder="Search pet or owner..." 
+                  className="pl-9 h-9" 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+              <select 
+                className="h-9 px-3 border rounded-md text-sm bg-background"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <option value="all">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="confirmed">Confirmed</option>
+                <option value="completed">Completed</option>
+              </select>
+              <select 
+                className="h-9 px-3 border rounded-md text-sm bg-background"
+                value={vetFilter}
+                onChange={(e) => setVetFilter(e.target.value)}
+              >
+                <option value="">All Vets</option>
+                {veterinarians.map(v => <option key={v.id} value={v.id}>Dr. {v.last_name}</option>)}
+              </select>
+              {(searchQuery || statusFilter !== 'all' || vetFilter) && (
+                <Button variant="ghost" size="sm" onClick={() => {setSearchQuery(''); setStatusFilter('all'); setVetFilter('')}}>
+                  <X className="w-4 h-4 mr-1" /> Reset
+                </Button>
+              )}
+            </div>
+
+            <HeatmapCalendar
+              appointmentCounts={appointmentCounts}
+              selectedDate={selectedDate}
+              onDateSelect={setSelectedDate}
+            />
+          </div>
         </div>
 
-        {/* Daily Detail Panel — 1 col */}
-        <div className="lg:col-span-1 min-h-[400px]">
+        {/* DAILY SCHEDULE (5/12) */}
+        <div className="col-span-12 lg:col-span-5">
           <DailyDetailPanel
             selectedDate={selectedDate}
             appointments={selectedDateAppointments}
-            onAddWalkIn={handleAddWalkIn}
+            onAddWalkIn={(d, t) => console.log(d, t)}
+            onSelectAppointment={handleOpenAppointment} 
           />
         </div>
       </div>
@@ -457,50 +487,24 @@ export default function AppointmentsPage() {
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Appointment Details</DialogTitle>
-            <DialogDescription>
-              Appointment #{selectedAppointment?.appointment_number}
-            </DialogDescription>
+            <DialogDescription>View and update booking information</DialogDescription>
           </DialogHeader>
-
+          
           {selectedAppointment && (
             <div className="space-y-6">
-              {/* Status and Type */}
-              <div className="flex gap-2 flex-wrap">
+              <div className="flex gap-2">
                 <Badge className={statusColors[selectedAppointment.appointment_status]}>
                   {selectedAppointment.appointment_status.replace('_', ' ')}
                 </Badge>
-                <Badge variant="outline">
-                  {appointmentTypes[selectedAppointment.appointment_type] ||
-                    selectedAppointment.appointment_type}
-                </Badge>
-                {selectedAppointment.is_emergency && (
-                  <Badge variant="destructive">Emergency</Badge>
-                )}
+                <Badge variant="outline">{appointmentTypes[selectedAppointment.appointment_type]}</Badge>
               </div>
 
-              {/* Pet Information */}
-              <div>
-                <h4 className="font-semibold mb-2">Pet Information</h4>
+              <div className="grid grid-cols-2 gap-4">
                 <div className="bg-secondary/20 rounded-xl p-4 space-y-2">
-                  <p>
-                    <span className="font-medium">Name:</span> {selectedAppointment.pet?.name}
-                  </p>
-                  <p>
-                    <span className="font-medium">Species:</span>{' '}
-                    {selectedAppointment.pet?.species}
-                  </p>
-                  {selectedAppointment.pet?.breed && (
-                    <p>
-                      <span className="font-medium">Breed:</span>{' '}
-                      {selectedAppointment.pet.breed}
-                    </p>
-                  )}
+                  <h4 className="text-xs font-bold uppercase text-muted-foreground">Pet Information</h4>
+                  <p className="font-medium text-lg">{selectedAppointment.pet?.name}</p>
+                  <p className="text-sm text-muted-foreground">{selectedAppointment.pet?.species} • {selectedAppointment.pet?.breed}</p>
                 </div>
-              </div>
-
-              {/* Owner Information */}
-              <div>
-                <h4 className="font-semibold mb-2">Owner Information</h4>
                 <div className="bg-secondary/20 rounded-xl p-4 space-y-2">
                   <p>
                     <span className="font-medium">Name:</span>{' '}
@@ -518,59 +522,59 @@ export default function AppointmentsPage() {
                 </div>
               </div>
 
-              {/* Veterinarian */}
-              <div>
-                <h4 className="font-semibold mb-2">Assigned Veterinarian</h4>
-                <div className="bg-secondary/20 rounded-xl p-4">
-                  <p className="font-medium">
-                    Dr. {selectedAppointment.veterinarian?.first_name}{' '}
-                    {selectedAppointment.veterinarian?.last_name}
-                  </p>
-                  {selectedAppointment.veterinarian?.specializations && (
-                    <p className="text-sm text-muted-foreground">
-                      Specializations:{' '}
-                      {selectedAppointment.veterinarian.specializations.join(', ')}
-                    </p>
+              <div className="border rounded-xl p-4 bg-card space-y-3">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-muted-foreground">Scheduled Time:</span>
+                  <span className="font-semibold">{formatDate(selectedAppointment.scheduled_start!)} @ {formatTime(selectedAppointment.scheduled_start!)}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-muted-foreground">Veterinarian:</span>
+                  <span className="font-semibold">Dr. {selectedAppointment.veterinarian?.first_name} {selectedAppointment.veterinarian?.last_name}</span>
+                </div>
+                <div className="pt-2 border-t mt-2 space-y-2">
+                  <span className="text-xs font-bold uppercase text-muted-foreground block">Reason for Visit</span>
+                  {isEditingDetails ? (
+                    <>
+                      <select
+                        className="h-9 px-3 border rounded-md text-sm bg-background w-full"
+                        value={editType}
+                        onChange={(e) => setEditType(e.target.value)}
+                        disabled={isSavingAction}
+                      >
+                        {Object.entries(appointmentTypes).map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                      <Input
+                        value={editReason}
+                        onChange={(e) => setEditReason(e.target.value)}
+                        placeholder="Reason for visit"
+                        disabled={isSavingAction}
+                      />
+                    </>
+                  ) : (
+                    <p className="text-sm">{selectedAppointment.reason_for_visit}</p>
                   )}
                 </div>
               </div>
 
-              {/* Appointment Details */}
-              <div>
-                <h4 className="font-semibold mb-2">Appointment Details</h4>
-                <div className="bg-secondary/20 rounded-xl p-4 space-y-2">
-                  <p>
-                    <span className="font-medium">Scheduled:</span>{' '}
-                    {formatDate(selectedAppointment.scheduled_start)} at{' '}
-                    {formatTime(selectedAppointment.scheduled_start)}
-                  </p>
-                  <p>
-                    <span className="font-medium">Duration:</span>{' '}
-                    {formatTime(selectedAppointment.scheduled_start)} –{' '}
-                    {formatTime(selectedAppointment.scheduled_end)}
-                  </p>
-                  <p>
-                    <span className="font-medium">Reason:</span>{' '}
-                    {selectedAppointment.reason_for_visit}
-                  </p>
-                  {selectedAppointment.special_instructions && (
-                    <p>
-                      <span className="font-medium">Special Instructions:</span>{' '}
-                      {selectedAppointment.special_instructions}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex gap-2 pt-4">
-                <Button variant="outline" className="flex-1">
-                  Edit
-                </Button>
-                <Button variant="outline" className="flex-1">
-                  Cancel Appointment
-                </Button>
-                <Button className="flex-1 bg-primary">Check In</Button>
+              <div className="flex gap-2 pt-2">
+                {isEditingDetails ? (
+                  <>
+                    <Button variant="outline" className="flex-1" onClick={() => setIsEditingDetails(false)} disabled={isSavingAction}>Discard</Button>
+                    <Button className="flex-1" onClick={handleSaveEdit} disabled={isSavingAction}>Save</Button>
+                  </>
+                ) : (
+                  <>
+                    <Button variant="outline" className="flex-1" onClick={handleStartEdit} disabled={isSavingAction}>Edit</Button>
+                    <Button variant="outline" className="flex-1 text-destructive" onClick={handleCloseDetails} disabled={isSavingAction}>Cancel</Button>
+                    {selectedAppointment.appointment_status !== 'completed' && (
+                      <Button className="flex-1" onClick={handleCheckIn} disabled={isSavingAction}>Check In</Button>
+                    )}
+                  </>
+                )}
               </div>
             </div>
           )}

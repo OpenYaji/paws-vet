@@ -1,4 +1,4 @@
-    'use client';
+'use client';
 
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -11,6 +11,8 @@ interface DailyDetailPanelProps {
   selectedDate: string;
   appointments: Appointment[];
   onAddWalkIn?: (date: string, time: string) => void;
+  // 1. ADDED THIS: The panel now expects a function when an appointment is clicked
+  onSelectAppointment?: (appointment: Appointment) => void; 
 }
 
 const TIME_SLOTS = [
@@ -49,6 +51,7 @@ export default function DailyDetailPanel({
   selectedDate,
   appointments,
   onAddWalkIn,
+  onSelectAppointment, // 2. IMPORTED IT HERE
 }: DailyDetailPanelProps) {
   const [activeTab, setActiveTab] = useState<'taken' | 'available'>('taken');
 
@@ -65,10 +68,12 @@ export default function DailyDetailPanel({
   // Determine which slots are taken
   const takenSlots = new Set<string>();
   appointments.forEach((apt) => {
+    if (!apt.scheduled_start || !apt.scheduled_end) return;
     const start = new Date(apt.scheduled_start);
     const hh = start.getHours().toString().padStart(2, '0');
     const mm = start.getMinutes().toString().padStart(2, '0');
     takenSlots.add(`${hh}:${mm}`);
+    
     // Also mark the next 30-min slot if appointment spans it
     const end = new Date(apt.scheduled_end);
     const diffMin = (end.getTime() - start.getTime()) / 60000;
@@ -156,7 +161,13 @@ export default function DailyDetailPanel({
               return (
                 <div
                   key={apt.id}
-                  className="border border-border rounded-xl p-3 space-y-2 hover:shadow-sm transition-shadow"
+                  // 3. ADDED THIS: Trigger the modal click here!
+                  onClick={() => onSelectAppointment && onSelectAppointment(apt)} 
+                  className={cn(
+                    "border border-border rounded-xl p-3 space-y-2 transition-all",
+                    // 4. ADDED THIS: Makes cursor a pointer and highlights on hover
+                    onSelectAppointment ? "cursor-pointer hover:border-primary hover:shadow-md hover:bg-muted/30" : "hover:shadow-sm"
+                  )}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
