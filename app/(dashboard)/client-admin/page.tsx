@@ -376,7 +376,7 @@ function ClientAdminPageInner() {
     isLoading: appointmentsLoading,
     mutate: mutateAppointments,
   } = useSWR(
-    activeTab === 'appointments' ? 'cms-appointments' : null,
+    ['appointments', 'regular_appointments', 'outreach_appointments'].includes(activeTab) ? 'cms-appointments' : null,
     fetchAllAppointments,
     {
       revalidateOnFocus: false,
@@ -384,100 +384,20 @@ function ClientAdminPageInner() {
     }
   );
 
-  const {
-    data: regularAppointments = [],
-    isLoading: regularLoading,
-    mutate: mutateRegular,
-  } = useSWR(
-    activeTab === 'regular_appointments' ? 'cms-regular' : null,
-    async () => {
-      const { data } = await supabase
-        .from('appointments')
-        .select(`
-          id, appointment_number, scheduled_start, appointment_status,
-          duration_minutes, payment_status, payment_method,
-          pets!appointments_pet_id_fkey (
-            id, name, breed, gender,
-            client_profiles!pets_owner_id_fkey (
-              id, first_name, last_name
-            )
-          )
-        `)
-        .eq('appointment_type_detail', 'regular')
-        .order('scheduled_start', { ascending: false });
-
-      return (data || []).map((a: any) => ({
-        id: a.id,
-        appointment_number: a.appointment_number,
-        scheduled_start: a.scheduled_start,
-        appointment_status: a.appointment_status,
-        duration_minutes: a.duration_minutes,
-        payment_status: a.payment_status,
-        payment_method: a.payment_method,
-        pet_id: a.pets?.id ?? '',
-        pet_name: a.pets?.name ?? '—',
-        breed: a.pets?.breed ?? null,
-        gender: a.pets?.gender ?? null,
-        client_id: a.pets?.client_profiles?.id ?? '',
-        client_name: a.pets?.client_profiles
-          ? `${a.pets.client_profiles.first_name} ${a.pets.client_profiles.last_name}`
-          : '—',
-      }));
-    },
-    {
-      revalidateOnFocus: false,
-      dedupingInterval: 30000,
-    }
+  // Derived state to eliminate redundant database queries
+  const regularAppointments = appointments.filter(
+    (a: any) => a.appointment_type_detail === 'regular'
+  );
+  
+  const outreachAppointments = appointments.filter(
+    (a: any) => a.appointment_type_detail === 'outreach'
   );
 
-  const {
-    data: outreachAppointments = [],
-    isLoading: outreachLoading,
-    mutate: mutateOutreach,
-  } = useSWR(
-    activeTab === 'outreach_appointments' ? 'cms-outreach' : null,
-    async () => {
-      const { data } = await supabase
-        .from('appointments')
-        .select(`
-          id, appointment_number, scheduled_start, appointment_status,
-          is_aspin_puspin, payment_amount, payment_status,
-          outreach_program_id,
-          outreach_programs!appointments_outreach_program_id_fkey (title),
-          pets!appointments_pet_id_fkey (
-            id, name, breed,
-            client_profiles!pets_owner_id_fkey (
-              id, first_name, last_name
-            )
-          )
-        `)
-        .eq('appointment_type_detail', 'outreach')
-        .order('scheduled_start', { ascending: false });
+  const regularLoading = appointmentsLoading;
+  const outreachLoading = appointmentsLoading;
 
-      return (data || []).map((a: any) => ({
-        id: a.id,
-        appointment_number: a.appointment_number,
-        scheduled_start: a.scheduled_start,
-        appointment_status: a.appointment_status,
-        is_aspin_puspin: a.is_aspin_puspin ?? false,
-        payment_amount: a.payment_amount,
-        payment_status: a.payment_status,
-        outreach_program_id: a.outreach_program_id,
-        outreach_program_title: a.outreach_programs?.title ?? null,
-        pet_id: a.pets?.id ?? '',
-        pet_name: a.pets?.name ?? '—',
-        breed: a.pets?.breed ?? null,
-        client_id: a.pets?.client_profiles?.id ?? '',
-        client_name: a.pets?.client_profiles
-          ? `${a.pets.client_profiles.first_name} ${a.pets.client_profiles.last_name}`
-          : '—',
-      }));
-    },
-    {
-      revalidateOnFocus: false,
-      dedupingInterval: 30000,
-    }
-  );
+  const mutateRegular = () => mutateAppointments();
+  const mutateOutreach = () => mutateAppointments();
 
   const {
     data: notificationLogs = [],
@@ -533,7 +453,7 @@ function ClientAdminPageInner() {
     return matchesSearch && matchesStatus;
   });
 
-  const filteredRegular = regularAppointments.filter(a => {
+  const filteredRegular = regularAppointments.filter((a: any) => {
     const q = searchTerm.toLowerCase();
     const matchesSearch = !q ||
       a.client_name.toLowerCase().includes(q) ||
@@ -543,7 +463,7 @@ function ClientAdminPageInner() {
     return matchesSearch && matchesStatus;
   });
 
-  const filteredOutreach = outreachAppointments.filter(a => {
+  const filteredOutreach = outreachAppointments.filter((a: any) => {
     const q = searchTerm.toLowerCase();
     const matchesSearch = !q ||
       a.client_name.toLowerCase().includes(q) ||
@@ -1200,7 +1120,7 @@ function ClientAdminPageInner() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {filteredRegular.map(a => (
+                      {filteredRegular.map((a: any) => (
                         <tr key={a.id} className="hover:bg-primary/[0.08] transition-colors duration-150">
                           <td className="px-5 py-4">
                             <div className="text-sm font-semibold text-foreground whitespace-nowrap">
@@ -1282,7 +1202,7 @@ function ClientAdminPageInner() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {filteredOutreach.map(a => (
+                      {filteredOutreach.map((a: any) => (
                         <tr key={a.id} className="hover:bg-primary/[0.08] transition-colors duration-150">
                           <td className="px-4 py-4">
                             <div className="text-sm font-semibold text-foreground whitespace-nowrap">

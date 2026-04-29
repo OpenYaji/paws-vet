@@ -37,51 +37,70 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // BUG FIX: use Promise.allSettled instead of Promise.all so one failing
-    // count lookup doesn't crash the entire response
-    const clientsWithCounts = await Promise.allSettled(
-      (clients || []).map(async (client: any) => {
-        try {
-          const { count: petCount } = await supabaseAdmin
-            .from('pets')
-            .select('*', { count: 'exact', head: true })
-            .eq('owner_id', client.id)
-            .eq('is_active', true);
+    if (!clients || clients.length === 0) {
+      return NextResponse.json([]);
+    }
 
-          // BUG FIX: was making 2 DB calls (get pets, then count appts).
-          // Use a single count query joined through the pets relationship.
-          // First get pet IDs, then count appointments in one shot.
-          let appointmentCount = 0;
-          const { data: clientPets } = await supabaseAdmin
-            .from('pets')
-            .select('id')
-            .eq('owner_id', client.id);
+    // Optimization: Bulk fetch pets and appointments to avoid N+1 queries
+    const clientIds = clients.map((c: any) => c.id);
 
-          if (clientPets && clientPets.length > 0) {
-            const petIds = clientPets.map((p: { id: string }) => p.id);
-            const { count } = await supabaseAdmin
-              .from('appointments')
-              .select('*', { count: 'exact', head: true })
-              .in('pet_id', petIds);
-            appointmentCount = count || 0;
-          }
+    // 1. Bulk fetch all pets for these clients
+    const { data: allPets } = await supabaseAdmin
+      .from('pets')
+      .select('id, owner_id')
+      .in('owner_id', clientIds)
+      .eq('is_active', true);
 
-          return {
-            ...client,
-            pet_count: petCount || 0,
-            appointment_count: appointmentCount,
-          };
-        } catch {
-          // Gracefully degrade — return client without counts rather than fail
-          return { ...client, pet_count: 0, appointment_count: 0 };
+    const pets = allPets || [];
+    const petIds = pets.map(p => p.id);
+
+    // 2. Bulk fetch all appointments for these pets
+    let appointments: any[] = [];
+    // Note: Supabase restricts 'in' filters to a maximum of 1000 items usually.
+    // If the number of petIds exceeds 1000, we might need chunking, but for now this is much better than N queries.
+    if (petIds.length > 0) {
+      // Chunking petIds to handle cases where there are >1000 pets
+      const CHUNK_SIZE = 500;
+      for (let i = 0; i < petIds.length; i += CHUNK_SIZE) {
+        const chunk = petIds.slice(i, i + CHUNK_SIZE);
+        const { data: apptsChunk } = await supabaseAdmin
+          .from('appointments')
+          .select('id, pet_id')
+          .in('pet_id', chunk);
+        if (apptsChunk) {
+          appointments.push(...apptsChunk);
         }
-      })
-    );
+      }
+    }
 
-    // Extract fulfilled results (reject any that somehow still fail)
-    const result = clientsWithCounts
-      .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled')
-      .map(r => r.value);
+    // 3. Map counts in memory
+    const petCountByClient: Record<string, number> = {};
+    const petIdsByClient: Record<string, string[]> = {};
+    
+    for (const pet of pets) {
+      petCountByClient[pet.owner_id] = (petCountByClient[pet.owner_id] || 0) + 1;
+      if (!petIdsByClient[pet.owner_id]) {
+        petIdsByClient[pet.owner_id] = [];
+      }
+      petIdsByClient[pet.owner_id].push(pet.id);
+    }
+
+    const apptCountByPet: Record<string, number> = {};
+    for (const appt of appointments) {
+      apptCountByPet[appt.pet_id] = (apptCountByPet[appt.pet_id] || 0) + 1;
+    }
+
+    const result = clients.map((client: any) => {
+      const pCount = petCountByClient[client.id] || 0;
+      const cPetIds = petIdsByClient[client.id] || [];
+      const aCount = cPetIds.reduce((sum, pid) => sum + (apptCountByPet[pid] || 0), 0);
+
+      return {
+        ...client,
+        pet_count: pCount,
+        appointment_count: aCount,
+      };
+    });
 
     return NextResponse.json(result);
   } catch (error) {
