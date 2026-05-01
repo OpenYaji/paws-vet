@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
       pet_id: pet.id,
       booked_by: user.id,
       veterinarian_id: veterinarianId,
-      appointment_type: 'wellness',
+      appointment_type: body.appointment_type || 'kapon',
       appointment_type_detail: 'outreach',
       outreach_program_id: program.id,
       scheduled_start: body.scheduled_start,

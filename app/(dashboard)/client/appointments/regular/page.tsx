@@ -338,7 +338,7 @@ export default function RegularAppointmentPage() {
       const payload = {
         pet_id: selectedPet.id,
         booked_by: userId,
-        appointment_type: 'wellness',
+        appointment_type: isKaponService ? 'kapon' : 'surgery',
         appointment_type_detail: 'regular',
         scheduled_start: scheduledStart.toISOString(),
         scheduled_end: scheduledEnd.toISOString(),

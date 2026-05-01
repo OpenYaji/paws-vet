@@ -6,7 +6,7 @@
 // Enums matching database enums
 export type UserRole = 'client' | 'veterinarian' | 'admin';
 export type AppointmentStatus = 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled' | 'no_show';
-export type AppointmentType = 'wellness' | 'emergency' | 'follow_up' | 'surgery' | 'vaccination' | 'dental' | 'consultation';
+export type AppointmentType = 'wellness' | 'emergency' | 'follow_up' | 'surgery' | 'vaccination' | 'dental' | 'consultation' | 'kapon';
 export type AccountStatus = 'active' | 'inactive' | 'suspended';
 export type EmploymentStatus = 'full_time' | 'part_time' | 'contract' | 'terminated';
 export type Gender = 'male' | 'female' | 'unknown';
