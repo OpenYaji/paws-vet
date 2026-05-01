@@ -37,7 +37,15 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
       .delete()
       .eq('id', id);
 
-    if (error) throw error;
+    if (error) {
+      if (error.code === '23503') { // Postgres foreign_key_violation
+        return NextResponse.json(
+          { error: 'Cannot delete this service because it has been used in past or upcoming appointments. Please Deactivate it instead.' }, 
+          { status: 409 }
+        );
+      }
+      throw error;
+    }
     
     return NextResponse.json({ success: true });
   } catch (error: any) {

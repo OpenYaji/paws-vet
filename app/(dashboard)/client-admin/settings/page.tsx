@@ -423,7 +423,7 @@ export default function CMSSettingsPage() {
         method: 'DELETE',
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to delete service (It may be linked to an existing appointment)');
+      if (!res.ok) throw new Error(data.error || 'Failed to delete service');
       showToast('Service deleted!');
       await load();
     } catch (e: any) {

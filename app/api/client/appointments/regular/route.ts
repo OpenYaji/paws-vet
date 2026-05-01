@@ -87,17 +87,17 @@ export async function POST(request: NextRequest) {
 
     // Only perform kapon-related checks if this is a kapon service
     if (body.is_kapon_service) {
-      const { count: priorRegularCount, error: priorError } = await supabaseAdmin
+      const { count: priorKaponCount, error: priorError } = await supabaseAdmin
         .from('appointments')
         .select('id', { count: 'exact', head: true })
         .eq('pet_id', pet.id)
-        .eq('appointment_type_detail', 'regular');
+        .or('appointment_type.eq.kapon,appointment_type_detail.eq.outreach');
 
       if (priorError) {
         return jsonError('booking_check_failed', 500, priorError.message);
       }
 
-      if ((priorRegularCount ?? 0) > 0 && !pet.allow_repeat_kapon_booking) {
+      if ((priorKaponCount ?? 0) > 0 && !pet.allow_repeat_kapon_booking) {
         return jsonError(
           'kapon_repeat_blocked',
           409,

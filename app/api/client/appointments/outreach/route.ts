@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
 
     const { data: pet, error: petError } = await supabaseAdmin
       .from('pets')
-      .select('id, owner_id')
+      .select('id, owner_id, allow_repeat_kapon_booking')
       .eq('id', body.pet_id)
       .eq('is_active', true)
       .is('deleted_at', null)
@@ -83,6 +83,24 @@ export async function POST(request: NextRequest) {
 
     if (pet.owner_id !== profile.id) {
       return jsonError('forbidden', 403, 'You can only book appointments for your own pets.');
+    }
+
+    const { count: priorKaponCount, error: priorError } = await supabaseAdmin
+      .from('appointments')
+      .select('id', { count: 'exact', head: true })
+      .eq('pet_id', pet.id)
+      .or('appointment_type.eq.kapon,appointment_type_detail.eq.outreach');
+
+    if (priorError) {
+      return jsonError('booking_check_failed', 500, priorError.message);
+    }
+
+    if ((priorKaponCount ?? 0) > 0 && !pet.allow_repeat_kapon_booking) {
+      return jsonError(
+        'kapon_repeat_blocked',
+        409,
+        'This pet has already been registered for Kapon previously and is not eligible for another Kapon/Outreach booking.'
+      );
     }
 
     const { data: program, error: programError } = await supabaseAdmin
@@ -180,6 +198,20 @@ export async function POST(request: NextRequest) {
 
       if (updateProgramError) {
         console.error('[outreach-booking] Failed to update outreach program counts:', updateProgramError);
+      }
+    }
+
+    if (pet.allow_repeat_kapon_booking) {
+      const { error: consumeError } = await supabaseAdmin
+        .from('pets')
+        .update({
+          allow_repeat_kapon_booking: false,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', pet.id);
+
+      if (consumeError) {
+        console.error('[outreach-booking] Failed to consume allow_repeat_kapon_booking:', consumeError);
       }
     }
 
