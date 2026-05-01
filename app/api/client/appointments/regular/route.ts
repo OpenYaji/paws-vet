@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
       pet_id: pet.id,
       booked_by: user.id,
       veterinarian_id: veterinarianId,
-      appointment_type: body.appointment_type || (body.is_kapon_service ? 'kapon' : 'surgery'),
+      appointment_type: body.appointment_type || 'wellness',
       appointment_type_detail: 'regular',
       scheduled_start: body.scheduled_start,
       scheduled_end: body.scheduled_end,

@@ -1029,13 +1029,22 @@ export default function CMSSettingsPage() {
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Category *
+                    Category / Type *
                   </label>
-                  <input className={inp}
+                  <select className={inp}
                     value={serviceForm.service_category}
                     onChange={e => setServiceForm(f => ({ ...f, service_category: e.target.value }))}
-                    placeholder="e.g. Surgery"
-                  />
+                  >
+                    <option value="" disabled>Select a type...</option>
+                    <option value="kapon">Kapon / Neuter</option>
+                    <option value="surgery">Other Surgery</option>
+                    <option value="wellness">Wellness / Grooming</option>
+                    <option value="vaccination">Vaccination</option>
+                    <option value="dental">Dental Care</option>
+                    <option value="consultation">Consultation</option>
+                    <option value="emergency">Emergency</option>
+                    <option value="follow_up">Follow Up</option>
+                  </select>
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
@@ -1125,11 +1134,20 @@ export default function CMSSettingsPage() {
                             />
                           </div>
                           <div className="flex flex-col gap-1">
-                            <label className="text-xs text-muted-foreground font-medium">Category</label>
-                            <input className={inp}
+                            <label className="text-xs text-muted-foreground font-medium">Category / Type</label>
+                            <select className={inp}
                               value={editingService.service_category}
                               onChange={e => setEditingService(s => s ? { ...s, service_category: e.target.value } : s)}
-                            />
+                            >
+                              <option value="kapon">Kapon / Neuter</option>
+                              <option value="surgery">Other Surgery</option>
+                              <option value="wellness">Wellness / Grooming</option>
+                              <option value="vaccination">Vaccination</option>
+                              <option value="dental">Dental Care</option>
+                              <option value="consultation">Consultation</option>
+                              <option value="emergency">Emergency</option>
+                              <option value="follow_up">Follow Up</option>
+                            </select>
                           </div>
                           <div className="flex flex-col gap-1">
                             <label className="text-xs text-muted-foreground font-medium">Price (&#8369;)</label>
