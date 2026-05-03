@@ -29,6 +29,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Settings,
+  ShieldCheck,
 } from 'lucide-react';
 
 interface Notification {
@@ -350,6 +351,19 @@ export default function ClientTopbar({ profile, collapsed, setCollapsed, setMobi
                   <span className="font-medium">Help & support</span>
                   <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" />
                 </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="rounded-xl px-3 py-2"
+                onClick={async () => {
+                  await supabase.auth.signOut();
+                  window.location.href = `/login?mode=cms&redirect=${encodeURIComponent('/client-admin?tab=clients')}`;
+                }}
+              >
+                <div className="flex w-full items-center gap-2">
+                  <ShieldCheck className="h-4 w-4 shrink-0" />
+                  <span className="font-medium">CMS Admin</span>
+                  <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" />
+                </div>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem variant="destructive" className="rounded-xl px-3 py-2" onClick={handleSignOut}>

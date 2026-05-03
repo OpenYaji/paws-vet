@@ -117,22 +117,6 @@ export async function POST(request: NextRequest) {
       return jsonError('program_full_or_closed', 409, 'Sorry, this outreach program is now full or closed.');
     }
 
-    const { count: duplicateCount, error: duplicateError } = await supabaseAdmin
-      .from('appointments')
-      .select('id', { count: 'exact', head: true })
-      .eq('pet_id', pet.id)
-      .eq('outreach_program_id', program.id)
-      .eq('appointment_type_detail', 'outreach')
-      .neq('appointment_status', 'cancelled');
-
-    if (duplicateError) {
-      return jsonError('duplicate_check_failed', 500, duplicateError.message);
-    }
-
-    if ((duplicateCount ?? 0) > 0) {
-      return jsonError('duplicate_booking', 409, 'This pet is already registered for this outreach program.');
-    }
-
     let veterinarianId = body.veterinarian_id as string | undefined;
     if (!veterinarianId) {
       try {
@@ -165,40 +149,55 @@ export async function POST(request: NextRequest) {
       is_emergency: Boolean(body.is_emergency),
     };
 
-    const { data: created, error: insertError } = await supabaseAdmin
-      .from('appointments')
-      .insert(payload)
-      .select('id, appointment_number')
-      .single();
+    const { data: createdRows, error: bookingError } = await supabaseAdmin
+      .rpc('book_outreach_appointment_transaction', {
+        p_pet_id: payload.pet_id,
+        p_booked_by: payload.booked_by,
+        p_veterinarian_id: payload.veterinarian_id,
+        p_outreach_program_id: payload.outreach_program_id,
+        p_scheduled_start: payload.scheduled_start,
+        p_scheduled_end: payload.scheduled_end,
+        p_appointment_type: payload.appointment_type,
+        p_reason_for_visit: payload.reason_for_visit,
+        p_special_instructions: payload.special_instructions,
+        p_appointment_status: payload.appointment_status,
+        p_pet_gender_at_booking: payload.pet_gender_at_booking,
+        p_duration_minutes: payload.duration_minutes,
+        p_is_aspin_puspin: payload.is_aspin_puspin,
+        p_payment_amount: payload.payment_amount,
+        p_payment_status: payload.payment_status,
+        p_payment_method: payload.payment_method,
+        p_payment_reference: payload.payment_reference,
+        p_payment_sender_name: payload.payment_sender_name,
+        p_is_emergency: payload.is_emergency,
+      });
 
-    if (insertError) {
-      return jsonError('booking_create_failed', 500, insertError.message || 'Failed to create appointment.');
-    }
-
-    const { count: liveCount, error: countError } = await supabaseAdmin
-      .from('appointments')
-      .select('id', { count: 'exact', head: true })
-      .eq('outreach_program_id', program.id)
-      .neq('appointment_status', 'cancelled');
-
-    if (countError) {
-      console.error('[outreach-booking] Failed to count live bookings:', countError);
-    }
-
-    if (liveCount !== null && liveCount !== undefined) {
-      const nowFull = liveCount >= program.max_capacity;
-      const { error: updateProgramError } = await supabaseAdmin
-        .from('outreach_programs')
-        .update({
-          current_bookings: liveCount,
-          is_full: nowFull,
-          is_open: nowFull ? false : program.is_open,
-        })
-        .eq('id', program.id);
-
-      if (updateProgramError) {
-        console.error('[outreach-booking] Failed to update outreach program counts:', updateProgramError);
+    if (bookingError) {
+      const message = bookingError.message || '';
+      if (message.includes('program_not_found')) {
+        return jsonError('program_not_found', 404, 'Selected outreach program was not found.');
       }
+      if (message.includes('program_full_or_closed')) {
+        return jsonError('program_full_or_closed', 409, 'Sorry, this outreach program is now full or closed.');
+      }
+      if (message.includes('duplicate_booking')) {
+        return jsonError('duplicate_booking', 409, 'This pet is already registered for this outreach program.');
+      }
+      if (message.includes('kapon_repeat_blocked')) {
+        return jsonError(
+          'kapon_repeat_blocked',
+          409,
+          'This pet has already been registered for Kapon previously and is not eligible for another Kapon/Outreach booking.'
+        );
+      }
+
+      return jsonError('booking_create_failed', 500, message || 'Failed to create appointment.');
+    }
+
+    const created = Array.isArray(createdRows) ? createdRows[0] : createdRows;
+
+    if (!created?.id) {
+      return jsonError('booking_create_failed', 500, 'Failed to create appointment.');
     }
 
     if (pet.allow_repeat_kapon_booking) {

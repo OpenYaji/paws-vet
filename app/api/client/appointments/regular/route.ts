@@ -167,7 +167,26 @@ export async function POST(request: NextRequest) {
 
     if (serviceInsertError) {
       console.error('[regular-booking] Failed to insert appointment_services:', serviceInsertError);
-      // Log error but don't fail the appointment creation
+
+      const { error: rollbackError } = await supabaseAdmin
+        .from('appointments')
+        .delete()
+        .eq('id', created.id);
+
+      if (rollbackError) {
+        console.error('[regular-booking] Failed to rollback orphaned appointment:', rollbackError);
+        return jsonError(
+          'booking_service_link_failed',
+          500,
+          'Appointment service could not be saved, and the incomplete appointment could not be rolled back. Please contact the clinic.'
+        );
+      }
+
+      return jsonError(
+        'booking_service_link_failed',
+        500,
+        'Appointment service could not be saved. Please try booking again.'
+      );
     }
 
     // Only consume allow_repeat_kapon_booking if this is a kapon service

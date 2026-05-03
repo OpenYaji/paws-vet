@@ -54,5 +54,8 @@ scripts/
 # seeders
 seed_images/
 
-# supabase migrations and seeds
-supabase/
+# supabase local state and generated files
+supabase/*
+!supabase/migrations/
+supabase/migrations/*
+!supabase/migrations/20260504000000_outreach_booking_transaction.sql

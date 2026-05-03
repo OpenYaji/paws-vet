@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { requireClientAdmin } from '@/lib/client-admin-auth';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -9,6 +10,9 @@ const supabaseAdmin = createClient(
 
 export async function GET(request: Request) {
   try {
+    const auth = await requireClientAdmin(request);
+    if (auth.response) return auth.response;
+
     const { searchParams } = new URL(request.url);
     const ownerId = searchParams.get('owner_id');
     // BUG FIX: Added pagination support to avoid fetching unbounded rows

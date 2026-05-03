@@ -100,9 +100,9 @@ export default function ClientAdminSidebar({ collapsed, setCollapsed, mobileOpen
             {!isCollapsed && (
               <div className="flex flex-col overflow-hidden flex-1 min-w-0">
                 <span className="font-bold text-sm truncate">
-                  {profile ? `${profile.first_name} ${profile.last_name}` : 'Pet Owner'}
+                  {profile ? `${profile.first_name} ${profile.last_name}` : 'CMS Admin'}
                 </span>
-                <span className="text-[10px] text-muted-foreground uppercase tracking-[0.14em] font-semibold">Client Admin</span>
+                <span className="text-[10px] text-muted-foreground uppercase tracking-[0.14em] font-semibold">CMS Admin</span>
               </div>
             )}
 

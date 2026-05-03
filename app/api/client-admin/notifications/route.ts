@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { requireClientAdmin } from '@/lib/client-admin-auth';
 
 const admin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -14,8 +15,11 @@ const ADMIN_NOTIF_TYPES = [
   'new_pet',
 ];
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const auth = await requireClientAdmin(request);
+    if (auth.response) return auth.response;
+
     const { data, error } = await admin
       .from('notification_logs')
       .select('*')

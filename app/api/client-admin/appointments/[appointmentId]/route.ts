@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { requireClientAdmin } from '@/lib/client-admin-auth';
 import {
   sendClientNotification,
   getAppointmentNotificationPayload,
@@ -17,6 +18,9 @@ export async function GET(
   { params }: { params: Promise<{ appointmentId: string }> }
 ) {
   try {
+    const auth = await requireClientAdmin(request);
+    if (auth.response) return auth.response;
+
     const { appointmentId } = await params;
 
     if (!appointmentId) {
@@ -70,6 +74,9 @@ export async function PATCH(
   { params }: { params: Promise<{ appointmentId: string }> }
 ) {
   try {
+    const auth = await requireClientAdmin(request);
+    if (auth.response) return auth.response;
+
     const { appointmentId } = await params;
 
     if (!appointmentId) {

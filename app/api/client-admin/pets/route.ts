@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { requireClientAdmin } from '@/lib/client-admin-auth';
 import {
   sendClientNotification,
   getPetNotificationPayload,
@@ -14,6 +15,9 @@ const supabaseAdmin = createClient(
 // GET /api/client-admin/pets
 export async function GET(request: Request) {
   try {
+    const auth = await requireClientAdmin(request);
+    if (auth.response) return auth.response;
+
     const { searchParams } = new URL(request.url);
     const ownerId = searchParams.get('owner_id');
     const limit = Math.min(parseInt(searchParams.get('limit') || '200'), 1000);
@@ -62,6 +66,9 @@ export async function GET(request: Request) {
 //   { "deleted_at": "<iso>" }                          → "archived" notification
 export async function PATCH(request: Request) {
   try {
+    const auth = await requireClientAdmin(request);
+    if (auth.response) return auth.response;
+
     const { searchParams } = new URL(request.url);
     const petId = searchParams.get('pet_id');
 

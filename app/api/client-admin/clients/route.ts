@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { requireClientAdmin } from '@/lib/client-admin-auth';
 
 // Service role client — bypasses RLS so admin can see all data
 const supabaseAdmin = createClient(
@@ -10,6 +11,9 @@ const supabaseAdmin = createClient(
 
 export async function GET(request: Request) {
   try {
+    const auth = await requireClientAdmin(request);
+    if (auth.response) return auth.response;
+
     const { searchParams } = new URL(request.url);
     // BUG FIX: Support filtering by active/archived status from the URL
     const showDeleted = searchParams.get('deleted') === 'true';
