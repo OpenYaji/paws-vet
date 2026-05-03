@@ -102,6 +102,8 @@ export async function GET(request: Request) {
       payment_amount: apt.payment_amount || null,
       outreach_program_id: apt.outreach_program_id || null,
       outreach_program_title: apt.outreach_programs?.title || null,
+      scheduled_start: apt.scheduled_start || '',
+      scheduled_end: apt.scheduled_end || '',
       appointment_date: apt.scheduled_start || '',
       appointment_time: apt.scheduled_start
         ? new Date(apt.scheduled_start).toLocaleTimeString('en-US', {

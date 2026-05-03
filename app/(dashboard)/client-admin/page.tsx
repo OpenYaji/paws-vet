@@ -177,12 +177,10 @@ const fetchAllAppointments = async () => {
   return await res.json() || [];
 };
 
-const fetchNotificationLogs = async () => {
-  const { data } = await supabase
-    .from('notification_logs')
-    .select('*')
-    .order('sent_at', { ascending: false })
-    .limit(200);
+const fetchNotificationLogs = async (): Promise<NotificationLogData[]> => {
+  const res = await fetch('/api/client-admin/notifications');
+  if (!res.ok) return [];
+  const data = (await res.json()) as NotificationLogData[];
 
   return (data || []).map((n: any) => ({
     id: n.id,
@@ -257,10 +255,23 @@ function statusBadge(status: string): string {
 }
 
 function formatDate(d?: string): string {
-  if (!d) return 'Never';
-  return new Date(d).toLocaleDateString('en-US', {
+  if (!d) return '—';
+  const date = new Date(d);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleDateString('en-US', {
     year: 'numeric', month: 'short', day: 'numeric',
   });
+}
+
+function formatTime(d?: string): string {
+  if (!d) return '—';
+  const date = new Date(d);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+}
+
+function getAppointmentStart(a: { scheduled_start?: string; appointment_date?: string }): string {
+  return a.scheduled_start || a.appointment_date || '';
 }
 
 function calcAge(birth?: string): string {
@@ -403,7 +414,7 @@ function ClientAdminPageInner() {
     data: notificationLogs = [],
     isLoading: notificationsLoading,
     mutate: mutateNotifications,
-  } = useSWR(
+  } = useSWR<NotificationLogData[]>(
     activeTab === 'notifications' ? 'cms-notifications' : null,
     fetchNotificationLogs,
     {
@@ -473,7 +484,7 @@ function ClientAdminPageInner() {
     return matchesSearch && matchesStatus;
   });
 
-  const filteredNotifications = notificationLogs.filter(n => {
+  const filteredNotifications = notificationLogs.filter((n: NotificationLogData) => {
     const q = searchTerm.toLowerCase();
     const matchesSearch = !q ||
       (n.subject ?? '').toLowerCase().includes(q) ||
@@ -1124,10 +1135,10 @@ function ClientAdminPageInner() {
                         <tr key={a.id} className="hover:bg-primary/[0.08] transition-colors duration-150">
                           <td className="px-5 py-4">
                             <div className="text-sm font-semibold text-foreground whitespace-nowrap">
-                              {formatDate(a.scheduled_start)}
+                              {formatDate(getAppointmentStart(a))}
                             </div>
                             <div className="text-xs text-muted-foreground mt-0.5">
-                              {new Date(a.scheduled_start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                              {formatTime(getAppointmentStart(a))}
                             </div>
                           </td>
                           <td className="px-5 py-4">
@@ -1206,10 +1217,10 @@ function ClientAdminPageInner() {
                         <tr key={a.id} className="hover:bg-primary/[0.08] transition-colors duration-150">
                           <td className="px-4 py-4">
                             <div className="text-sm font-semibold text-foreground whitespace-nowrap">
-                              {formatDate(a.scheduled_start)}
+                              {formatDate(getAppointmentStart(a))}
                             </div>
                             <div className="text-xs text-muted-foreground mt-0.5">
-                              {new Date(a.scheduled_start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                              {formatTime(getAppointmentStart(a))}
                             </div>
                           </td>
                           <td className="px-4 py-4">
@@ -1302,7 +1313,7 @@ function ClientAdminPageInner() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {filteredNotifications.map(n => (
+                      {filteredNotifications.map((n: NotificationLogData) => (
                         <tr key={n.id} className="hover:bg-primary/[0.08] transition-colors duration-150">
                           <td className="px-6 py-4">
                             <div className="text-sm font-semibold text-foreground whitespace-nowrap">{formatDate(n.sent_at)}</div>
