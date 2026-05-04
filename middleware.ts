@@ -1,13 +1,107 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { NextResponse, type NextRequest } from "next/server";
 
-export async function middleware(req: NextRequest) {
-  // Temporarily disable all middleware logic
-  return NextResponse.next();
+export async function middleware(request: NextRequest) {
+  let response = NextResponse.next({
+    request: {
+      headers: request.headers,
+    },
+  });
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return request.cookies.get(name)?.value;
+        },
+        set(name: string, value: string, options: CookieOptions) {
+          request.cookies.set({
+            name,
+            value,
+            ...options,
+          });
+          response = NextResponse.next({
+            request: {
+              headers: request.headers,
+            },
+          });
+          response.cookies.set({
+            name,
+            value,
+            ...options,
+          });
+        },
+        remove(name: string, options: CookieOptions) {
+          request.cookies.set({
+            name,
+            value: "",
+            ...options,
+          });
+          response = NextResponse.next({
+            request: {
+              headers: request.headers,
+            },
+          });
+          response.cookies.set({
+            name,
+            value: "",
+            ...options,
+          });
+        },
+      },
+    },
+  );
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // 1. PROTECT THE API ROUTES
+  if (
+    [
+      "api/appointments",
+      "api/veterinarian",
+      "api/reports",
+      "api/client",
+      "api/client-admin",
+      "api/billing",
+      "api/cron",
+      "api/notifications",
+      "api/products",
+      "api/try",
+      "api/user",
+    ].some((path) => request.nextUrl.pathname.startsWith(`/${path}`))
+  ) {
+    // Check A: Are they logged in?
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Check B: Are they a Vet?
+    if (request.nextUrl.pathname.startsWith("/api/veterinarian")) {
+      if (user?.user_metadata?.role !== "veterinarian") {
+        return NextResponse.json(
+          { error: "Forbidden: Vets only" },
+          { status: 403 },
+        );
+      }
+    }
+  }
+  return response;
 }
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|images/|api/).*)',
+    /*
+     * Match all request paths except:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - public folder
+     * - api/auth (auth endpoints)
+     */
+    "/((?!_next/static|_next/image|favicon.ico|public|api/auth).*)",
   ],
 };
