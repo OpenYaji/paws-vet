@@ -221,6 +221,10 @@ function ExpiryAlertBanner({ products, effectiveExpiry }: { products: any[]; eff
   );
 }
 
+/* ─── Cache ──────────────────────────────────────────────────────────── */
+
+let inventoryCache: { products: any[]; batches: any[] } | null = null;
+
 /* ─── MAIN PAGE ──────────────────────────────────────────────────────── */
 
 const EMPTY_FORM = {
@@ -280,10 +284,23 @@ export default function InventoryPage() {
   useEffect(() => { loadProducts(); }, []);
 
   async function loadProducts() {
+    if (inventoryCache) {
+      const { products: prods, batches: batchRows } = inventoryCache;
+      setProducts(prods);
+      const map: Record<string, any[]> = {};
+      for (const b of batchRows) {
+        if (!map[b.product_id]) map[b.product_id] = [];
+        map[b.product_id].push(b);
+      }
+      setProductBatches(map);
+      setIsLoading(false);
+      return;
+    }
     try {
       setIsLoading(true);
       const res = await fetch('/api/admin/inventory');
       const { products: prods, batches: batchRows } = await res.json();
+      inventoryCache = { products: prods || [], batches: batchRows || [] };
       setProducts(prods || []);
       const map: Record<string, any[]> = {};
       for (const b of (batchRows || [])) {
@@ -354,6 +371,7 @@ export default function InventoryPage() {
           body: JSON.stringify({ id: editingProduct.id, ...payload }),
         });
         setShowDialog(false);
+        inventoryCache = null;
         loadProducts();
         showToast(`"${form.product_name}" updated successfully`);
       } else {
@@ -371,6 +389,7 @@ export default function InventoryPage() {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(payload),
             });
+            inventoryCache = null;
             loadProducts();
             showToast(`"${productName}" added to inventory`);
           },
@@ -401,6 +420,7 @@ export default function InventoryPage() {
       });
       if (!res.ok) throw new Error((await res.json()).error);
       setShowDialog(false);
+      inventoryCache = null;
       loadProducts();
       showToast(`Batch ${autoBatchNum} added · +${addStockData.qty} units`);
     } catch (e) { console.error(e); }
@@ -422,6 +442,7 @@ export default function InventoryPage() {
         if (!res.ok) throw new Error((await res.json()).error);
         setEditingProduct((p: any) => p ? { ...p, stock_quantity: newQty } : p);
         setForm(f => ({ ...f, stock_quantity: newQty }));
+        inventoryCache = null;
         loadProducts();
         showToast(`${label} removed · stock reduced by ${batch.quantity}`);
       },
@@ -449,6 +470,7 @@ export default function InventoryPage() {
           }
           return;
         }
+        inventoryCache = null;
         loadProducts();
         showToast(`"${name}" deleted`, 'info');
       },

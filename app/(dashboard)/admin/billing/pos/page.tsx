@@ -254,14 +254,14 @@ function PayBtn({
       onClick={onClick}
       disabled={disabled}
       className={`
-        flex-1 flex flex-col items-center justify-center gap-1.5
-        rounded-xl py-3.5 border font-bold text-xs uppercase tracking-wider
+        flex-1 flex flex-col items-center justify-center gap-2
+        rounded-xl py-5 border font-black text-sm uppercase tracking-widest
         transition-all duration-150 disabled:opacity-35 disabled:cursor-not-allowed
         disabled:shadow-none
         ${styles[variant]}
       `}
     >
-      <Icon className="w-4 h-4" />
+      <Icon className="w-6 h-6" />
       {label}
     </button>
   );
@@ -563,7 +563,7 @@ export default function POSPage() {
                         <span className="text-[10px] text-muted-foreground">{filteredServices.length}</span>
                       </div>
                     )}
-                    <div className={viewMode === 'grid' ? 'grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5' : 'space-y-1.5'}>
+                    <div className={viewMode === 'grid' ? 'grid grid-cols-2 sm:grid-cols-3 gap-2.5' : 'space-y-1.5'}>
                       {filteredServices.map(s => (
                         <ItemCard
                           key={s.id} name={s.service_name} price={s.base_price}
@@ -586,7 +586,7 @@ export default function POSPage() {
                         <span className="text-[10px] text-muted-foreground">{filteredProducts.length}</span>
                       </div>
                     )}
-                    <div className={viewMode === 'grid' ? 'grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5' : 'space-y-1.5'}>
+                    <div className={viewMode === 'grid' ? 'grid grid-cols-2 sm:grid-cols-3 gap-2.5' : 'space-y-1.5'}>
                       {filteredProducts.map(p => (
                         <ItemCard
                           key={p.id} name={p.product_name} price={p.price}
@@ -607,7 +607,7 @@ export default function POSPage() {
         </div>
 
         {/* ──── RIGHT: ORDER PANEL ──── */}
-        <div className="w-[360px] flex-none flex flex-col bg-card overflow-hidden">
+        <div className="w-[42%] flex-none flex flex-col bg-card overflow-hidden">
 
           {/* Customer */}
           <div className="flex-none px-4 pt-4 pb-3 border-b border-border">
@@ -717,9 +717,9 @@ export default function POSPage() {
             </div>
 
             {/* Total */}
-            <div className="flex items-center justify-between py-2.5 px-3 rounded-xl bg-card border border-border">
-              <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Total</span>
-              <span className="text-2xl font-black text-foreground tracking-tight">
+            <div className="flex items-center justify-between py-4 px-4 rounded-xl bg-card border border-border">
+              <span className="text-sm font-black uppercase tracking-widest text-muted-foreground">Total</span>
+              <span className="text-4xl font-black text-foreground tracking-tight">
                 ₱{total.toFixed(2)}
               </span>
             </div>

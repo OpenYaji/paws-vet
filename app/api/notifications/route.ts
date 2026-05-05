@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
-    return NextResponse.json(data);
+    return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error("Create notification error:", error);
     return NextResponse.json(
@@ -179,7 +179,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
-    return NextResponse.json(data);
+    return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error("Update notification error:", error);
     return NextResponse.json(

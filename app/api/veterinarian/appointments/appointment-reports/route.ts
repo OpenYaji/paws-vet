@@ -31,10 +31,6 @@ async function getAuthUser(request: NextRequest) {
 
 // GET /api/veterinarian/appointments/appointment-reports?date=2024-06-01
 export async function GET(request: NextRequest) {
-  const { user, role } = await getAuthUser(request);
-  if (!user || role !== "veterinarian") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
   try {
     const { searchParams } = new URL(request.url);
     const dateParam = searchParams.get("date");
@@ -81,18 +77,6 @@ export async function GET(request: NextRequest) {
 
     // Delegate fetch error to centralized handler
     if (error) return handleError(error, "appointment-reports");
-
-    console.log(`Found ${appointments?.length || 0} appointments in date range`);
-    
-    // Debug: Log all appointments found
-    if (appointments && appointments.length > 0) {
-      console.log('Appointments found:', appointments.map(a => ({
-        id: a.id,
-        scheduled_start: a.scheduled_start,
-        status: a.appointment_status,
-        type: a.appointment_type
-      })));
-    }
 
     // Initialize counters
     const report = {

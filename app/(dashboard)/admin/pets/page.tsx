@@ -34,6 +34,8 @@ interface Pet {
   appointments?: any[];
 }
 
+const petsCache = new Map<string, Pet[]>();
+
 export default function PetsPage() {
   const [pets, setPets] = useState<Pet[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,25 +43,41 @@ export default function PetsPage() {
   const [showProfile, setShowProfile] = useState(false);
   const [speciesFilter, setSpeciesFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [isUploading, setIsUploading] = useState(false);
-  
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { fetchPets(); }, [speciesFilter, searchQuery]);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  useEffect(() => { fetchPets(); }, [speciesFilter, debouncedSearch]);
 
   const fetchPets = async () => {
+    const params = new URLSearchParams();
+    if (speciesFilter !== 'all') params.append('species', speciesFilter);
+    if (debouncedSearch) params.append('search', debouncedSearch);
+    const cacheKey = params.toString();
+
+    if (petsCache.has(cacheKey)) {
+      setPets(petsCache.get(cacheKey)!);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (speciesFilter !== 'all') params.append('species', speciesFilter);
-      if (searchQuery) params.append('search', searchQuery);
-      const res = await fetch(`/api/admin/pets?${params.toString()}`);
+      const res = await fetch(`/api/admin/pets?${cacheKey}`);
       const data = await res.json();
-      setPets(Array.isArray(data) ? data : []);
-    } catch (e) { 
-      console.error('Error fetching pets:', e); 
-    } finally { 
-      setLoading(false); 
+      const result = Array.isArray(data) ? data : [];
+      petsCache.set(cacheKey, result);
+      setPets(result);
+    } catch (e) {
+      console.error('Error fetching pets:', e);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -92,6 +110,7 @@ export default function PetsPage() {
       if (dbError) throw dbError;
 
       if (selectedPet?.id === petId) setSelectedPet({ ...selectedPet, image_url: publicUrl });
+      petsCache.clear();
       fetchPets();
     } catch (err: any) { 
       alert("Update failed: " + err.message); 

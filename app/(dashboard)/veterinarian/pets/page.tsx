@@ -36,7 +36,7 @@ import {
   Search,
   Eye,
   FileText,
-  Trash2,
+  Upload,
   LayoutList,
   TableIcon,
   ChevronLeft,
@@ -58,13 +58,14 @@ import Link from "next/link";
 import AddNewPet from "@/components/veterinarian/pets/add-new-pet";
 import useSWR, { mutate } from "swr";
 import { supabase } from "@/lib/auth-client";
+import { toast } from "@/components/ui/use-toast";
 
-const ITEMS_LIST = 10;  // changed from 5 per user request
-const ITEMS_TABLE = 10;
+const items_list = 10; // changed from 5 per user request
+const items_table = 10;
 
 // Maximum records fetched in a single API call.
 // Pagination beyond this is handled entirely client-side — no re-fetch on page click.
-const FETCH_LIMIT = 200;
+const fetch_limit = 200;
 
 // Fetcher function for SWR to handle API requests and errors uniformly
 const fetcher = async (url: string) => {
@@ -118,17 +119,20 @@ export default function PatientsPage() {
   const [viewMode, setViewMode] = useState<"list" | "table">("list");
   const [page, setPage] = useState(1); // display-only page counter — does NOT affect the API URL
   const limit = 20; // For pagination, if needed in the future when API supports it
-  const [recordFilter, setRecordFilter] = useState<"active" | "archived">("active");
+  const [recordFilter, setRecordFilter] = useState<"active" | "archived">(
+    "active",
+  );
 
   // SWR key: page is intentionally NOT included here.
   // Putting `page` in the URL causes a new API call every time the user clicks
   // "next page", which (a) wastes server resources and (b) triggers an
   // out-of-bounds Supabase range query → HTTP 500 when the batch doesn't exist.
   // Instead, we fetch one full batch up front and slice it client-side.
-  const swrKey = `/api/veterinarian/pets?limit=${FETCH_LIMIT}${recordFilter === "archived" ? "&archived=true" : ""}`;
+  const swrKey = `/api/veterinarian/pets?limit=${fetch_limit}${recordFilter === "archived" ? "&archived=true" : ""}`;
 
   const { data: apiResponse, isLoading } = useSWR(swrKey, fetcher, {
     revalidateOnFocus: false,
+    dedupingInterval: 60000,
   });
 
   const allPets: Pet[] = useMemo(
@@ -139,8 +143,18 @@ export default function PatientsPage() {
   // View details modal
   const [viewTarget, setViewTarget] = useState<Pet | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
-  const [editForm, setEditForm] = useState({ name: "", species: "", breed: "", color: "", weight: "", microchip_number: "" });
+  const [editForm, setEditForm] = useState({
+    photo_url: "",
+    name: "",
+    species: "",
+    breed: "",
+    color: "",
+    weight: "",
+    microchip_number: "",
+  });
   const [isSavingPet, setIsSavingPet] = useState(false);
+  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
 
   // Medical records modal
   const [medicalTarget, setMedicalTarget] = useState<Pet | null>(null);
@@ -152,7 +166,7 @@ export default function PatientsPage() {
   const [isArchiving, setIsArchiving] = useState(false);
 
   const resetPage = () => setPage(1);
-  const itemsPerPage = viewMode === "list" ? ITEMS_LIST : ITEMS_TABLE;
+  const itemsPerPage = viewMode === "list" ? items_list : items_table;
 
   const filteredPets = useMemo(() => {
     const filtered = allPets.filter((pet) => {
@@ -163,7 +177,8 @@ export default function PatientsPage() {
 
       const matchesSearch =
         pet.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (pet.breed && pet.breed.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (pet.breed &&
+          pet.breed.toLowerCase().includes(searchTerm.toLowerCase())) ||
         ownerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (pet.microchip_number && pet.microchip_number.includes(searchTerm));
 
@@ -177,9 +192,13 @@ export default function PatientsPage() {
     filtered.sort((a, b) => {
       if (sortBy === "name") return a.name.localeCompare(b.name);
       if (sortBy === "recent")
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        return (
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
       if (sortBy === "oldest")
-        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        return (
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        );
       return 0;
     });
 
@@ -201,7 +220,10 @@ export default function PatientsPage() {
       swrKey,
       (cur: any) =>
         cur
-          ? { ...cur, data: cur.data.filter((p: Pet) => p.id !== archiveTarget.id) }
+          ? {
+              ...cur,
+              data: cur.data.filter((p: Pet) => p.id !== archiveTarget.id),
+            }
           : cur,
       false,
     );
@@ -227,44 +249,105 @@ export default function PatientsPage() {
   const openEditMode = () => {
     if (!viewTarget) return;
     setEditForm({
+      photo_url: viewTarget.photo_url || "",
       name: viewTarget.name || "",
-      species: viewTarget.species || "",
+      species: viewTarget.species?.toLowerCase() || "",
       breed: viewTarget.breed || "",
       color: viewTarget.color || "",
       weight: viewTarget.weight || "",
       microchip_number: viewTarget.microchip_number || "",
     });
+    setImagePreviewUrl(viewTarget.photo_url || null);
+    setSelectedImageFile(null);
     setIsEditMode(true);
+  };
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  const previewUrl = URL.createObjectURL(file);
+  setImagePreviewUrl(previewUrl);
+  setSelectedImageFile(file);
   };
 
   const handleSavePet = async () => {
     if (!viewTarget) return;
     setIsSavingPet(true);
+
     try {
+      let finalPhotoUrl = editForm.photo_url;
+
+      // upload new image to supabase storage if one was selected
+      if (selectedImageFile) {
+        const fileExt = selectedImageFile.name.split('.').pop();
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+        const filePath = `${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('pet-images')
+          .upload(filePath, selectedImageFile);
+
+        if (uploadError) {
+          console.error("upload error:", uploadError);
+          toast({
+            title: "Error",
+            description: "Failed to upload image.",
+            variant: "destructive",
+          });
+          setIsSavingPet(false);
+          return;
+        }
+
+        // get the public url for the new image
+        const { data: publicUrlData } = supabase.storage
+          .from('pet-images')
+          .getPublicUrl(filePath);
+
+        finalPhotoUrl = publicUrlData.publicUrl;
+      }
+
+      // PATCH updated pet info to the API
+      const payload = { ...editForm, photo_url: finalPhotoUrl };
+
       const res = await fetch(`/api/veterinarian/pets/${viewTarget.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editForm),
+        body: JSON.stringify(payload),
       });
+
       if (!res.ok) {
         const err = await res.json();
-        alert(err.error || "Failed to save");
+        toast({
+          title: "Error",
+          description: err.error || "Failed to save",
+          variant: "destructive",
+        });
+        setIsSavingPet(false);
         return;
       }
-      // Update local view target so modal reflects new values immediately
-      setViewTarget({ ...viewTarget, ...editForm });
+      setViewTarget({ ...viewTarget, ...payload });
       setIsEditMode(false);
-      mutate(swrKey); // refresh list
-    } catch {
-      alert("Error saving pet.");
+      setSelectedImageFile(null);
+      mutate(swrKey);
+    } catch (error) {
+      console.error(error);
+      toast({
+        title: "Error",
+        description: "An error occurred while saving the pet record.",
+        variant: "destructive",
+      });
     } finally {
       setIsSavingPet(false);
     }
   };
 
-  // Fetch medical records when a medical target is set
+  // Fetch medical records when a   medical target is set
   useEffect(() => {
-    if (!medicalTarget) { setMedicalRecords([]); return; }
+    if (!medicalTarget) {
+      setMedicalRecords([]);
+      return;
+    }
     setIsLoadingMedical(true);
     fetch(`/api/veterinarian/medical-records?pet_id=${medicalTarget.id}`)
       .then((r) => r.json())
@@ -273,14 +356,24 @@ export default function PatientsPage() {
       .finally(() => setIsLoadingMedical(false));
   }, [medicalTarget]);
 
-  const PetAvatar = ({ pet, size = "sm" }: { pet: Pet; size?: "sm" | "md" }) => {
+  const PetAvatar = ({
+    pet,
+    size = "sm",
+  }: {
+    pet: Pet;
+    size?: "sm" | "md";
+  }) => {
     const dim = size === "sm" ? "w-8 h-8 text-base" : "w-14 h-14 text-3xl";
     return (
       <div
         className={`${dim} rounded-full bg-primary/10 flex items-center justify-center overflow-hidden border border-border shrink-0`}
       >
         {pet.photo_url ? (
-          <img src={pet.photo_url} alt={pet.name} className="w-full h-full object-cover" />
+          <img
+            src={pet.photo_url}
+            alt={pet.name}
+            className="w-full h-full object-cover"
+          />
         ) : (
           getSpeciesEmoji(pet.species)
         )}
@@ -292,7 +385,12 @@ export default function PatientsPage() {
     <div className="flex gap-1">
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setViewTarget(pet)}>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setViewTarget(pet)}
+          >
             <Eye className="h-3.5 w-3.5" />
           </Button>
         </TooltipTrigger>
@@ -322,7 +420,7 @@ export default function PatientsPage() {
               className="h-8 w-8 text-destructive hover:text-destructive"
               onClick={() => setArchiveTarget(pet)}
             >
-              <Trash2 className="h-3.5 w-3.5" />
+              <Archive className="h-3.5 w-3.5" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Archive Pet</TooltipContent>
@@ -338,7 +436,8 @@ export default function PatientsPage() {
         <p className="text-sm text-muted-foreground">
           Showing {(safePage - 1) * itemsPerPage + 1}–
           {Math.min(safePage * itemsPerPage, filteredPets.length)} of{" "}
-          {filteredPets.length} {recordFilter === "archived" ? "archived" : ""} pets
+          {filteredPets.length} {recordFilter === "archived" ? "archived" : ""}{" "}
+          pets
         </p>
         <div className="flex items-center gap-2">
           <Button
@@ -406,7 +505,10 @@ export default function PatientsPage() {
             <Input
               placeholder="Search by pet name, breed, owner, or microchip..."
               value={searchTerm}
-              onChange={(e) => { setSearchTerm(e.target.value); resetPage(); }}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                resetPage();
+              }}
               className="pl-10"
             />
           </div>
@@ -414,8 +516,16 @@ export default function PatientsPage() {
           <div className="flex flex-wrap gap-3 items-end">
             {/* Species */}
             <div className="space-y-1 min-w-35">
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Species</label>
-              <Select value={speciesFilter} onValueChange={(v) => { setSpeciesFilter(v); resetPage(); }}>
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Species
+              </label>
+              <Select
+                value={speciesFilter}
+                onValueChange={(v) => {
+                  setSpeciesFilter(v);
+                  resetPage();
+                }}
+              >
                 <SelectTrigger className="h-9">
                   <SelectValue />
                 </SelectTrigger>
@@ -435,8 +545,16 @@ export default function PatientsPage() {
 
             {/* Sort By */}
             <div className="space-y-1 min-w-40">
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Sort By</label>
-              <Select value={sortBy} onValueChange={(v) => { setSortBy(v); resetPage(); }}>
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Sort By
+              </label>
+              <Select
+                value={sortBy}
+                onValueChange={(v) => {
+                  setSortBy(v);
+                  resetPage();
+                }}
+              >
                 <SelectTrigger className="h-9">
                   <SelectValue />
                 </SelectTrigger>
@@ -450,7 +568,9 @@ export default function PatientsPage() {
 
             {/* Records filter */}
             <div className="space-y-1 min-w-40">
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Records</label>
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Records
+              </label>
               <Select
                 value={recordFilter}
                 onValueChange={(v: "active" | "archived") => {
@@ -470,7 +590,9 @@ export default function PatientsPage() {
 
             {/* View toggle */}
             <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">View</label>
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                View
+              </label>
               <div className="flex border border-border rounded-md overflow-hidden h-9">
                 <button
                   className={`px-3 flex items-center gap-1.5 text-sm font-medium transition-colors ${
@@ -478,7 +600,10 @@ export default function PatientsPage() {
                       ? "bg-primary text-primary-foreground"
                       : "bg-background hover:bg-muted text-foreground"
                   }`}
-                  onClick={() => { setViewMode("list"); resetPage(); }}
+                  onClick={() => {
+                    setViewMode("list");
+                    resetPage();
+                  }}
                 >
                   <LayoutList className="h-4 w-4" />
                   List
@@ -489,7 +614,10 @@ export default function PatientsPage() {
                       ? "bg-primary text-primary-foreground"
                       : "bg-background hover:bg-muted text-foreground"
                   }`}
-                  onClick={() => { setViewMode("table"); resetPage(); }}
+                  onClick={() => {
+                    setViewMode("table");
+                    resetPage();
+                  }}
                 >
                   <TableIcon className="h-4 w-4" />
                   Table
@@ -497,7 +625,12 @@ export default function PatientsPage() {
               </div>
             </div>
 
-            <Button variant="outline" size="sm" className="h-9 ml-auto" onClick={refreshData}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 ml-auto"
+              onClick={refreshData}
+            >
               Refresh
             </Button>
           </div>
@@ -506,7 +639,8 @@ export default function PatientsPage() {
           {recordFilter === "archived" && (
             <div className="flex items-center gap-2 rounded-md bg-amber-50 border border-amber-200 text-amber-800 px-3 py-2 text-xs font-medium dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-400">
               <Archive className="h-3.5 w-3.5 shrink-0" />
-              Showing archived pet records — these are no longer active in the system.
+              Showing archived pet records — these are no longer active in the
+              system.
             </div>
           )}
         </CardContent>
@@ -516,10 +650,14 @@ export default function PatientsPage() {
       <div className="grid grid-cols-3 gap-3">
         <Card>
           <CardContent className="py-4">
-            <div className="text-2xl font-bold text-primary">{filteredPets.length}</div>
+            <div className="text-2xl font-bold text-primary">
+              {filteredPets.length}
+            </div>
             <p className="text-xs text-muted-foreground mt-0.5">
               {filteredPets.length === allPets.length
-                ? recordFilter === "archived" ? "Archived Pets" : "Total Pets"
+                ? recordFilter === "archived"
+                  ? "Archived Pets"
+                  : "Total Pets"
                 : "Filtered Results"}
             </p>
           </CardContent>
@@ -529,7 +667,9 @@ export default function PatientsPage() {
             <div className="text-2xl font-bold">
               {new Set(filteredPets.map((p) => p.species)).size}
             </div>
-            <p className="text-xs text-muted-foreground mt-0.5">Species Types</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Species Types
+            </p>
           </CardContent>
         </Card>
         <Card>
@@ -550,7 +690,9 @@ export default function PatientsPage() {
               {recordFilter === "archived" ? "🗄️" : "🔍"}
             </div>
             <h3 className="text-lg font-semibold mb-1">
-              {recordFilter === "archived" ? "No archived pets" : "No pets found"}
+              {recordFilter === "archived"
+                ? "No archived pets"
+                : "No pets found"}
             </h3>
             <p className="text-sm text-muted-foreground">
               {recordFilter === "archived"
@@ -585,13 +727,22 @@ export default function PatientsPage() {
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-0.5 text-xs">
                       <span className="text-muted-foreground">
-                        <span className="font-medium text-foreground">{pet.breed || "—"}</span> · Breed
+                        <span className="font-medium text-foreground">
+                          {pet.breed || "—"}
+                        </span>{" "}
+                        · Breed
                       </span>
                       <span className="text-muted-foreground">
-                        <span className="font-medium text-foreground">{pet.color || "—"}</span> · Color
+                        <span className="font-medium text-foreground">
+                          {pet.color || "—"}
+                        </span>{" "}
+                        · Color
                       </span>
                       <span className="text-muted-foreground">
-                        <span className="font-medium text-foreground">{pet.weight || "—"}</span> · Weight
+                        <span className="font-medium text-foreground">
+                          {pet.weight || "—"}
+                        </span>{" "}
+                        · Weight
                       </span>
                       <span className="text-muted-foreground">
                         <span className="font-medium text-foreground">
@@ -649,9 +800,15 @@ export default function PatientsPage() {
                         {pet.species}
                       </span>
                     </TableCell>
-                    <TableCell className="text-sm">{pet.breed || "—"}</TableCell>
-                    <TableCell className="text-sm">{pet.color || "—"}</TableCell>
-                    <TableCell className="text-sm">{pet.weight || "—"}</TableCell>
+                    <TableCell className="text-sm">
+                      {pet.breed || "—"}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {pet.color || "—"}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {pet.weight || "—"}
+                    </TableCell>
                     <TableCell className="text-sm">
                       {pet.client_profiles
                         ? `${pet.client_profiles.first_name} ${pet.client_profiles.last_name}`
@@ -675,54 +832,156 @@ export default function PatientsPage() {
       )}
 
       {/* ── VIEW DETAILS MODAL ── */}
-      <Dialog open={!!viewTarget} onOpenChange={(open) => { if (!open) { setViewTarget(null); setIsEditMode(false); } }}>
+      <Dialog
+        open={!!viewTarget}
+        onOpenChange={(open) => {
+          if (!open) {
+            setViewTarget(null);
+            setIsEditMode(false);
+          }
+        }}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>{isEditMode ? "Edit Pet" : "Pet Details"}</DialogTitle>
           </DialogHeader>
-          {viewTarget && (
-            isEditMode ? (
+          {viewTarget &&
+            (isEditMode ? (
               /* ── EDIT MODE ── */
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
+              <div className="space-y-4">
+                {/* --- Image Preview & Upload Section --- */}
+                <div className="flex flex-col items-center justify-center pt-2 pb-4">
+                  <label
+                    htmlFor="pet-image"
+                    className="relative flex flex-col items-center justify-center w-28 h-28 rounded-full border-2 border-dashed border-gray-300 hover:border-primary cursor-pointer overflow-hidden group bg-muted/30 transition-colors"
+                  >
+                    {imagePreviewUrl ? (
+                      <>
+                        {/* Show the selected or existing image */}
+                        <img
+                          src={imagePreviewUrl}
+                          alt="Pet Preview"
+                          className="w-full h-full object-cover transition-opacity group-hover:opacity-40"
+                        />
+                        {/* Show upload icon on hover when an image exists */}
+                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Upload className="h-8 w-8 text-foreground drop-shadow-md" />
+                        </div>
+                      </>
+                    ) : (
+                      /* Empty state */
+                      <Upload className="h-8 w-8 text-muted-foreground group-hover:text-primary transition-colors" />
+                    )}
+                  </label>
+                  <span className="mt-3 text-sm font-medium text-primary">
+                    {imagePreviewUrl ? "Change Photo" : "Upload Photo"}
+                  </span>
+                  {/* Hidden file input */}
+                  <input
+                    id="pet-image"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleImageChange}
+                  />
+                </div>
+
+                {/* --- Form Fields --- */}
+                <div className="grid grid-cols-2 gap-4">
+                  {/* I made Name span 2 columns to match your screenshot layout */}
+                  <div className="col-span-2 space-y-1">
                     <Label>Name</Label>
-                    <Input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
+                    <Input
+                      value={editForm.name}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, name: e.target.value })
+                      }
+                    />
                   </div>
+
                   <div className="space-y-1">
                     <Label>Species</Label>
-                    <UISelect value={editForm.species} onValueChange={(v) => setEditForm({ ...editForm, species: v })}>
-                      <UISelectTrigger><UISelectValue /></UISelectTrigger>
+                    <UISelect
+                      value={editForm.species}
+                      onValueChange={(v) =>
+                        setEditForm({ ...editForm, species: v })
+                      }
+                    >
+                      <UISelectTrigger>
+                        <UISelectValue />
+                      </UISelectTrigger>
                       <UISelectContent>
-                        {["Dog","Cat","Bird","Rabbit","Hamster","Fish","Reptile","Other"].map((s) => (
-                          <UISelectItem key={s} value={s}>{s}</UISelectItem>
+                        {[
+                          "Dog",
+                          "Cat",
+                          "Bird",
+                          "Rabbit",
+                          "Hamster",
+                          "Fish",
+                          "Reptile",
+                          "Other",
+                        ].map((s) => (
+                          <UISelectItem key={s} value={s.toLowerCase()}>
+                            {" "}
+                            {s}
+                          </UISelectItem>
                         ))}
                       </UISelectContent>
                     </UISelect>
                   </div>
+
                   <div className="space-y-1">
                     <Label>Breed</Label>
-                    <Input value={editForm.breed} onChange={(e) => setEditForm({ ...editForm, breed: e.target.value })} />
+                    <Input
+                      value={editForm.breed}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, breed: e.target.value })
+                      }
+                    />
                   </div>
+
                   <div className="space-y-1">
                     <Label>Color</Label>
-                    <Input value={editForm.color} onChange={(e) => setEditForm({ ...editForm, color: e.target.value })} />
+                    <Input
+                      value={editForm.color}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, color: e.target.value })
+                      }
+                    />
                   </div>
+
                   <div className="space-y-1">
                     <Label>Weight</Label>
-                    <Input value={editForm.weight} onChange={(e) => setEditForm({ ...editForm, weight: e.target.value })} placeholder="e.g. 5kg" />
+                    <Input
+                      value={editForm.weight}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, weight: e.target.value })
+                      }
+                      placeholder="e.g. 5kg"
+                    />
                   </div>
-                  <div className="space-y-1">
+
+                  <div className="col-span-2 space-y-1">
                     <Label>Microchip No.</Label>
-                    <Input value={editForm.microchip_number} onChange={(e) => setEditForm({ ...editForm, microchip_number: e.target.value })} className="font-mono" />
+                    <Input
+                      value={editForm.microchip_number}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          microchip_number: e.target.value,
+                        })
+                      }
+                      className="font-mono"
+                    />
                   </div>
-                </div>
-                <DialogFooter className="pt-2">
-                  <Button variant="outline" onClick={() => setIsEditMode(false)} disabled={isSavingPet}>Cancel</Button>
-                  <Button onClick={handleSavePet} disabled={isSavingPet}>
-                    {isSavingPet ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : "Save Changes"}
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsEditMode(false)}
+                  >
+                    Cancel
                   </Button>
-                </DialogFooter>
+                  <Button onClick={() => handleSavePet()}>Save</Button>
+                </div>
               </div>
             ) : (
               /* ── VIEW MODE ── */
@@ -730,7 +989,11 @@ export default function PatientsPage() {
                 <div className="flex items-center gap-4">
                   <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden border border-border shrink-0 text-4xl">
                     {viewTarget.photo_url ? (
-                      <img src={viewTarget.photo_url} alt={viewTarget.name} className="w-full h-full object-cover" />
+                      <img
+                        src={viewTarget.photo_url}
+                        alt={viewTarget.name}
+                        className="w-full h-full object-cover"
+                      />
                     ) : (
                       getSpeciesEmoji(viewTarget.species)
                     )}
@@ -741,70 +1004,109 @@ export default function PatientsPage() {
                       {viewTarget.species}
                     </span>
                   </div>
-                  <Button variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={openEditMode}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 shrink-0"
+                    onClick={openEditMode}
+                  >
                     <Pencil className="h-3.5 w-3.5" /> Edit
                   </Button>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div className="space-y-0.5">
-                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Breed</p>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">
+                      Breed
+                    </p>
                     <p className="font-medium">{viewTarget.breed || "—"}</p>
                   </div>
                   <div className="space-y-0.5">
-                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Color</p>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">
+                      Color
+                    </p>
                     <p className="font-medium">{viewTarget.color || "—"}</p>
                   </div>
                   <div className="space-y-0.5">
-                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Age</p>
-                    <p className="font-medium">{viewTarget.age != null ? `${viewTarget.age} yr${viewTarget.age !== 1 ? "s" : ""}` : "—"}</p>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">
+                      Age
+                    </p>
+                    <p className="font-medium">
+                      {viewTarget.age != null
+                        ? `${viewTarget.age} yr${viewTarget.age !== 1 ? "s" : ""}`
+                        : "—"}
+                    </p>
                   </div>
                   <div className="space-y-0.5">
-                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Weight</p>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">
+                      Weight
+                    </p>
                     <p className="font-medium">{viewTarget.weight || "—"}</p>
                   </div>
                   <div className="space-y-0.5 col-span-2">
-                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Microchip No.</p>
-                    <p className="font-mono font-medium">{viewTarget.microchip_number || "—"}</p>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">
+                      Microchip No.
+                    </p>
+                    <p className="font-mono font-medium">
+                      {viewTarget.microchip_number || "—"}
+                    </p>
                   </div>
                 </div>
 
                 <div className="border-t pt-3">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Owner</p>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">
+                    Owner
+                  </p>
                   {viewTarget.client_profiles ? (
                     <div className="grid grid-cols-2 gap-3 text-sm">
                       <div className="space-y-0.5">
                         <p className="text-xs text-muted-foreground">Name</p>
-                        <p className="font-medium">{viewTarget.client_profiles.first_name} {viewTarget.client_profiles.last_name}</p>
+                        <p className="font-medium">
+                          {viewTarget.client_profiles.first_name}{" "}
+                          {viewTarget.client_profiles.last_name}
+                        </p>
                       </div>
                       <div className="space-y-0.5">
                         <p className="text-xs text-muted-foreground">Phone</p>
-                        <p className="font-medium">{viewTarget.client_profiles.phone || "—"}</p>
+                        <p className="font-medium">
+                          {viewTarget.client_profiles.phone || "—"}
+                        </p>
                       </div>
                     </div>
                   ) : (
-                    <p className="text-sm text-muted-foreground">No owner information</p>
+                    <p className="text-sm text-muted-foreground">
+                      No owner information
+                    </p>
                   )}
                 </div>
 
                 <div className="border-t pt-3 text-xs text-muted-foreground">
                   Registered on{" "}
                   <span className="text-foreground font-medium">
-                    {new Date(viewTarget.created_at).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
+                    {new Date(viewTarget.created_at).toLocaleDateString(
+                      "en-US",
+                      { year: "numeric", month: "long", day: "numeric" },
+                    )}
                   </span>
                 </div>
 
                 <DialogFooter>
-                  <Button variant="outline" onClick={() => setViewTarget(null)}>Close</Button>
+                  <Button variant="outline" onClick={() => setViewTarget(null)}>
+                    Close
+                  </Button>
                 </DialogFooter>
               </div>
-            )
-          )}
+            ))}
         </DialogContent>
       </Dialog>
 
       {/* ── MEDICAL RECORDS MODAL ── */}
-      <Dialog open={!!medicalTarget} onOpenChange={(open) => { if (!open) setMedicalTarget(null); }}>
+      <Dialog
+        open={!!medicalTarget}
+        onOpenChange={(open) => {
+          if (!open) setMedicalTarget(null);
+        }}
+      >
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>
@@ -818,20 +1120,34 @@ export default function PatientsPage() {
           ) : medicalRecords.length === 0 ? (
             <div className="py-10 text-center">
               <div className="text-4xl mb-3 opacity-30">📋</div>
-              <p className="text-sm text-muted-foreground">No medical records found for this pet.</p>
+              <p className="text-sm text-muted-foreground">
+                No medical records found for this pet.
+              </p>
             </div>
           ) : (
             <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
               {medicalRecords.map((record: any) => (
-                <div key={record.id} className="border border-border rounded-lg p-3 space-y-2">
+                <div
+                  key={record.id}
+                  className="border border-border rounded-lg p-3 space-y-2"
+                >
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <p className="font-semibold text-sm">
                         {record.visit_date
-                          ? new Date(record.visit_date).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+                          ? new Date(record.visit_date).toLocaleDateString(
+                              "en-US",
+                              {
+                                year: "numeric",
+                                month: "long",
+                                day: "numeric",
+                              },
+                            )
                           : "—"}
                       </p>
-                      <p className="text-xs text-muted-foreground">{record.record_number}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {record.record_number}
+                      </p>
                     </div>
                     <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-primary/10 text-primary shrink-0 capitalize">
                       {record.record_type || "Visit"}
@@ -839,25 +1155,32 @@ export default function PatientsPage() {
                   </div>
                   {record.chief_complaint && (
                     <div>
-                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Chief Complaint</p>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">
+                        Chief Complaint
+                      </p>
                       <p className="text-sm">{record.chief_complaint}</p>
                     </div>
                   )}
                   {record.diagnosis && (
                     <div>
-                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Diagnosis</p>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">
+                        Diagnosis
+                      </p>
                       <p className="text-sm">{record.diagnosis}</p>
                     </div>
                   )}
                   {record.treatment && (
                     <div>
-                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Treatment</p>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">
+                        Treatment
+                      </p>
                       <p className="text-sm">{record.treatment}</p>
                     </div>
                   )}
                   {record.veterinarian && (
                     <p className="text-xs text-muted-foreground border-t pt-2">
-                      Attending: Dr. {record.veterinarian.first_name} {record.veterinarian.last_name}
+                      Attending: Dr. {record.veterinarian.first_name}{" "}
+                      {record.veterinarian.last_name}
                     </p>
                   )}
                 </div>
@@ -865,13 +1188,20 @@ export default function PatientsPage() {
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setMedicalTarget(null)}>Close</Button>
+            <Button variant="outline" onClick={() => setMedicalTarget(null)}>
+              Close
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* ── ARCHIVE CONFIRM MODAL ── */}
-      <Dialog open={!!archiveTarget} onOpenChange={(open) => { if (!open) setArchiveTarget(null); }}>
+      <Dialog
+        open={!!archiveTarget}
+        onOpenChange={(open) => {
+          if (!open) setArchiveTarget(null);
+        }}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <div className="flex items-center gap-3 mb-1">
@@ -882,9 +1212,15 @@ export default function PatientsPage() {
             </div>
             <DialogDescription className="text-sm leading-relaxed">
               You are about to archive{" "}
-              <span className="font-semibold text-foreground">{archiveTarget?.name}</span>.
-              This will remove the record from active listings. You can still view it
-              by switching to <span className="font-semibold text-foreground">Archived Records</span>.
+              <span className="font-semibold text-foreground">
+                {archiveTarget?.name}
+              </span>
+              . This will remove the record from active listings. You can still
+              view it by switching to{" "}
+              <span className="font-semibold text-foreground">
+                Archived Records
+              </span>
+              .
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-2">

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { Calendar, Stethoscope, Camera, ClipboardList } from 'lucide-react';
 import AppointmentsContent from '@/components/veterinarian/appointments/appointments-content';
@@ -18,7 +19,11 @@ const tabConfig = [
 type TabValue = typeof tabConfig[number]['value'];
 
 export default function AppointmentsPage() {
-  const [activeTab, setActiveTab] = useState<TabValue>('calendar');
+  const searchParams = useSearchParams();
+  const initialTab = (searchParams.get('tab') as TabValue | null);
+  const [activeTab, setActiveTab] = useState<TabValue>(
+    initialTab && tabConfig.some(t => t.value === initialTab) ? initialTab : 'calendar'
+  );
   const [direction, setDirection] = useState<'left' | 'right'>('right');
   const [animating, setAnimating] = useState(false);
 

@@ -133,7 +133,7 @@ export default function AdminSidebar({ collapsed, setCollapsed, mobileOpen, setM
   const SidebarContent = ({ isMobileView = false }: SidebarContentProps) => {
     if (isMobileView) {
       return (
-        <aside className="h-screen bg-card border-r text-card-foreground flex flex-col w-64 p-4">
+        <aside className="h-screen bg-card border-r text-card-foreground flex flex-col w-64 p-4 overflow-y-auto custom-scrollbar">
           <header className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-3">
               <Image src="/images/image.png" alt="Logo" width={40} height={40} className="rounded-full" />
@@ -162,7 +162,7 @@ export default function AdminSidebar({ collapsed, setCollapsed, mobileOpen, setM
     return (
       <aside className={`h-screen bg-transparent flex flex-col flex-shrink-0 transition-all duration-300 sticky top-0 ${collapsed ? 'w-28' : 'w-72'}`}>
         <div className="flex flex-col h-full p-3">
-          <div className="bg-card border rounded-3xl p-4 flex-1 flex flex-col shadow-lg overflow-y-auto overflow-x-hidden">
+          <div className="bg-card border rounded-3xl p-4 flex-1 flex flex-col shadow-lg overflow-y-auto overflow-x-hidden custom-scrollbar">
             <header className={`flex flex-col items-center text-center mb-8 relative flex-shrink-0 ${collapsed ? 'px-0' : ''}`}>
               <button 
                 onClick={() => setCollapsed(!collapsed)} 

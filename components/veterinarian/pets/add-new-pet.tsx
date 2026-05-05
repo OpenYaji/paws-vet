@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Plus, Upload } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
   DialogContent,
@@ -23,6 +24,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { toast } from "@/components/ui/use-toast";
+import getSafeUrl from "@/lib/get-safe-url";
 
 interface AddNewPetProps {
   onPetAdded: () => void;
@@ -31,6 +34,7 @@ interface AddNewPetProps {
 export default function AddNewPet({ onPetAdded }: AddNewPetProps) {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const { toast } = useToast();
 
   // Pet Form State
   const [newPet, setNewPet] = useState({
@@ -57,7 +61,7 @@ export default function AddNewPet({ onPetAdded }: AddNewPetProps) {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 5 * 1024 * 1024) {
-        alert("File is too large. Max 5MB.");
+        toast({ title: 'File Too Large', description: 'Maximum allowed file size is 5MB.', variant: 'destructive' });
         return;
       }
       setSelectedImageFile(file);
@@ -77,7 +81,7 @@ export default function AddNewPet({ onPetAdded }: AddNewPetProps) {
 
     try {
       if (!newPet.name || !newPet.species) {
-        alert("Please fill in Name and Species");
+        toast({ title: 'Missing Fields', description: 'Please fill in Name and Species.', variant: 'destructive' });
         setIsSaving(false);
         return;
       }
@@ -128,6 +132,7 @@ export default function AddNewPet({ onPetAdded }: AddNewPetProps) {
         throw new Error(result.error || "Failed to add pet");
       }
 
+      toast({ title: 'Pet Added', description: `${newPet.name} has been successfully added.` });
       onPetAdded();
       setIsAddOpen(false);
       setNewPet({
@@ -150,7 +155,7 @@ export default function AddNewPet({ onPetAdded }: AddNewPetProps) {
       setImagePreviewUrl(null);
       mutate('/api/veterinarian/pets'); // Refresh pet list after adding
     } catch (error: any) {
-      alert("Error adding pet: " + error.message);
+      toast({ title: 'Error', description: error.message || 'Failed to add pet.', variant: 'destructive' });
     } finally {
       setIsSaving(false);
     }
@@ -183,7 +188,7 @@ export default function AddNewPet({ onPetAdded }: AddNewPetProps) {
             <div className="relative w-24 h-24 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center bg-gray-50 overflow-hidden group hover:border-green-500 transition-colors">
               {imagePreviewUrl ? (
                 <img
-                  src={imagePreviewUrl}
+                  src={getSafeUrl(imagePreviewUrl)}
                   alt="Preview"
                   className="w-full h-full object-cover"
                 />

@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
       productsRes,
       paymentsRes,
       invoicesRes,
+      lineItemsRes,
     ] = await Promise.all([
       supabase.from('client_profiles').select('id', { count: 'exact' }),
       supabase.from('pets').select('id, species, breed, date_of_birth, owner_id', { count: 'exact' }),
@@ -35,6 +36,7 @@ export async function GET(request: NextRequest) {
       supabase.from('products').select('*').eq('is_active', true),
       supabase.from('payments').select('*').order('created_at', { ascending: false }),
       supabase.from('invoices').select('*').order('created_at', { ascending: false }),
+      supabase.from('invoice_line_items').select('product_id, quantity').not('product_id', 'is', null),
     ]);
 
     const clients = clientsRes.data || [];
@@ -44,6 +46,22 @@ export async function GET(request: NextRequest) {
     const products = productsRes.data || [];
     const payments = paymentsRes.data || [];
     const invoices = invoicesRes.data || [];
+    const lineItems = lineItemsRes.data || [];
+
+    // Aggregate sales per product from invoice line items
+    const salesByProduct: Record<string, number> = {};
+    lineItems.forEach((item: any) => {
+      if (item.product_id) {
+        salesByProduct[item.product_id] = (salesByProduct[item.product_id] || 0) + (item.quantity || 0);
+      }
+    });
+
+    // Lowest moving: active products with stock > 0, sorted by fewest sales then most stock
+    const lowestMovingProducts = products
+      .filter((p: any) => p.stock_quantity > 0)
+      .map((p: any) => ({ ...p, sales_count: salesByProduct[p.id] || 0 }))
+      .sort((a: any, b: any) => a.sales_count - b.sales_count || b.stock_quantity - a.stock_quantity)
+      .slice(0, 10);
 
     const now = new Date();
     const todayStart = new Date(now);
@@ -234,6 +252,7 @@ export async function GET(request: NextRequest) {
       upcomingAppointments: upcomingAppointments.length,
       recentAppointments: appointments.slice(0, 5),
       lowStockProducts,
+      lowestMovingProducts,
       revenueByCategory,
       totalRevenue,
       weeklyRevenue,

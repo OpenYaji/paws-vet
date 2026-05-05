@@ -15,9 +15,16 @@ import {
   Tooltip, TooltipContent, TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
-  FileText, Search, Eye, ChevronLeft, ChevronRight, LayoutList, TableIcon,
+  FileText, Search, Eye, ChevronLeft, ChevronRight, LayoutList, TableIcon, Pencil, Loader2, Printer,
 } from "lucide-react";
 import { Fetcher } from "@/lib/fetcher";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { mutate } from "swr";
+import PrintMedicalRecord from "@/components/veterinarian/medical-records/print-medical-record";
 
 interface MedicalRecord {
   id: string;
@@ -31,7 +38,7 @@ interface MedicalRecord {
   appointments: { appointment_number: string; scheduled_start: string; reason_for_visit: string } | null;
 }
 
-const ITEMS_PER_PAGE = 20;
+const items_per_page = 20;
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -44,6 +51,7 @@ export default function MedicalRecordsPage() {
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<"list" | "table">("table");
   const [page, setPage] = useState(1);
+  const [printRecord, setPrintRecord] = useState<MedicalRecord | null>(null);
 
   const filtered = useMemo(() => {
     const term = search.toLowerCase();
@@ -56,16 +64,48 @@ export default function MedicalRecordsPage() {
     );
   }, [records, search]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+  const totalPages = Math.max(1, Math.ceil(filtered.length / items_per_page));
   const safePage = Math.min(page, totalPages);
   const paginated = filtered.slice(
-    (safePage - 1) * ITEMS_PER_PAGE,
-    safePage * ITEMS_PER_PAGE
+    (safePage - 1) * items_per_page,
+    safePage * items_per_page
   );
 
   const handleSearch = (v: string) => {
     setSearch(v);
     setPage(1);
+  };
+
+  const [editRec, setEditRec] = useState<MedicalRecord | null>(null);
+  const [editForm, setEditForm] = useState({ chief_complaint: '', diagnosis: '', treatment_plan: '' });
+  const [editSaving, setEditSaving] = useState(false);
+
+  const openEdit = (rec: MedicalRecord) => {
+    setEditRec(rec);
+    setEditForm({
+      chief_complaint: rec.chief_complaint ?? '',
+      diagnosis: rec.diagnosis ?? '',
+      treatment_plan: rec.treatment_plan ?? '',
+    });
+  };
+
+  const handleEditSave = async () => {
+    if (!editRec) return;
+    setEditSaving(true);
+    try {
+      const res = await fetch('/api/veterinarian/medical-records', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: editRec.id, ...editForm }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setEditRec(null);
+      mutate('/api/veterinarian/medical-records');
+    } catch (err) {
+      console.error('[MedicalRecords] edit error', err);
+    } finally {
+      setEditSaving(false);
+    }
   };
 
   if (isLoading) {
@@ -179,16 +219,26 @@ export default function MedicalRecordsPage() {
                           : "—"}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button variant="outline" size="icon" asChild>
-                              <Link href={`/veterinarian/medical-records/${rec.id}`}>
-                                <Eye className="h-4 w-4" />
-                              </Link>
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>View Record</TooltipContent>
-                        </Tooltip>
+                        <div className="flex justify-end gap-1">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button variant="outline" size="icon" asChild>
+                                <Link href={`/veterinarian/medical-records/${rec.id}`}>
+                                  <Eye className="h-4 w-4" />
+                                </Link>
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>View Record</TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button variant="outline" size="icon" onClick={() => setPrintRecord(rec)}>
+                                <Printer className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Print Record</TooltipContent>
+                          </Tooltip>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))
@@ -240,11 +290,16 @@ export default function MedicalRecordsPage() {
                         ? format(new Date(rec.visit_date), "MMM dd, yyyy")
                         : "—"}
                     </span>
-                    <Button variant="outline" size="sm" asChild>
-                      <Link href={`/veterinarian/medical-records/${rec.id}`}>
-                        <Eye className="h-3.5 w-3.5 mr-1" /> View
-                      </Link>
-                    </Button>
+                    <div className="flex gap-1">
+                      <Button variant="outline" size="sm" asChild>
+                        <Link href={`/veterinarian/medical-records/${rec.id}`}>
+                          <Eye className="h-3.5 w-3.5 mr-1" /> View
+                        </Link>
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => setPrintRecord(rec)}>
+                        <Printer className="h-3.5 w-3.5 mr-1" /> Print
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -278,6 +333,50 @@ export default function MedicalRecordsPage() {
             </Button>
           </div>
         </div>
+      )}
+
+      {/* Edit Medical Record Dialog */}
+      <Dialog open={!!editRec} onOpenChange={(open) => !open && setEditRec(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit Medical Record <span className="font-mono text-sm text-muted-foreground">#{editRec?.record_number}</span></DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1">
+              <Label>Chief Complaint</Label>
+              <Input value={editForm.chief_complaint}
+                onChange={e => setEditForm(f => ({ ...f, chief_complaint: e.target.value }))}
+                placeholder="Primary reason for visit" />
+            </div>
+            <div className="space-y-1">
+              <Label>Diagnosis</Label>
+              <Input value={editForm.diagnosis}
+                onChange={e => setEditForm(f => ({ ...f, diagnosis: e.target.value }))}
+                placeholder="Clinical diagnosis" />
+            </div>
+            <div className="space-y-1">
+              <Label>Treatment Plan</Label>
+              <Textarea value={editForm.treatment_plan}
+                onChange={e => setEditForm(f => ({ ...f, treatment_plan: e.target.value }))}
+                placeholder="Treatment notes and plan"
+                className="min-h-24" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditRec(null)} disabled={editSaving}>Cancel</Button>
+            <Button onClick={handleEditSave} disabled={editSaving}>
+              {editSaving && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Single mounted print dialog — swaps content via printRecord state */}
+      {printRecord && (
+        <PrintMedicalRecord
+          record={printRecord}
+          open={!!printRecord}
+          onOpenChange={(open) => { if (!open) setPrintRecord(null); }}
+        />
       )}
     </div>
   );
