@@ -14,7 +14,7 @@ import {
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 
-type AppointmentPaymentStatus = 'unpaid' | 'paid' | 'waived' | 'refunded';
+type AppointmentPaymentStatus = 'unpaid' | 'paid' | 'waived' | 'refunded' | 'cancelled' | 'no_show';
 type AppointmentPaymentMethod = 'gcash' | 'maya' | 'cash' | 'card' | 'other' | null;
 
 interface PaymentRecord {
@@ -45,6 +45,8 @@ const BADGE: Record<AppointmentPaymentStatus, { label: string; cls: string }> = 
   paid:     { label: 'Paid',             cls: 'bg-emerald-700 text-white dark:bg-emerald-500 dark:text-white' },
   waived:   { label: 'Free / Waived',   cls: 'bg-blue-700 text-white dark:bg-blue-500 dark:text-white' },
   refunded: { label: 'Refunded',         cls: 'bg-slate-700 text-white dark:bg-slate-500 dark:text-white' },
+  cancelled: { label: 'Cancelled',       cls: 'bg-red-700 text-white dark:bg-red-500 dark:text-white' },
+  no_show:   { label: 'No Show',         cls: 'bg-gray-700 text-white dark:bg-gray-500 dark:text-white' },
 };
 
 const METHOD_LABEL: Record<string, string> = {
@@ -60,6 +62,8 @@ const STATUS_BORDER: Record<AppointmentPaymentStatus, string> = {
   unpaid:   'border-l-amber-500',
   waived:   'border-l-blue-500',
   refunded: 'border-l-muted-foreground',
+  cancelled: 'border-l-red-500',
+  no_show:   'border-l-gray-500',
 };
 
 function StatusBadge({ status }: { status: AppointmentPaymentStatus }) {
@@ -265,15 +269,18 @@ export default function ClientTransactionsPage() {
       ) : (
         <div className="space-y-3">
           {records.map((rec) => {
+            const isNoShowOrCancelled = (rec.appointment_status === 'no_show' || rec.appointment_status === 'cancelled') && rec.payment_status === 'unpaid';
+            const displayStatus: AppointmentPaymentStatus = isNoShowOrCancelled ? (rec.appointment_status as AppointmentPaymentStatus) : rec.payment_status;
+
             const referenceSubmitted =
-              rec.payment_status === 'unpaid' &&
+              displayStatus === 'unpaid' &&
               (rec.payment_method === 'gcash' || rec.payment_method === 'maya') &&
               !!rec.payment_reference;
 
             return (
               <div
                 key={rec.id}
-                className={`bg-card rounded-2xl border border-border border-l-4 ${STATUS_BORDER[rec.payment_status]} shadow-sm p-5 space-y-4`}
+                className={`bg-card rounded-2xl border border-border border-l-4 ${STATUS_BORDER[displayStatus]} shadow-sm p-5 space-y-4`}
               >
                 {/* Top row */}
                 <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -283,7 +290,7 @@ export default function ClientTransactionsPage() {
                     </span>
                     <TypeBadge type={rec.appointment_type_detail} />
                   </div>
-                  <StatusBadge status={rec.payment_status} />
+                  <StatusBadge status={displayStatus} />
                 </div>
 
                 {/* Pet + date */}
