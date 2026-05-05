@@ -1,16 +1,18 @@
-    'use client';
+'use client';
 
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Syringe, ClipboardList, Plus, Clock, User, PawPrint } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Appointment } from '@/types/appointments';
+import { AppointmentApiResponse as Appointment } from '@/types/appointments';
 
 interface DailyDetailPanelProps {
   selectedDate: string;
   appointments: Appointment[];
   onAddWalkIn?: (date: string, time: string) => void;
+  // 1. ADDED THIS: The panel now expects a function when an appointment is clicked
+  onSelectAppointment?: (appointment: Appointment) => void; 
 }
 
 const TIME_SLOTS = [
@@ -21,13 +23,12 @@ const TIME_SLOTS = [
 
 const typeIcons: Record<string, React.ReactNode> = {
   vaccination: <Syringe className="w-4 h-4 text-blue-600" />,
-  checkup: <ClipboardList className="w-4 h-4 text-green-600" />,
+  wellness: <ClipboardList className="w-4 h-4 text-green-600" />,
   dental: <span className="text-sm">🦷</span>,
   consultation: <ClipboardList className="w-4 h-4 text-purple-600" />,
   surgery: <ClipboardList className="w-4 h-4 text-red-600" />,
   emergency: <ClipboardList className="w-4 h-4 text-red-600" />,
-  grooming: <PawPrint className="w-4 h-4 text-amber-600" />,
-  followup: <ClipboardList className="w-4 h-4 text-teal-600" />,
+  follow_up: <ClipboardList className="w-4 h-4 text-teal-600" />,
 };
 
 const statusColors: Record<string, string> = {
@@ -50,6 +51,7 @@ export default function DailyDetailPanel({
   selectedDate,
   appointments,
   onAddWalkIn,
+  onSelectAppointment, // 2. IMPORTED IT HERE
 }: DailyDetailPanelProps) {
   const [activeTab, setActiveTab] = useState<'taken' | 'available'>('taken');
 
@@ -66,10 +68,12 @@ export default function DailyDetailPanel({
   // Determine which slots are taken
   const takenSlots = new Set<string>();
   appointments.forEach((apt) => {
+    if (!apt.scheduled_start || !apt.scheduled_end) return;
     const start = new Date(apt.scheduled_start);
     const hh = start.getHours().toString().padStart(2, '0');
     const mm = start.getMinutes().toString().padStart(2, '0');
     takenSlots.add(`${hh}:${mm}`);
+    
     // Also mark the next 30-min slot if appointment spans it
     const end = new Date(apt.scheduled_end);
     const diffMin = (end.getTime() - start.getTime()) / 60000;
@@ -157,7 +161,13 @@ export default function DailyDetailPanel({
               return (
                 <div
                   key={apt.id}
-                  className="border border-border rounded-xl p-3 space-y-2 hover:shadow-sm transition-shadow"
+                  // 3. ADDED THIS: Trigger the modal click here!
+                  onClick={() => onSelectAppointment && onSelectAppointment(apt)} 
+                  className={cn(
+                    "border border-border rounded-xl p-3 space-y-2 transition-all",
+                    // 4. ADDED THIS: Makes cursor a pointer and highlights on hover
+                    onSelectAppointment ? "cursor-pointer hover:border-primary hover:shadow-md hover:bg-muted/30" : "hover:shadow-sm"
+                  )}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -183,7 +193,7 @@ export default function DailyDetailPanel({
                       </p>
                       <p className="text-xs text-muted-foreground flex items-center gap-1">
                         <User className="w-3 h-3" />
-                        {apt.client?.first_name} {apt.client?.last_name}
+                        {apt.pet?.client?.first_name} {apt.pet?.client?.last_name}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         Dr. {apt.veterinarian?.first_name} {apt.veterinarian?.last_name}

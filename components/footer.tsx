@@ -1,7 +1,13 @@
+"use client";
 import Link from 'next/link';
 import Image from 'next/image';
+import useSWR from 'swr';
+
+const fetcher = (url: string) => fetch(url).then(res => res.json());
 
 export function Footer() {
+ const { data: settings } = useSWR('/api/veterinarian/admin', fetcher);
+
   return (
     <footer className="bg-foreground text-primary-foreground">
       <div className="container mx-auto px-4 py-12">
@@ -36,8 +42,8 @@ export function Footer() {
             <h4 className="font-semibold mb-4">Information</h4>
             <ul className="space-y-2">
               <li><Link href="/faq" className="text-primary-foreground/80 hover:text-primary-foreground text-sm">FAQ</Link></li>
-              <li><a href="tel:+1234567890" className="text-primary-foreground/80 hover:text-primary-foreground text-sm">(123) 456-7890</a></li>
-              <li><a href="mailto:info@pawsclinic.com" className="text-primary-foreground/80 hover:text-primary-foreground text-sm">info@pawsclinic.com</a></li>
+              <li><a href={`tel:${settings?.phone || '(123) 456-7890'}`} className="text-primary-foreground/80 hover:text-primary-foreground text-sm">{settings?.phone || '(123) 456-7890'}</a></li>
+              <li><a href={`mailto:${settings?.email || 'info@pawsclinic.com'}`} className="text-primary-foreground/80 hover:text-primary-foreground text-sm">{settings?.email || 'info@pawsclinic.com'}</a></li>
               <li className="text-primary-foreground/80 text-sm">Open Daily 9am - 5pm</li>
             </ul>
           </div>
@@ -45,9 +51,7 @@ export function Footer() {
           <div>
             <h4 className="font-semibold mb-4">Location</h4>
             <p className="text-primary-foreground/80 text-sm">
-              123 Pet Street<br />
-              Veterinary City, VC 12345<br />
-              United States
+              {settings?.address || "Aurora Blvd, Quezon City, 1108 Metro Manila"}
             </p>
           </div>
         </div>
@@ -59,3 +63,5 @@ export function Footer() {
     </footer>
   );
 }
+
+export default Footer;

@@ -219,17 +219,16 @@ export function NotificationBell({ userId, className = '' }: NotificationBellPro
           aria-label="Notifications"
         >
           <Bell size={20} />
-          {hasUnread && (
-            <span className="absolute top-1 right-1 h-2.5 w-2.5 bg-red-500 rounded-full border-2 border-background animate-pulse" />
-          )}
-          {!hasUnread && notifications.length > 0 && (
-            <span className="absolute -top-1 -right-1 h-5 w-5 bg-primary text-primary-foreground text-xs rounded-full flex items-center justify-center border-2 border-background">
-              {notifications.length > 9 ? '9+' : notifications.length}
+          {notifications.length > 0 ? (
+            <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center border-2 border-background shadow-sm">
+              {notifications.length > 99 ? '99+' : notifications.length}
             </span>
-          )}
+          ) : hasUnread ? (
+            <span className="absolute top-1 right-1 h-2.5 w-2.5 bg-red-500 rounded-full border-2 border-background animate-pulse" />
+          ) : null}
         </button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 p-0">
+      <PopoverContent align="end" className="w-80 p-0 bg-background border shadow-lg">
         <div className="flex items-center justify-between px-4 py-3 border-b">
           <h4 className="text-sm font-semibold">Notifications</h4>
           {notifications.length > 0 && (
@@ -238,7 +237,7 @@ export function NotificationBell({ userId, className = '' }: NotificationBellPro
             </span>
           )}
         </div>
-        <ScrollArea className="max-h-80">
+        <ScrollArea className="h-72 overflow-y-auto">
           {notifLoading ? (
             <div className="flex justify-center py-8">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />

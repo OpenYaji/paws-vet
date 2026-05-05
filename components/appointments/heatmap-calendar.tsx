@@ -13,6 +13,13 @@ interface HeatmapCalendarProps {
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+function toLocalDateStr(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 function getHeatColor(count: number): string {
   if (count >= 13) return 'bg-red-100 text-red-800 hover:bg-red-200';
   if (count >= 6) return 'bg-amber-50 text-amber-800 hover:bg-amber-100';
@@ -49,9 +56,8 @@ export default function HeatmapCalendar({
     // Previous month padding
     for (let i = firstDay - 1; i >= 0; i--) {
       const d = daysInPrevMonth - i;
-      const prevMonth = new Date(year, month - 1, d);
       days.push({
-        date: prevMonth.toISOString().split('T')[0],
+        date: toLocalDateStr(new Date(year, month - 1, d)),
         day: d,
         isCurrentMonth: false,
       });
@@ -59,9 +65,8 @@ export default function HeatmapCalendar({
 
     // Current month
     for (let d = 1; d <= daysInMonth; d++) {
-      const dateObj = new Date(year, month, d);
       days.push({
-        date: dateObj.toISOString().split('T')[0],
+        date: toLocalDateStr(new Date(year, month, d)),
         day: d,
         isCurrentMonth: true,
       });
@@ -70,9 +75,8 @@ export default function HeatmapCalendar({
     // Next month padding
     const remaining = 42 - days.length;
     for (let d = 1; d <= remaining; d++) {
-      const nextMonth = new Date(year, month + 1, d);
       days.push({
-        date: nextMonth.toISOString().split('T')[0],
+        date: toLocalDateStr(new Date(year, month + 1, d)),
         day: d,
         isCurrentMonth: false,
       });
@@ -86,7 +90,7 @@ export default function HeatmapCalendar({
     year: 'numeric',
   });
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = toLocalDateStr(new Date());
 
   return (
     <div className="bg-card border border-border rounded-xl shadow-sm p-5">

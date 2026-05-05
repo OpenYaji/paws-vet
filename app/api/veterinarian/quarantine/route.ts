@@ -1,40 +1,12 @@
 import { createClient } from "@/utils/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { handleError } from "@/utils/error-handler";
+import { sendSms } from "@/utils/sms/sms";
 
 // Force dynamic rendering to ensure fresh data on each request
 export const dynamic = "force-dynamic";
 
-// get the authenticated user and role
-async function getAuthUser(request: NextRequest) {
-  const supabase = await createClient();
-
-  // check for manual token in headers (for fetcher)
-  const authHeader = request.headers.get("Authorization");
-  const token = authHeader ? authHeader.replace("Bearer ", "").trim() : null;
-
-  const {
-    data: { user },
-    error,
-  } = token
-    ? await supabase.auth.getUser(token)
-    : await supabase.auth.getUser();
-
-  if (error || !user) return { user: null, role: null, supabase };
-
-  const role =
-    user?.user_metadata?.role?.toLowerCase() ||
-    user?.app_metadata?.role?.toLowerCase() ||
-    "client";
-
-  return { user, role, supabase };
-}
-
 export async function GET(request: NextRequest) {
-  const { user } = await getAuthUser(request);
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
   try {
     const supabase = await createClient();
 
@@ -71,12 +43,15 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { user } = await getAuthUser(request);
+    const supabase = await createClient();
 
-    // verify authentication before creating quarantine records
-    if (!user) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const user = session?.user;
+
+    if (!user)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
 
     // Parse JSON request body
     const body = await request.json();
@@ -92,22 +67,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = await createClient();
+    const [insertResult, auditResult] = await Promise.all([
+      supabase
+        .from("quarantine_pets")
+        .insert({
+          pet_id,
+          reason,
+          notes: notes || null,
+          start_date,
+          expected_end_date,
+          status: "active",
+        })
+        .select()
+        .single(),
+      supabase.from("audit_logs").insert({
+        user_id: user.id,
+        action_type: "create",
+        table_name: "quarantine_pets",
+        details: `Placed pet_id ${pet_id} in quarantine. Reason: ${reason}`,
+      }),
+    ]);
 
-    const { data, error } = await supabase
-      .from("quarantine_pets")
-      .insert({
-        pet_id,
-        reason,
-        notes: notes || null,
-        start_date,
-        expected_end_date,
-        status: "active",
-      })
-      .select() // Return the inserted record
-      .single(); // Expect exactly one record to be returned
-    if (error) return handleError(error, "POST /api/quarantine");
-    return NextResponse.json(data, { status: 201 });
+    if (insertResult.error)
+      return handleError(insertResult.error, "POST /api/quarantine");
+    if (auditResult.error) throw auditResult.error;
+    return NextResponse.json({ success: true }, { status: 201 });
   } catch (error) {
     // Unexpected error — centralized handler
     return handleError(error, "POST /api/quarantine");
@@ -116,35 +100,87 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const { user } = await getAuthUser(request);
-    if (!user) {
+    const supabase = await createClient();
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const user = session?.user;
+
+    if (!user)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
 
     const body = await request.json();
-    const { id, status, end_date } = body;
+    const { id, status, end_date, reason, notes, expected_end_date } = body;
 
-    if (!body.id || !body.status) {
+    if (!body.id) {
       return NextResponse.json(
-        { error: "Missing required fields" },
+        { error: "Missing required field: id" },
         { status: 400 },
       );
     }
-    const supabase = await createClient();
-    const { data, error } = await supabase
+
+    const patch: Record<string, any> = {};
+    if (status !== undefined) patch.status = status;
+    if (end_date !== undefined) patch.end_date = end_date || null;
+    if (reason !== undefined) patch.reason = reason;
+    if (notes !== undefined) patch.notes = notes;
+    if (expected_end_date !== undefined)
+      patch.expected_end_date = expected_end_date;
+
+    const { data: oldRecord } = await supabase
       .from("quarantine_pets")
-      .update({
-        status: status,
-        end_date: end_date || null,
-      })
-      .eq("id", id)
       .select()
+      .eq("id", id)
       .single();
 
-    // Delegate update error to centralized handler
-    if (error) return handleError(error, "PATCH /api/quarantine");
+    const [updateResult, auditResult] = await Promise.all([
+      supabase
+        .from("quarantine_pets")
+        .update(patch)
+        .eq("id", id)
+        .select()
+        .single(),
+      supabase.from("audit_logs").insert({
+        user_id: user.id,
+        action_type: "update",
+        table_name: "quarantine_pets",
+        details: `Updated quarantine record id ${id}`,
+        old_values: oldRecord ?? null,
+        new_values: patch,
+      }),
+    ]);
 
-    return NextResponse.json(data, { status: 200 });
+    if (updateResult.error)
+      return handleError(updateResult.error, "PATCH /api/quarantine");
+    if (auditResult.error) throw auditResult.error;
+
+    const previousStatus = oldRecord?.status;
+    const newStatus = updateResult.data?.status;
+    if (
+      previousStatus !== newStatus &&
+      (newStatus === "completed" || newStatus === "released")
+    ) {
+      const { data: petData } = await supabase
+        .from("pets")
+        .select(
+          "name, client:client_profiles!pets_owner_id_fkey(user_id, first_name, phone)",
+        )
+        .eq("id", updateResult.data?.pet_id)
+        .maybeSingle();
+
+      const phone = (petData as any)?.client?.phone;
+      const firstName = (petData as any)?.client?.first_name || "Client";
+      const petName = (petData as any)?.name || "your pet";
+      if (phone) {
+        const smsMessage = `Hi ${firstName}, this is Paws Vet Clinic. ${petName} has completed their quarantine period and is ready for release.`;
+        sendSms(phone, smsMessage).catch((err) =>
+          console.error("[Quarantine SMS] Failed to notify client:", err),
+        );
+      }
+    }
+
+    return NextResponse.json({ success: true });
   } catch (error) {
     // Unexpected error — centralized handler
     return handleError(error, "PATCH /api/quarantine");

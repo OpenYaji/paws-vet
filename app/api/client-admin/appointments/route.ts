@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { requireClientAdmin } from '@/lib/client-admin-auth';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -9,6 +10,9 @@ const supabaseAdmin = createClient(
 
 export async function GET(request: Request) {
   try {
+    const auth = await requireClientAdmin(request);
+    if (auth.response) return auth.response;
+
     const { searchParams } = new URL(request.url);
     const ownerId = searchParams.get('owner_id');
     // BUG FIX: Added pagination support to avoid fetching unbounded rows
@@ -60,9 +64,12 @@ export async function GET(request: Request) {
       .from('appointments')
       .select(`
         *,
+        outreach_programs!appointments_outreach_program_id_fkey (title),
         pets!appointments_pet_id_fkey (
           name,
           species,
+          breed,
+          gender,
           client_profiles!pets_owner_id_fkey (
             id, first_name, last_name
           )
@@ -84,9 +91,19 @@ export async function GET(request: Request) {
         : 'Unknown Client',
       pet_id: apt.pet_id,
       pet_name: apt.pets?.name || 'Unknown',
-      // BUG FIX: keep the full ISO string for appointment_date so the client
-      // can format it however it needs; was converting to bare date string which
-      // loses timezone info and causes off-by-one display bugs.
+      breed: apt.pets?.breed || null,
+      gender: apt.pets?.gender || null,
+      appointment_type_detail: apt.appointment_type_detail || '',
+      appointment_number: apt.appointment_number || null,
+      duration_minutes: apt.duration_minutes || null,
+      payment_method: apt.payment_method || null,
+      payment_status: apt.payment_status || null,
+      is_aspin_puspin: apt.is_aspin_puspin || false,
+      payment_amount: apt.payment_amount || null,
+      outreach_program_id: apt.outreach_program_id || null,
+      outreach_program_title: apt.outreach_programs?.title || null,
+      scheduled_start: apt.scheduled_start || '',
+      scheduled_end: apt.scheduled_end || '',
       appointment_date: apt.scheduled_start || '',
       appointment_time: apt.scheduled_start
         ? new Date(apt.scheduled_start).toLocaleTimeString('en-US', {
@@ -94,6 +111,7 @@ export async function GET(request: Request) {
           })
         : '',
       status: apt.appointment_status || 'pending',
+      appointment_status: apt.appointment_status || 'pending',
       reason: apt.reason_for_visit || 'No reason provided',
       is_emergency: apt.is_emergency || false,
       created_at: apt.created_at,

@@ -46,6 +46,7 @@ interface DashboardStats {
   appointmentStats?: { todayCount: number; thisWeekCount: number; totalCount: number; completionRate: number; cancelRate: number; byType: Record<string, number>; byStatus: Record<string, number> };
   petStats?: { totalPets: number; petsBySpecies: Array<{ species: string; count: number }> };
   employeeStats?: { totalEmployees: number; activeEmployees: number; suspendedEmployees: number; totalAdminStaff: number; totalVetStaff: number };
+  lowestMovingProducts?: any[];
 }
 
 /* ─── Alert config ───────────────────────────────────────────────────── */

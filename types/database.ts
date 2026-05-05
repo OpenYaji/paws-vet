@@ -6,7 +6,7 @@
 // Enums matching database enums
 export type UserRole = 'client' | 'veterinarian' | 'admin';
 export type AppointmentStatus = 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled' | 'no_show';
-export type AppointmentType = 'wellness' | 'emergency' | 'follow_up' | 'surgery' | 'vaccination' | 'dental' | 'consultation';
+export type AppointmentType = 'wellness' | 'emergency' | 'follow_up' | 'surgery' | 'vaccination' | 'dental' | 'consultation' | 'kapon';
 export type AccountStatus = 'active' | 'inactive' | 'suspended';
 export type EmploymentStatus = 'full_time' | 'part_time' | 'contract' | 'terminated';
 export type Gender = 'male' | 'female' | 'unknown';
@@ -17,7 +17,9 @@ export type NotificationType =
   | 'appointment_confirmed' | 'appointment_cancelled' | 'general' | 'low_stock'
   // vet-specific types fired by DB triggers
   | 'new_appointment' | 'new_pet' | 'emergency' | 'appointment_today'
-  | 'quarantine_alert' | 'no_show' | 'admin_announcement' | 'admin_duty_notice';
+  | 'quarantine_alert' | 'no_show' | 'admin_announcement' | 'admin_duty_notice'
+  // CMS admin notification types
+  | 'appointment_booked' | 'pet_added' | 'pet_updated';
 export type NotificationStatus = 'pending' | 'sent' | 'delivered' | 'failed';
 export type CommunicationPreference = 'email' | 'sms' | 'phone' | 'any';
 export type ActionType = 'create' | 'update' | 'delete' | 'view' | 'login' | 'logout';
@@ -106,6 +108,7 @@ export interface Pet {
   special_needs?: string;
   behavioral_notes?: string;
   current_medical_status?: string;
+  allow_repeat_kapon_booking: boolean;
   is_active: boolean;
   created_at: string;
   updated_at: string;

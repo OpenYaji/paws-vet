@@ -1,9 +1,10 @@
 'use client';
 
-import React from "react"
+import React, { Suspense } from "react"
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,7 +17,13 @@ export const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-export default function LoginPage() {
+function LoginContent() {
+  const searchParams = useSearchParams();
+  const isCmsLogin = searchParams.get('mode') === 'cms';
+  const rawCmsRedirect = searchParams.get('redirect') || '/client-admin?tab=clients';
+  const cmsRedirect = rawCmsRedirect.startsWith('/client-admin')
+    ? rawCmsRedirect
+    : '/client-admin?tab=clients';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -58,9 +65,31 @@ export default function LoginPage() {
       const role = data.user.user_metadata?.role || 'client';
       console.log('User role:', role);
 
+      let isCmsAdmin = role === 'admin';
+
+      if (isCmsLogin && !isCmsAdmin) {
+        const { data: adminProfile } = await supabase
+          .from('admin_profiles')
+          .select('id')
+          .eq('user_id', data.user.id)
+          .maybeSingle();
+
+        isCmsAdmin = Boolean(adminProfile?.id);
+      }
+
+      if (isCmsLogin && !isCmsAdmin) {
+        await supabase.auth.signOut();
+        setError('Admin account required to access CMS.');
+        setPassword('');
+        setIsLoading(false);
+        return;
+      }
+
       // Determine redirect path
       let redirectPath = '/client/dashboard';
-      if (role === 'admin') {
+      if (isCmsLogin) {
+        redirectPath = cmsRedirect;
+      } else if (role === 'admin') {
         redirectPath = '/admin/dashboard';
       } else if (role === 'veterinarian') {
         redirectPath = '/veterinarian/dashboard';
@@ -98,8 +127,10 @@ export default function LoginPage() {
 
         <Card>
           <CardHeader className="space-y-2 text-center">
-            <CardTitle className="text-2xl">Welcome to PAWS</CardTitle>
-            <CardDescription>Veterinary Clinic Management System</CardDescription>
+            <CardTitle className="text-2xl">{isCmsLogin ? 'CMS Admin Login' : 'Welcome to PAWS'}</CardTitle>
+            <CardDescription>
+              {isCmsLogin ? 'Sign in with an admin account to access the CMS' : 'Veterinary Clinic Management System'}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleLogin} className="space-y-4">
@@ -152,5 +183,17 @@ export default function LoginPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <p className="text-sm text-muted-foreground">Loading login...</p>
+      </div>
+    }>
+      <LoginContent />
+    </Suspense>
   );
 }

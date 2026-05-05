@@ -301,7 +301,7 @@ export default function ClientDetailPage() {
       {activeTab === 'overview' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {/* Account Info */}
-          <div className="bg-card rounded-2xl border border-border shadow-sm">
+          <div className="rounded-2xl border border-border/80 bg-card/95 shadow-sm">
             <div className="px-6 py-4 border-b border-border flex items-center justify-between">
               <h2 className="text-[17px] font-bold">Account Information</h2>
             </div>
@@ -388,7 +388,7 @@ export default function ClientDetailPage() {
 
       {/* ── Pets ── */}
       {activeTab === 'pets' && (
-        <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+        <div className="rounded-2xl border border-border/80 bg-card/95 shadow-sm overflow-hidden">
           {pets.length === 0 ? (
             <div className="py-16 px-6 text-center text-muted-foreground">
               <div className="w-14 h-14 bg-accent rounded-2xl flex items-center justify-center mx-auto mb-4">
@@ -442,7 +442,7 @@ export default function ClientDetailPage() {
 
       {/* ── Appointments ── */}
       {activeTab === 'appointments' && (
-        <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+        <div className="rounded-2xl border border-border/80 bg-card/95 shadow-sm overflow-hidden">
           {appointments.length === 0 ? (
             <div className="py-16 px-6 text-center text-muted-foreground">
               <div className="w-14 h-14 bg-accent rounded-2xl flex items-center justify-center mx-auto mb-4">
@@ -526,3 +526,4 @@ export default function ClientDetailPage() {
     </div>
   );
 }
+

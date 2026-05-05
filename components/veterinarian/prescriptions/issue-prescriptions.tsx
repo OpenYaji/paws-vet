@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { Plus, Loader2 } from "lucide-react";
 import { format } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
 
 interface IssuePrescriptionProps {
   onPrescriptionIssued: () => void;
@@ -34,6 +35,7 @@ export default function IssuePrescription({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const { toast } = useToast();
 
   // --- Search States ---
   const [searchTerm, setSearchTerm] = useState("");
@@ -136,7 +138,7 @@ export default function IssuePrescription({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPet || !selectedMedicalRecord) {
-      alert("Please select both a patient and a medical record.");
+      toast({ title: 'Missing Information', description: 'Please select both a patient and a medical record.', variant: 'destructive' });
       return;
     }
 
@@ -157,16 +159,17 @@ export default function IssuePrescription({
 
       if (!res.ok) {
         const errorData = await res.json();
-        alert(errorData.error || "Failed to issue prescription. Please try again.");
+        toast({ title: 'Failed', description: errorData.error || 'Failed to issue prescription. Please try again.', variant: 'destructive' });
         return;
       }
 
+      toast({ title: 'Prescription Issued', description: `Prescription for ${selectedPet.name} has been successfully issued.` });
       setIsModalOpen(false);
       resetForm();
       onPrescriptionIssued();
     } catch (error) {
       console.error(error);
-      alert("Error issuing prescription. Please try again.");
+      toast({ title: 'Error', description: 'Error issuing prescription. Please try again.', variant: 'destructive' });
     } finally {
       setIsSaving(false);
     }

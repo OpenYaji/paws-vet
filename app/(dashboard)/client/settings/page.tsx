@@ -52,11 +52,11 @@ const profileSchema = z.object({
   lastName: z.string()
     .min(2, 'Last name must be at least 2 characters')
     .max(50, 'Last name must be less than 50 characters'),
-  // DB phone check: international format ^+?[1-9]\d{1,14}$
+  // DB phone check: international format ^+?[0-9]\d{1,14}$ (updated for PH mobile)
   phone: z.string()
-    .regex(/^\+?[1-9]\d{1,14}$/, 'Invalid phone number (e.g. +639123456789 or 09123456789)'),
+    .regex(/^\+?[0-9]\d{1,14}$/, 'Invalid phone number (e.g. +639123456789 or 09123456789)'),
   alternatePhone: z.string()
-    .regex(/^\+?[1-9]\d{1,14}$/, 'Invalid phone number')
+    .regex(/^\+?[0-9]\d{1,14}$/, 'Invalid phone number')
     .optional()
     .or(z.literal('')),
   addressLine1: z.string()
@@ -73,9 +73,9 @@ const profileSchema = z.object({
   state: z.string()
     .min(2, 'State/Province is required')
     .max(50, 'State/Province must be less than 50 characters'),
-  // DB zip_code check: ^\d{5}(-\d{4})?$  (5-digit US format or ZIP+4)
+  // DB zip_code check: ^\d{4}$ (4-digit Philippines format)
   zipCode: z.string()
-    .regex(/^\d{5}(-\d{4})?$/, 'Invalid ZIP code (e.g. 12345 or 12345-6789)'),
+    .regex(/^\d{4}$/, 'Invalid ZIP code (must be exactly 4 digits)'),
   country: z.string()
     .min(2, 'Country is required')
     .max(50, 'Country must be less than 50 characters'),
@@ -586,48 +586,6 @@ export default function ClientSettingsPage() {
               <Button type="submit" disabled={isProfileSubmitting || !isProfileDirty} className="w-full md:w-auto">
                 <Save className="w-4 h-4 mr-2" />
                 {isProfileSubmitting ? 'Saving...' : 'Save Profile'}
-              </Button>
-            </form>
-          </div>
-        </div>
-
-        {/* ── COMMUNICATION PREFERENCES ──────────────────────────────────── */}
-        <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
-          <div className="p-6 pb-0">
-            <h2 className="text-lg font-semibold flex items-center gap-2">
-              <Bell className="w-5 h-5" />
-              Communication Preferences
-            </h2>
-            <p className="text-sm text-muted-foreground mt-1">
-              Choose how you want to receive notifications and updates
-            </p>
-          </div>
-          <div className="p-6">
-            <form onSubmit={handleSubmitProfile(onSubmitProfile)} className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="communicationPreference">Preferred Contact Method</Label>
-                <Controller
-                  name="communicationPreference"
-                  control={controlProfile}
-                  render={({ field }) => (
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select method" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="email">Email</SelectItem>
-                        <SelectItem value="phone">Phone Call</SelectItem>
-                        <SelectItem value="sms">SMS / Text</SelectItem>
-                        <SelectItem value="zoom">Zoom</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
-              </div>
-
-              <Button type="submit" disabled={isProfileSubmitting || !isProfileDirty} className="w-full md:w-auto">
-                <Save className="w-4 h-4 mr-2" />
-                Save Preferences
               </Button>
             </form>
           </div>

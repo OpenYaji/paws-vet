@@ -1,7 +1,7 @@
 ﻿'use client';
 
-import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/auth-client';
+import useSWR, { useSWRConfig } from 'swr';
 import {
   Receipt,
   PawPrint,
@@ -14,7 +14,7 @@ import {
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 
-type AppointmentPaymentStatus = 'unpaid' | 'paid' | 'waived' | 'refunded';
+type AppointmentPaymentStatus = 'unpaid' | 'paid' | 'waived' | 'refunded' | 'cancelled' | 'no_show';
 type AppointmentPaymentMethod = 'gcash' | 'maya' | 'cash' | 'card' | 'other' | null;
 
 interface PaymentRecord {
@@ -29,6 +29,8 @@ interface PaymentRecord {
   payment_reference: string | null;
   paid_at: string | null;
   is_aspin_puspin: boolean;
+  payment_sender_name?: string | null;
+  payment_verified_at?: string | null;
   pet: {
     name: string;
     species: string;
@@ -43,6 +45,8 @@ const BADGE: Record<AppointmentPaymentStatus, { label: string; cls: string }> = 
   paid:     { label: 'Paid',             cls: 'bg-emerald-700 text-white dark:bg-emerald-500 dark:text-white' },
   waived:   { label: 'Free / Waived',   cls: 'bg-blue-700 text-white dark:bg-blue-500 dark:text-white' },
   refunded: { label: 'Refunded',         cls: 'bg-slate-700 text-white dark:bg-slate-500 dark:text-white' },
+  cancelled: { label: 'Cancelled',       cls: 'bg-red-700 text-white dark:bg-red-500 dark:text-white' },
+  no_show:   { label: 'No Show',         cls: 'bg-gray-700 text-white dark:bg-gray-500 dark:text-white' },
 };
 
 const METHOD_LABEL: Record<string, string> = {
@@ -58,6 +62,8 @@ const STATUS_BORDER: Record<AppointmentPaymentStatus, string> = {
   unpaid:   'border-l-amber-500',
   waived:   'border-l-blue-500',
   refunded: 'border-l-muted-foreground',
+  cancelled: 'border-l-red-500',
+  no_show:   'border-l-gray-500',
 };
 
 function StatusBadge({ status }: { status: AppointmentPaymentStatus }) {
@@ -84,83 +90,90 @@ function TypeBadge({ type }: { type: string | null }) {
   );
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const fetchTransactions = async () => {
+  const { data: { user }, error: authErr } =
+    await supabase.auth.getUser();
+  if (authErr || !user)
+    throw new Error('Session expired.');
+
+  const { data, error } = await supabase
+    .from('appointments')
+    .select(`
+      id,
+      appointment_number,
+      appointment_type_detail,
+      scheduled_start,
+      appointment_status,
+      payment_amount,
+      payment_status,
+      payment_method,
+      payment_reference,
+      paid_at,
+      payment_sender_name,
+      payment_verified_at,
+      is_aspin_puspin,
+      pets!appointments_pet_id_fkey (
+        name, species, breed
+      )
+    `)
+    .eq('booked_by', user.id)
+    .order('scheduled_start', { ascending: false });
+
+  if (error) throw error;
+
+  const rows = (data ?? []).map((row: any) => ({
+    id: row.id,
+    appointment_number: row.appointment_number,
+    appointment_type_detail: row.appointment_type_detail,
+    scheduled_start: row.scheduled_start,
+    appointment_status: row.appointment_status,
+    payment_amount: row.payment_amount ?? 0,
+    payment_status: (row.payment_status ?? 'unpaid') as AppointmentPaymentStatus,
+    payment_method: (row.payment_method ?? null) as AppointmentPaymentMethod,
+    payment_reference: row.payment_reference ?? null,
+    paid_at: row.paid_at ?? null,
+    payment_sender_name: row.payment_sender_name ?? null,
+    payment_verified_at: row.payment_verified_at ?? null,
+    is_aspin_puspin: row.is_aspin_puspin ?? false,
+    pet: Array.isArray(row.pets)
+      ? (row.pets[0] ?? null)
+      : (row.pets ?? null),
+  }));
+
+  const totalPaid = rows
+    .filter(r => r.payment_status === 'paid')
+    .reduce((s, r) => s + r.payment_amount, 0);
+
+  return { records: rows, totalPaid };
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Component
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default function ClientTransactionsPage() {
-  const [records, setRecords]     = useState<PaymentRecord[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState<string | null>(null);
-  const [totalPaid, setTotalPaid] = useState(0);
+  const { mutate } = useSWRConfig();
+  const { data, isLoading: loading, error: swrError } =
+    useSWR(
+      'client-transactions',
+      fetchTransactions,
+      {
+        revalidateOnFocus: false,
+        revalidateOnReconnect: false,
+        dedupingInterval: 60000,
+      }
+    );
 
-  useEffect(() => { load(); }, []);
-
-  async function load() {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const { data: { user }, error: authErr } = await supabase.auth.getUser();
-      if (authErr || !user) throw new Error('Session expired. Please log in again.');
-
-      const { data, error: qErr } = await supabase
-        .from('appointments')
-        .select(`
-          id,
-          appointment_number,
-          appointment_type_detail,
-          scheduled_start,
-          appointment_status,
-          payment_amount,
-          payment_status,
-          payment_method,
-          payment_reference,
-          paid_at,
-          is_aspin_puspin,
-          pets!appointments_pet_id_fkey (
-            name,
-            species,
-            breed
-          )
-        `)
-        .eq('booked_by', user.id)
-        .order('scheduled_start', { ascending: false });
-
-      if (qErr) throw qErr;
-
-      const rows = (data ?? []).map((row: any) => ({
-        id:                      row.id,
-        appointment_number:      row.appointment_number,
-        appointment_type_detail: row.appointment_type_detail,
-        scheduled_start:         row.scheduled_start,
-        appointment_status:      row.appointment_status,
-        payment_amount:          row.payment_amount ?? 0,
-        payment_status:          (row.payment_status ?? 'unpaid') as AppointmentPaymentStatus,
-        payment_method:          row.payment_method as AppointmentPaymentMethod,
-        payment_reference:       row.payment_reference ?? null,
-        paid_at:                 row.paid_at ?? null,
-        is_aspin_puspin:         row.is_aspin_puspin ?? false,
-        pet: Array.isArray(row.pets) ? (row.pets[0] ?? null) : (row.pets ?? null),
-      })) as PaymentRecord[];
-
-      setRecords(rows);
-      setTotalPaid(
-        rows.filter(r => r.payment_status === 'paid').reduce((s, r) => s + r.payment_amount, 0),
-      );
-    } catch (e: any) {
-      setError(e.message ?? 'Failed to load payment history.');
-    } finally {
-      setLoading(false);
-    }
-  }
+  const records = (data?.records ?? []) as PaymentRecord[];
+  const totalPaid = data?.totalPaid ?? 0;
+  const error = swrError?.message ?? null;
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="flex flex-col items-center gap-3 text-muted-foreground">
           <Loader2 size={36} className="animate-spin text-primary" />
-          <p className="text-sm font-medium">Loading payment historyâ€¦</p>
+          <p className="text-sm font-medium">Loading payment history…</p>
         </div>
       </div>
     );
@@ -173,7 +186,7 @@ export default function ClientTransactionsPage() {
           <AlertCircle size={36} className="text-destructive mx-auto mb-4" />
           <p className="font-semibold text-destructive mb-2">Unable to load</p>
           <p className="text-sm text-muted-foreground mb-4">{error}</p>
-          <Button variant="outline" onClick={load} className="gap-2">
+          <Button variant="outline" onClick={() => mutate('client-transactions')} className="gap-2">
             <RefreshCw size={14} /> Retry
           </Button>
         </div>
@@ -198,7 +211,7 @@ export default function ClientTransactionsPage() {
           </p>
         </div>
         <button
-          onClick={load}
+          onClick={() => mutate('client-transactions')}
           className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
           <RefreshCw size={12} /> Refresh
@@ -256,15 +269,18 @@ export default function ClientTransactionsPage() {
       ) : (
         <div className="space-y-3">
           {records.map((rec) => {
+            const isNoShowOrCancelled = (rec.appointment_status === 'no_show' || rec.appointment_status === 'cancelled') && rec.payment_status === 'unpaid';
+            const displayStatus: AppointmentPaymentStatus = isNoShowOrCancelled ? (rec.appointment_status as AppointmentPaymentStatus) : rec.payment_status;
+
             const referenceSubmitted =
-              rec.payment_status === 'unpaid' &&
+              displayStatus === 'unpaid' &&
               (rec.payment_method === 'gcash' || rec.payment_method === 'maya') &&
               !!rec.payment_reference;
 
             return (
               <div
                 key={rec.id}
-                className={`bg-card rounded-2xl border border-border border-l-4 ${STATUS_BORDER[rec.payment_status]} shadow-sm p-5 space-y-4`}
+                className={`bg-card rounded-2xl border border-border border-l-4 ${STATUS_BORDER[displayStatus]} shadow-sm p-5 space-y-4`}
               >
                 {/* Top row */}
                 <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -274,7 +290,7 @@ export default function ClientTransactionsPage() {
                     </span>
                     <TypeBadge type={rec.appointment_type_detail} />
                   </div>
-                  <StatusBadge status={rec.payment_status} />
+                  <StatusBadge status={displayStatus} />
                 </div>
 
                 {/* Pet + date */}
@@ -295,7 +311,7 @@ export default function ClientTransactionsPage() {
                 </div>
 
                 {/* Payment cells */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 pt-1">
                   <PayCell
                     label="Amount"
                     value={
@@ -307,25 +323,39 @@ export default function ClientTransactionsPage() {
                   />
                   <PayCell
                     label="Method"
-                    value={rec.payment_method ? METHOD_LABEL[rec.payment_method] : 'â€”'}
+                    value={rec.payment_method ? METHOD_LABEL[rec.payment_method] : '—'}
                   />
                   <PayCell
                     label="Reference"
-                    value={rec.payment_reference ?? 'â€”'}
+                    value={rec.payment_reference ?? '—'}
                     mono
                   />
                   <PayCell
                     label="Paid on"
-                    value={rec.paid_at ? format(new Date(rec.paid_at), 'PPP') : 'â€”'}
+                    value={rec.paid_at ? format(new Date(rec.paid_at), 'PPP') : '—'}
                   />
+
+                  {rec.payment_sender_name && (
+                    <PayCell
+                      label="Sender Name"
+                      value={rec.payment_sender_name}
+                    />
+                  )}
+
+                  {rec.payment_status === 'paid' && rec.payment_verified_at && (
+                    <PayCell
+                      label="Verified On"
+                      value={format(new Date(rec.payment_verified_at), 'PPP')}
+                    />
+                  )}
                 </div>
 
                 {/* Pending verification notice */}
                 {referenceSubmitted && (
-                  <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-2.5 text-xs text-amber-700 dark:text-amber-400">
-                    <AlertCircle size={13} className="flex-shrink-0 mt-0.5" />
+                  <div className="flex items-start gap-2 rounded-xl border border-amber-600 bg-amber-600 px-4 py-2.5 text-sm font-semibold leading-relaxed text-white dark:border-amber-500 dark:bg-amber-700 dark:text-white">
+                    <AlertCircle size={14} className="mt-0.5 flex-shrink-0 text-white" />
                     <span>
-                      Reference submitted â€”{' '}
+                      Reference submitted —{' '}
                       <strong>awaiting verification by the PAWS team</strong>. Your booking will be
                       confirmed once payment is verified.
                     </span>
@@ -340,9 +370,9 @@ export default function ClientTransactionsPage() {
   );
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
 // Sub-component
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
 
 function PayCell({
   label,
