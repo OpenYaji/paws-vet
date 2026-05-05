@@ -18,6 +18,19 @@ function jsonError(error: string, status: number, message?: string) {
   );
 }
 
+function mapToAppointmentTypeEnum(category: string): string {
+  if (!category) return 'wellness';
+  const cat = category.toLowerCase();
+  if (cat.includes('surgery') || cat.includes('operation')) return 'surgery';
+  if (cat.includes('vaccin') || cat.includes('shot')) return 'vaccination';
+  if (cat.includes('dental') || cat.includes('teeth')) return 'dental';
+  if (cat.includes('emergenc')) return 'emergency';
+  if (cat.includes('follow')) return 'follow_up';
+  if (cat.includes('consult') || cat.includes('check')) return 'consultation';
+  if (cat.includes('kapon')) return 'kapon';
+  return 'wellness';
+}
+
 async function getDefaultVeterinarianId(): Promise<string> {
   const { data: fullTimeVet, error: fullTimeError } = await supabaseAdmin
     .from('veterinarian_profiles')
@@ -119,7 +132,9 @@ export async function POST(request: NextRequest) {
       pet_id: pet.id,
       booked_by: user.id,
       veterinarian_id: veterinarianId,
-      appointment_type: body.appointment_type || 'wellness',
+      appointment_type: body.is_kapon_service 
+        ? 'kapon' 
+        : mapToAppointmentTypeEnum(body.appointment_type || ''),
       appointment_type_detail: 'regular',
       scheduled_start: body.scheduled_start,
       scheduled_end: body.scheduled_end,
