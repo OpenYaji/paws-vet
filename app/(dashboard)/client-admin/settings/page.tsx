@@ -402,13 +402,33 @@ export default function CMSSettingsPage() {
   };
 
   const toggleService = async (id: string, isActive: boolean) => {
-    const { error } = await supabase
-      .from('services')
-      .update({ is_active: !isActive })
-      .eq('id', id);
-    if (error) { showToast('Failed to toggle service', 'error'); return; }
-    showToast(!isActive ? 'Service activated' : 'Service deactivated');
-    await load();
+    try {
+      const res = await fetch(`/api/client-admin/services/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: !isActive }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to toggle service');
+      showToast(!isActive ? 'Service activated' : 'Service deactivated');
+      await load();
+    } catch (e: any) {
+      showToast(e.message || 'Failed to toggle service', 'error');
+    }
+  };
+
+  const deleteService = async (id: string) => {
+    try {
+      const res = await fetch(`/api/client-admin/services/${id}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to delete service');
+      showToast('Service deleted!');
+      await load();
+    } catch (e: any) {
+      showToast(e.message || 'Failed to delete service', 'error');
+    }
   };
 
   const addClosedDate = async () => {
@@ -1009,13 +1029,22 @@ export default function CMSSettingsPage() {
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Category *
+                    Category / Type *
                   </label>
-                  <input className={inp}
+                  <select className={inp}
                     value={serviceForm.service_category}
                     onChange={e => setServiceForm(f => ({ ...f, service_category: e.target.value }))}
-                    placeholder="e.g. Surgery"
-                  />
+                  >
+                    <option value="" disabled>Select a type...</option>
+                    <option value="kapon">Kapon / Neuter</option>
+                    <option value="surgery">Other Surgery</option>
+                    <option value="wellness">Wellness / Grooming</option>
+                    <option value="vaccination">Vaccination</option>
+                    <option value="dental">Dental Care</option>
+                    <option value="consultation">Consultation</option>
+                    <option value="emergency">Emergency</option>
+                    <option value="follow_up">Follow Up</option>
+                  </select>
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
@@ -1105,11 +1134,20 @@ export default function CMSSettingsPage() {
                             />
                           </div>
                           <div className="flex flex-col gap-1">
-                            <label className="text-xs text-muted-foreground font-medium">Category</label>
-                            <input className={inp}
+                            <label className="text-xs text-muted-foreground font-medium">Category / Type</label>
+                            <select className={inp}
                               value={editingService.service_category}
                               onChange={e => setEditingService(s => s ? { ...s, service_category: e.target.value } : s)}
-                            />
+                            >
+                              <option value="kapon">Kapon / Neuter</option>
+                              <option value="surgery">Other Surgery</option>
+                              <option value="wellness">Wellness / Grooming</option>
+                              <option value="vaccination">Vaccination</option>
+                              <option value="dental">Dental Care</option>
+                              <option value="consultation">Consultation</option>
+                              <option value="emergency">Emergency</option>
+                              <option value="follow_up">Follow Up</option>
+                            </select>
                           </div>
                           <div className="flex flex-col gap-1">
                             <label className="text-xs text-muted-foreground font-medium">Price (&#8369;)</label>
@@ -1188,6 +1226,16 @@ export default function CMSSettingsPage() {
                             className="px-2.5 py-1.5 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground text-xs font-semibold transition-all"
                           >
                             Edit
+                          </button>
+                          <button
+                            onClick={() => setConfirmModal({
+                              title: 'Delete Service',
+                              message: 'Are you sure you want to delete this service? If clients have booked this, it cannot be deleted.',
+                              onConfirm: () => deleteService(service.id),
+                            })}
+                            className="px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-red-50 text-red-600 dark:hover:bg-red-900/20 transition-all"
+                          >
+                            Delete
                           </button>
                           <button
                             onClick={() => toggleService(service.id, service.is_active)}

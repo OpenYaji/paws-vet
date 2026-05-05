@@ -2,6 +2,7 @@
 // Sends notifications to all CMS admin users when clients perform actions
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
+import { requireClientAdmin } from '@/lib/client-admin-auth';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -11,6 +12,9 @@ const supabaseAdmin = createClient(
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireClientAdmin(request);
+    if (auth.response) return auth.response;
+
     const body = await request.json();
     const { event_type, subject, content, related_entity_type, related_entity_id } = body;
 

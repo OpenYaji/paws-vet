@@ -1,13 +1,17 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { requireClientAdmin } from '@/lib/client-admin-auth';
 
 const admin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
+    const auth = await requireClientAdmin(request);
+    if (auth.response) return auth.response;
+
     const { error } = await admin
       .from('notification_logs')
       .update({

@@ -41,29 +41,29 @@ interface MenuItem {
 }
 
 const NAV_SETTING_KEY: Record<string, keyof NavSettings> = {
-  'Dashboard':    'show_dashboard',
+  'Dashboard': 'show_dashboard',
   'Appointments': 'show_appointments',
-  'History':      'show_history',
-  'My Pets':      'show_pets',
-  'Products':     'show_products',
-  'Services':     'show_services',
+  'History': 'show_history',
+  'My Pets': 'show_pets',
+  'Products': 'show_products',
+  'Services': 'show_services',
   'Transactions': 'show_transactions',
-  'FAQ':          'show_faq',
+  'FAQ': 'show_faq',
 };
 
 export default function ClientSidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen, profile, navSettings }: ClientSidebarProps) {
   const pathname = usePathname();
 
   const menuItems: MenuItem[] = [
-    { name: 'Dashboard',    icon: <LayoutDashboard size={20} />, path: '/client/dashboard' },
-    { name: 'Appointments', icon: <Calendar size={20} />,        path: '/client/appointments' },
-    { name: 'History',      icon: <Clock size={20} />,           path: '/client/appointments/history' },
-    { name: 'My Pets',      icon: <PawPrint size={20} />,        path: '/client/pets' },
-    { name: 'Products',     icon: <ShoppingBasket size={20} />,  path: '/client/products' },
-    { name: 'Services',     icon: <HandPlatter size={20} />,     path: '/client/services' },
-    { name: 'Transactions', icon: <Wallet size={20} />,          path: '/client/transactions' },
-    { name: 'FAQ',          icon: <HelpCircle size={20} />,      path: '/client/faq' },
-    { name: 'Admin CMS',    icon: <Database size={20} />,        path: '/client-admin' },
+    { name: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/client/dashboard' },
+    { name: 'Appointments', icon: <Calendar size={20} />, path: '/client/appointments' },
+    { name: 'History', icon: <Clock size={20} />, path: '/client/appointments/history' },
+    { name: 'My Pets', icon: <PawPrint size={20} />, path: '/client/pets' },
+    { name: 'Products', icon: <ShoppingBasket size={20} />, path: '/client/products' },
+    { name: 'Services', icon: <HandPlatter size={20} />, path: '/client/services' },
+    { name: 'Transactions', icon: <Wallet size={20} />, path: '/client/transactions' },
+    { name: 'FAQ', icon: <HelpCircle size={20} />, path: '/client/faq' },
+
   ];
 
   const isItemActive = (itemPath: string) => {
@@ -77,11 +77,10 @@ export default function ClientSidebar({ collapsed, setCollapsed, mobileOpen, set
         href={item.path}
         onClick={() => isMobileLink && setMobileOpen(false)}
         title={isCollapsed ? item.name : undefined}
-        className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all duration-200 ${
-          isItemActive(item.path)
+        className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all duration-200 ${isItemActive(item.path)
             ? "bg-slate-900 text-white shadow-sm dark:bg-primary dark:text-primary-foreground"
             : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-muted-foreground dark:hover:bg-accent dark:hover:text-foreground"
-        } ${isCollapsed ? 'justify-center' : ''}`}
+          } ${isCollapsed ? 'justify-center' : ''}`}
       >
         <span className="shrink-0">{item.icon}</span>
         {!isCollapsed && <span className="whitespace-nowrap font-medium">{item.name}</span>}
@@ -94,9 +93,8 @@ export default function ClientSidebar({ collapsed, setCollapsed, mobileOpen, set
 
     return (
       <aside
-        className={`flex h-full flex-col overflow-hidden border-r border-slate-200/70 bg-white/90 transition-all duration-300 dark:border-border dark:bg-card/90 ${
-          isCollapsed ? 'w-20' : 'w-72'
-        }`}
+        className={`flex h-full flex-col overflow-hidden border-r border-slate-200/70 bg-white/90 transition-all duration-300 dark:border-border dark:bg-card/90 ${isCollapsed ? 'w-20' : 'w-72'
+          }`}
       >
         <div className="flex h-full flex-col px-3 py-4 md:px-4 md:py-5">
 

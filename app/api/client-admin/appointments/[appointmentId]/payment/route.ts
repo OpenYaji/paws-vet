@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { requireClientAdmin } from '@/lib/client-admin-auth';
 import { sendClientNotification } from '@/lib/notify';
 
 const supabaseAdmin = createClient(
@@ -27,13 +28,17 @@ export async function POST(
   { params }: { params: Promise<{ appointmentId: string }> }
 ) {
   try {
+    const auth = await requireClientAdmin(request);
+    if (auth.response) return auth.response;
+
     const { appointmentId } = await params;
     if (!appointmentId) {
       return NextResponse.json({ error: 'appointmentId is required' }, { status: 400 });
     }
 
     const body = await request.json();
-    const { action, admin_user_id } = body as { action: string; admin_user_id: string };
+    const { action } = body as { action: string; admin_user_id?: string };
+    const admin_user_id = auth.user.id;
 
     const validActions = ['verify', 'waive', 'refund'];
     if (!validActions.includes(action)) {

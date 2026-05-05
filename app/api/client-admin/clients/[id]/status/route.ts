@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
+import { requireClientAdmin } from '@/lib/client-admin-auth';
 
 const admin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -11,6 +12,9 @@ export async function PATCH(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = await requireClientAdmin(req);
+    if (auth.response) return auth.response;
+
     const { id: clientId } = await context.params;
     const body = await req.json();
     const { account_status, archived } = body;

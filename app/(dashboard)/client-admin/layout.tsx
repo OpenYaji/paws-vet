@@ -2,9 +2,10 @@
 
 import Link from 'next/link';
 import { Suspense, useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/auth-client';
 import ClientThemeProvider from '@/components/client/theme-provider';
-import { Menu, PanelLeft, PawPrint } from 'lucide-react';
+import { LogOut, Menu, PanelLeft, PawPrint } from 'lucide-react';
 import { CmsNotificationBell } from '@/components/notifications/cms-notification-bell';
 import ClientAdminSidebar from '@/components/client/client-admin-sidebar';
 
@@ -24,6 +25,11 @@ function ClientAdminNav({
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    window.location.href = `/login?mode=cms&redirect=${encodeURIComponent('/client-admin?tab=clients')}`;
+  };
 
   useEffect(() => {
     const fetchUnread = async () => {
@@ -149,6 +155,15 @@ function ClientAdminNav({
               />
             )}
 
+            <button
+              onClick={handleLogout}
+              className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-semibold text-muted-foreground transition-all duration-150 hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
+              title="Log out"
+            >
+              <LogOut size={15} />
+              <span className="hidden sm:inline">Log out</span>
+            </button>
+
           </div>
       </div>
     </header>
@@ -160,18 +175,55 @@ export default function ClientAdminLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profile, setProfile] = useState<SidebarProfile | null>(null);
+  const [checkingAccess, setCheckingAccess] = useState(true);
+  const [hasAccess, setHasAccess] = useState(false);
 
   useEffect(() => {
+    let mounted = true;
+
     (async () => {
       try {
         const {
           data: { user },
         } = await supabase.auth.getUser();
 
-        if (!user) return;
+        if (!mounted) return;
+
+        if (!user) {
+          router.replace('/login');
+          return;
+        }
+
+        const metadataRole =
+          user.user_metadata?.role?.toLowerCase?.() ||
+          user.app_metadata?.role?.toLowerCase?.();
+
+        let isAdmin = metadataRole === 'admin';
+
+        if (!isAdmin) {
+          const { data: adminProfile } = await supabase
+            .from('admin_profiles')
+            .select('id')
+            .eq('user_id', user.id)
+            .maybeSingle();
+
+          isAdmin = Boolean(adminProfile?.id);
+        }
+
+        if (!mounted) return;
+
+        if (!isAdmin) {
+          setHasAccess(false);
+          setCheckingAccess(false);
+          router.replace('/client/dashboard');
+          return;
+        }
+
+        setHasAccess(true);
 
         const { data: admin } = await supabase
           .from('admin_profiles')
@@ -180,7 +232,7 @@ export default function ClientAdminLayout({
           .maybeSingle();
 
         if (admin) {
-          setProfile(admin);
+          if (mounted) setProfile(admin);
           return;
         }
 
@@ -191,7 +243,7 @@ export default function ClientAdminLayout({
           .maybeSingle();
 
         if (vet) {
-          setProfile(vet);
+          if (mounted) setProfile(vet);
           return;
         }
 
@@ -201,12 +253,47 @@ export default function ClientAdminLayout({
           .eq('user_id', user.id)
           .maybeSingle();
 
-        if (client) setProfile(client);
+        if (client && mounted) setProfile(client);
       } catch {
-        // Keep shell usable even if profile query fails.
+        if (mounted) {
+          setHasAccess(false);
+          router.replace('/login');
+        }
+      } finally {
+        if (mounted) setCheckingAccess(false);
       }
     })();
-  }, []);
+
+    return () => {
+      mounted = false;
+    };
+  }, [router]);
+
+  if (checkingAccess) {
+    return (
+      <ClientThemeProvider>
+        <div className="flex min-h-screen items-center justify-center bg-background text-center text-foreground">
+          <div>
+            <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+            <p className="text-sm font-medium text-muted-foreground">Checking CMS access...</p>
+          </div>
+        </div>
+      </ClientThemeProvider>
+    );
+  }
+
+  if (!hasAccess) {
+    return (
+      <ClientThemeProvider>
+        <div className="flex min-h-screen items-center justify-center bg-background px-4 text-center text-foreground">
+          <div>
+            <p className="text-lg font-semibold">CMS Admin access required</p>
+            <p className="mt-2 text-sm text-muted-foreground">Redirecting you back to your client dashboard...</p>
+          </div>
+        </div>
+      </ClientThemeProvider>
+    );
+  }
 
   return (
     <ClientThemeProvider>

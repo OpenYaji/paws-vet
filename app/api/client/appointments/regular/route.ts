@@ -87,17 +87,17 @@ export async function POST(request: NextRequest) {
 
     // Only perform kapon-related checks if this is a kapon service
     if (body.is_kapon_service) {
-      const { count: priorRegularCount, error: priorError } = await supabaseAdmin
+      const { count: priorKaponCount, error: priorError } = await supabaseAdmin
         .from('appointments')
         .select('id', { count: 'exact', head: true })
         .eq('pet_id', pet.id)
-        .eq('appointment_type_detail', 'regular');
+        .or('appointment_type.eq.kapon,appointment_type_detail.eq.outreach');
 
       if (priorError) {
         return jsonError('booking_check_failed', 500, priorError.message);
       }
 
-      if ((priorRegularCount ?? 0) > 0 && !pet.allow_repeat_kapon_booking) {
+      if ((priorKaponCount ?? 0) > 0 && !pet.allow_repeat_kapon_booking) {
         return jsonError(
           'kapon_repeat_blocked',
           409,
@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
       pet_id: pet.id,
       booked_by: user.id,
       veterinarian_id: veterinarianId,
-      appointment_type: 'wellness',
+      appointment_type: body.appointment_type || 'wellness',
       appointment_type_detail: 'regular',
       scheduled_start: body.scheduled_start,
       scheduled_end: body.scheduled_end,
@@ -167,7 +167,26 @@ export async function POST(request: NextRequest) {
 
     if (serviceInsertError) {
       console.error('[regular-booking] Failed to insert appointment_services:', serviceInsertError);
-      // Log error but don't fail the appointment creation
+
+      const { error: rollbackError } = await supabaseAdmin
+        .from('appointments')
+        .delete()
+        .eq('id', created.id);
+
+      if (rollbackError) {
+        console.error('[regular-booking] Failed to rollback orphaned appointment:', rollbackError);
+        return jsonError(
+          'booking_service_link_failed',
+          500,
+          'Appointment service could not be saved, and the incomplete appointment could not be rolled back. Please contact the clinic.'
+        );
+      }
+
+      return jsonError(
+        'booking_service_link_failed',
+        500,
+        'Appointment service could not be saved. Please try booking again.'
+      );
     }
 
     // Only consume allow_repeat_kapon_booking if this is a kapon service

@@ -322,7 +322,7 @@ export default function OutreachAppointmentPage() {
       const payload = {
         pet_id:                  selectedPet.id,
         booked_by:               userId,
-        appointment_type:        'wellness',         // legacy enum column
+        appointment_type:        'kapon',
         appointment_type_detail: 'outreach',
         outreach_program_id:     selectedProgram.id,
         scheduled_start:         scheduledStart.toISOString(),
