@@ -93,7 +93,7 @@ export default function ClientDashboardLayout({ children }: { children: React.Re
 
       const { data: profileData } = await supabase
         .from('client_profiles')
-        .select('first_name, last_name')
+        .select('first_name, last_name, avatar_url')
         .eq('user_id', session.user.id)
         .single();
 

@@ -52,11 +52,11 @@ const profileSchema = z.object({
   lastName: z.string()
     .min(2, 'Last name must be at least 2 characters')
     .max(50, 'Last name must be less than 50 characters'),
-  // DB phone check: international format ^+?[1-9]\d{1,14}$
+  // DB phone check: international format ^+?[0-9]\d{1,14}$ (updated for PH mobile)
   phone: z.string()
-    .regex(/^\+?[1-9]\d{1,14}$/, 'Invalid phone number (e.g. +639123456789 or 09123456789)'),
+    .regex(/^\+?[0-9]\d{1,14}$/, 'Invalid phone number (e.g. +639123456789 or 09123456789)'),
   alternatePhone: z.string()
-    .regex(/^\+?[1-9]\d{1,14}$/, 'Invalid phone number')
+    .regex(/^\+?[0-9]\d{1,14}$/, 'Invalid phone number')
     .optional()
     .or(z.literal('')),
   addressLine1: z.string()

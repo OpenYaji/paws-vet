@@ -1,7 +1,8 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Image from 'next/image';
 import { supabase } from '@/lib/auth-client';
 import useSWR from 'swr';
 import Link from 'next/link';
@@ -29,6 +30,7 @@ interface ClientData {
   user_id: string;
   first_name: string;
   last_name: string;
+  avatar_url: string | null;
   email: string;
   phone: string;
   address_line1: string;
@@ -130,6 +132,7 @@ const fetchClients = async (showArchived: boolean) => {
     user_id: c.user_id,
     first_name: c.first_name,
     last_name: c.last_name,
+    avatar_url: c.avatar_url || null,
     email: c.users?.email || c.email || '',
     phone: c.phone,
     address_line1: c.address_line1,
@@ -827,9 +830,7 @@ function ClientAdminPageInner() {
                         <tr key={c.id} className="hover:bg-primary/[0.08] transition-colors duration-150">
                           <td className="px-6 py-4">
                             <div className="flex items-center">
-                              <div className="w-8 h-8 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center flex-shrink-0 mr-3">
-                                {c.first_name[0]}{c.last_name[0]}
-                              </div>
+                              {c.avatar_url ? (<div className="relative w-8 h-8 rounded-full overflow-hidden flex-shrink-0 mr-3 border border-border"><Image src={c.avatar_url} alt="" fill className="object-cover" /></div>) : (<div className="w-8 h-8 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center flex-shrink-0 mr-3">{c.first_name[0]}{c.last_name[0]}</div>)}
                               <div>
                                 <div className="font-semibold text-foreground">{c.first_name} {c.last_name}</div>
                                 <div className="text-xs text-muted-foreground font-mono mt-1">{c.id.slice(0, 8)}…</div>
